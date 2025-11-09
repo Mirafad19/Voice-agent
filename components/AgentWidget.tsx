@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AgentProfile, AgentConfig, WidgetState, Recording, ReportingStatus } from '../types';
 import { GeminiLiveService } from '../services/geminiLiveService';
@@ -450,7 +451,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         </button>
       </div>
     );
-    return isWidgetMode ? <div className="w-full h-full p-2 flex items-end justify-end">{fabContent}</div> : <div className="fixed bottom-5 right-5 z-50">{fabContent}</div>;
+    return isWidgetMode ? <div className="w-full h-full p-2 flex items-end justify-end bg-transparent">{fabContent}</div> : <div className="fixed bottom-5 right-5 z-50">{fabContent}</div>;
   }
 
   return (
