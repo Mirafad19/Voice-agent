@@ -236,7 +236,7 @@ export const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({ profile,
                     For the "Reply-To" field, use `&#123;&#123;email&#125;&#125;`.
                 </p>
                 <p>
-                    <strong className="font-semibold text-yellow-800 dark:text-yellow-300">CRITICAL:</strong> In your EmailJS service settings, go to the "Security" tab and add your website's full URL (e.g., `https://my-site.netlify.app`) to the "Allowed Origins" list.
+                    <strong className="font-semibold text-yellow-800 dark:text-yellow-300">CRITICAL:</strong> In your EmailJS service settings, go to the "Security" tab and add your website's full URL (e.g., `https://my-site.vercel.app`) to the "Allowed Origins" list.
                 </p>
              </div>
         </div>

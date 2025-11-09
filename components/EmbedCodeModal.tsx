@@ -76,7 +76,7 @@ export const EmbedCodeModal: React.FC<EmbedCodeModalProps> = ({ isOpen, onClose,
           label="Public Hosting URL"
           id="publicUrl"
           type="url"
-          placeholder="https://my-agent.netlify.app"
+          placeholder="https://my-agent.vercel.app"
           value={publicUrl}
           onChange={(e) => setPublicUrl(e.target.value)}
         />
