@@ -37,8 +37,8 @@ async function getCloudinaryShareableLink(cloudName: string, uploadPreset: strin
 }
 
 
-const FabIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-9 w-9 text-white" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" fill="none" strokeLinecap="round" strokeLinejoin="round">
+const FabIcon = ({className = "h-9 w-9 text-white"}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" fill="none" strokeLinecap="round" strokeLinejoin="round">
         {/* Headphone band and earpieces */}
         <path d="M4 13.5V12a8 8 0 1116 0v1.5" />
         <path d="M4 12a2 2 0 00-2 2v3a2 2 0 002 2h1" />
@@ -388,7 +388,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
       onTranscriptUpdate: (isFinal, text, type) => {
         if (isFinal && type === 'output') {
           const lowerCaseText = text.toLowerCase();
-          const endKeywords = ['goodbye', 'farewell', 'take care', 'talk to you later'];
+          const endKeywords = ['goodbye', 'farewell', 'take care', 'talk to you later', 'bye bye', 'bye'];
           if (endKeywords.some(keyword => lowerCaseText.includes(keyword))) {
             shouldEndAfterSpeakingRef.current = true;
           }
@@ -467,7 +467,11 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                 <div className="relative w-48 h-48 flex items-center justify-center mb-4">
                     {widgetState === WidgetState.Connecting && <Spinner className={`w-24 h-24 text-accent-${accentColorClass}`} />}
                     
-                    {(widgetState === WidgetState.Idle || widgetState === WidgetState.Listening || widgetState === WidgetState.Speaking) && (
+                    {widgetState === WidgetState.Idle && (
+                        <FabIcon className={`h-24 w-24 text-gray-400 dark:text-gray-500`} />
+                    )}
+
+                    {(widgetState === WidgetState.Listening || widgetState === WidgetState.Speaking) && (
                         <div className="relative w-36 h-36 flex items-center justify-center">
                             {(widgetState === WidgetState.Listening || widgetState === WidgetState.Speaking) && (
                                 <>
@@ -475,7 +479,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                                     <div className={`absolute w-full h-full rounded-full bg-accent-${accentColorClass} animate-sonar-ping [animation-delay:0.5s]`}></div>
                                 </>
                             )}
-                            <div className={`relative w-24 h-24 rounded-full flex items-center justify-center transition-colors duration-300 shadow-lg ${widgetState === WidgetState.Idle ? 'bg-gray-300 dark:bg-gray-700' : `bg-accent-${accentColorClass}`}`}>
+                            <div className={`relative w-24 h-24 rounded-full flex items-center justify-center transition-colors duration-300 shadow-lg bg-accent-${accentColorClass}`}>
                                 {widgetState === WidgetState.Speaking && <div className="absolute inset-0 rounded-full bg-white opacity-20 animate-ping"></div>}
                                 <MicrophoneIcon state={widgetState} />
                             </div>
@@ -492,17 +496,20 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                 
                 <div className="h-10 mb-4 flex items-center justify-center">
                     {(widgetState === WidgetState.Idle || (widgetState === WidgetState.Ended && reportingStatus === 'idle')) && (
-                        <p className="text-md text-gray-500 dark:text-gray-300 transition-opacity duration-500">
-                            Try saying <span className={`font-semibold text-accent-${accentColorClass}`}>"Hello"</span> to begin.
+                         <p className="text-md text-gray-500 dark:text-gray-300 transition-opacity duration-500">
+                           Click the call button to start a conversation.
                         </p>
                     )}
                 </div>
 
                 <div className="h-20">
                      {(widgetState === WidgetState.Idle || widgetState === WidgetState.Ended || widgetState === WidgetState.Error) && (
-                        <button onClick={startSession} className="w-20 h-20 rounded-full bg-green-500 hover:bg-green-600 text-white flex items-center justify-center shadow-lg transition-transform transform hover:scale-105" aria-label={widgetState === WidgetState.Error ? "Retry Call" : "Start Call"}>
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10" viewBox="0 0 20 20" fill="currentColor"><path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" /></svg>
-                        </button>
+                        // Only show start button if the session isn't in the middle of uploading/sending
+                        !(widgetState === WidgetState.Ended && (reportingStatus === 'analyzing' || reportingStatus === 'sending')) && (
+                            <button onClick={startSession} className="w-20 h-20 rounded-full bg-green-500 hover:bg-green-600 text-white flex items-center justify-center shadow-lg transition-transform transform hover:scale-105" aria-label={widgetState === WidgetState.Error ? "Retry Call" : "Start Call"}>
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10" viewBox="0 0 20 20" fill="currentColor"><path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" /></svg>
+                            </button>
+                        )
                     )}
                     {(widgetState === WidgetState.Connecting || widgetState === WidgetState.Listening || widgetState === WidgetState.Speaking) && (
                         <button onClick={endSession} className="w-20 h-20 rounded-full bg-red-600 hover:bg-red-700 text-white flex items-center justify-center shadow-lg transition-transform transform hover:scale-105" aria-label="End Call">
