@@ -100,22 +100,20 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
       setReportingStatus('failed');
       return;
     }
-    
+
     setReportingStatus('analyzing');
-    
-    let audioLink = 'Audio link not available: Cloudinary is not configured in the agent profile.';
-    if (fileUploadConfig?.cloudinaryCloudName && fileUploadConfig.cloudinaryUploadPreset) {
-      try {
-        audioLink = await getCloudinaryShareableLink(fileUploadConfig.cloudinaryCloudName, fileUploadConfig.cloudinaryUploadPreset, recording);
-      } catch (uploadError) {
-        console.error("Audio upload to Cloudinary failed:", uploadError);
-        const message = uploadError instanceof Error ? uploadError.message : "An unknown error occurred.";
-        setErrorMessage(`Audio upload failed: ${message}`);
-        audioLink = `Audio link not available: ${message}`;
-      }
-    }
 
     try {
+        let audioLink = 'Audio link not available: Cloudinary is not configured in the agent profile.';
+        if (fileUploadConfig?.cloudinaryCloudName && fileUploadConfig.cloudinaryUploadPreset) {
+            try {
+                audioLink = await getCloudinaryShareableLink(fileUploadConfig.cloudinaryCloudName, fileUploadConfig.cloudinaryUploadPreset, recording);
+            } catch (uploadError) {
+                console.error("Audio upload to Cloudinary failed:", uploadError);
+                throw new Error(uploadError instanceof Error ? `Cloudinary upload failed: ${uploadError.message}` : 'Cloudinary upload failed.');
+            }
+        }
+
         const ai = new GoogleGenAI({ apiKey });
         const audioBase64 = await blobToBase64(recording.blob);
 
@@ -136,8 +134,18 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                 }
             },
         });
+
+        if (!response.text) {
+          throw new Error("Gemini analysis returned an empty response.");
+        }
         
-        const analysis = JSON.parse(response.text);
+        let analysis;
+        try {
+          analysis = JSON.parse(response.text);
+        } catch (parseError) {
+          console.error("Failed to parse Gemini response:", response.text);
+          throw new Error("Gemini analysis returned invalid data.");
+        }
 
         setReportingStatus('sending');
 
@@ -155,9 +163,9 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         
         setReportingStatus('sent');
     } catch (error) {
-        const errorText = (error as any)?.text || JSON.stringify(error);
-        console.error("Failed to analyze and send recording via EmailJS:", errorText);
-        setErrorMessage("Failed to send report. Check browser console for errors.");
+        const message = error instanceof Error ? error.message : 'An unknown error occurred. Check the console.';
+        console.error("Failed to process and send report:", error);
+        setErrorMessage(message);
         setReportingStatus('failed');
     } finally {
         setTimeout(() => {
@@ -165,7 +173,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             if (widgetStateRef.current === WidgetState.Ended) {
                 setWidgetState(WidgetState.Idle);
             }
-        }, 4000);
+        }, 5000);
     }
   }, [agentProfile, apiKey]);
 
@@ -439,11 +447,11 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
   if (!isOpen) {
     const fabContent = (
-      <div className={`${themeClass} relative flex flex-col items-end`}>
+      <div className={`${themeClass} relative`}>
         {showCallout && agentProfile.calloutMessage && (
-          <div className="absolute bottom-full right-0 mb-3 px-4 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-lg shadow-lg w-max max-w-xs text-right text-sm animate-fade-in-up">
+          <div className="absolute top-1/2 right-full mr-4 w-max max-w-[200px] transform -translate-y-1/2 px-4 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-lg shadow-lg text-left text-sm animate-fade-in-up">
             <p>{agentProfile.calloutMessage}</p>
-            <div className="absolute right-6 -bottom-2 w-0 h-0 border-x-8 border-x-transparent border-t-8 border-t-white dark:border-t-gray-800"></div>
+            <div className="absolute top-1/2 -right-2 w-0 h-0 transform -translate-y-1/2 border-y-8 border-y-transparent border-l-8 border-l-white dark:border-l-gray-800"></div>
           </div>
         )}
         <button onClick={toggleWidget} className={`w-16 h-16 rounded-full bg-accent-${accentColorClass} shadow-lg flex items-center justify-center text-white transform hover:scale-110 transition-transform animate-pulse`}>
@@ -492,7 +500,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                     {widgetState === WidgetState.Ended && reportingStatus === 'failed' && <div className="text-red-500"><svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>}
                     
                 </div>
-                <p className="text-lg text-gray-600 dark:text-gray-400 h-8 mb-2">{getStatusText()}</p>
+                <p className="text-lg text-gray-600 dark:text-gray-400 h-8 mb-2 break-words max-w-full px-2">{getStatusText()}</p>
                 
                 <div className="h-10 mb-4 flex items-center justify-center">
                     {(widgetState === WidgetState.Idle || (widgetState === WidgetState.Ended && reportingStatus === 'idle')) && (
