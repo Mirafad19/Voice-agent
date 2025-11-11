@@ -1,6 +1,7 @@
 
 
 
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { AgentProfile, WidgetTheme, AgentVoice, AccentColor, EmailConfig, FileUploadConfig } from '../types';
 import { Input } from './ui/Input';
@@ -19,6 +20,10 @@ const accentColorOptions = [
     { name: 'Pink', value: AccentColor.Pink, color: 'bg-accent-pink' },
     { name: 'Lime', value: AccentColor.Lime, color: 'bg-accent-lime' },
     { name: 'Violet', value: AccentColor.Violet, color: 'bg-accent-violet' },
+    { name: 'Teal', value: AccentColor.Teal, color: 'bg-accent-teal' },
+    { name: 'Emerald', value: AccentColor.Emerald, color: 'bg-accent-emerald' },
+    { name: 'Sky', value: AccentColor.Sky, color: 'bg-accent-sky' },
+    { name: 'Rose', value: AccentColor.Rose, color: 'bg-accent-rose' },
     { name: 'Black', value: AccentColor.Black, color: 'bg-accent-black' },
 ];
 
@@ -139,7 +144,7 @@ export const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({ profile,
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             Accent Color
           </label>
-          <div className="flex items-center space-x-3">
+          <div className="flex flex-wrap items-center gap-3">
             {accentColorOptions.map(option => (
               <button
                 key={option.value}

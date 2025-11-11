@@ -18,6 +18,10 @@ export enum AccentColor {
   Pink = 'pink',
   Lime = 'lime',
   Violet = 'violet',
+  Teal = 'teal',
+  Emerald = 'emerald',
+  Sky = 'sky',
+  Rose = 'rose',
   Black = 'black',
 }
 
