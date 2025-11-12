@@ -40,10 +40,7 @@ export const useAgentProfiles = () => {
         name,
         calloutMessage: 'Hey! Click me to start a voice chat.',
         emailConfig: {
-          serviceId: '',
-          templateId: '',
-          publicKey: '',
-          recipientEmail: 'fadahunsi.miracle@gmail.com',
+          formspreeEndpoint: '',
         },
         fileUploadConfig: {
           cloudinaryCloudName: '',

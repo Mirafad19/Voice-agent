@@ -1,7 +1,4 @@
 
-
-
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { AgentProfile, WidgetTheme, AgentVoice, AccentColor, EmailConfig, FileUploadConfig } from '../types';
 import { Input } from './ui/Input';
@@ -46,7 +43,7 @@ export const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({ profile,
     setEditedProfile(prev => ({
       ...prev,
       emailConfig: {
-        ...(prev.emailConfig || { serviceId: '', templateId: '', publicKey: '', recipientEmail: '' }),
+        ...(prev.emailConfig || { formspreeEndpoint: '' }),
         [key]: value
       }
     }));
@@ -183,7 +180,7 @@ export const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({ profile,
               </div>
               <div className="space-y-3 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-md border border-gray-200 dark:border-gray-700">
                   <h4 className="font-semibold text-gray-900 dark:text-white">Setup Instructions:</h4>
-                  <ol className="list-decimal list-inside space-y-2">
+                  <ol className="list-decimal list-inside space-y-2 text-gray-700 dark:text-gray-300">
                       <li>Create or log in to your <a href="https://cloudinary.com/users/register/free" target="_blank" rel="noopener noreferrer" className="text-indigo-500 hover:underline">free Cloudinary Account</a>.</li>
                       <li>From your main Dashboard, copy the <strong>Cloud Name</strong> and paste it into the field above.</li>
                       <li>Go to Settings by clicking the gear icon in the sidebar, then navigate to the <strong>Upload</strong> tab.</li>
@@ -211,60 +208,31 @@ export const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({ profile,
           </div>
         </details>
 
-        <details className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-          <summary className="font-semibold cursor-pointer text-gray-900 dark:text-white">Automated Email Reports</summary>
-          <div className="mt-4 space-y-4">
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Automatically send session recordings and insights to an email address after each conversation in the embedded widget. This requires a free account from <a href="https://www.emailjs.com/" target="_blank" rel="noopener noreferrer" className="text-indigo-500 hover:underline">EmailJS</a>.
-              </p>
-              <Input
-                  label="Recipient Email"
-                  id="recipientEmail"
-                  type="email"
-                  placeholder="Your organization's email"
-                  value={editedProfile.emailConfig?.recipientEmail || ''}
-                  onChange={(e) => handleEmailConfigChange('recipientEmail', e.target.value)}
-              />
-              <Input
-                  label="EmailJS Service ID"
-                  id="serviceId"
-                  type="text"
-                  placeholder="Your EmailJS Service ID"
-                  value={editedProfile.emailConfig?.serviceId || ''}
-                  onChange={(e) => handleEmailConfigChange('serviceId', e.target.value)}
-              />
-              <Input
-                  label="EmailJS Template ID"
-                  id="templateId"
-                  type="text"
-                  placeholder="Your EmailJS Template ID"
-                  value={editedProfile.emailConfig?.templateId || ''}
-                  onChange={(e) => handleEmailConfigChange('templateId', e.target.value)}
-              />
-              <Input
-                  label="EmailJS Public Key"
-                  id="publicKey"
-                  type="text"
-                  placeholder="Your EmailJS Public Key"
-                  value={editedProfile.emailConfig?.publicKey || ''}
-                  onChange={(e) => handleEmailConfigChange('publicKey', e.target.value)}
-              />
-              <div className="text-xs text-gray-500 dark:text-gray-400 space-y-2">
-                  <p>
-                      Note: In your EmailJS template, you can use these variables: 
-                      `&#123;&#123;session_name&#125;&#125;`, 
-                      `&#123;&#123;agent_name&#125;&#125;` (use for "From Name"),
-                      `&#123;&#123;summary&#125;&#125;`, 
-                      `&#123;&#123;sentiment&#125;&#125;`, 
-                      `&#123;&#123;action_items&#125;&#125;`,
-                      and the new `&#123;&#123;audio_link&#125;&#125;`. 
-                      For the "Reply-To" field, use `&#123;&#123;email&#125;&#125;`.
-                  </p>
-                  <p>
-                      <strong className="font-semibold text-yellow-800 dark:text-yellow-300">CRITICAL:</strong> In your EmailJS service settings, go to the "Security" tab and add your website's full URL (e.g., `https://my-site.vercel.app`) to the "Allowed Origins" list.
-                  </p>
-              </div>
-          </div>
+        <details className="border border-gray-200 dark:border-gray-700 rounded-lg p-4" open>
+            <summary className="font-semibold cursor-pointer text-gray-900 dark:text-white">Automated Email Reports (via Formspree)</summary>
+            <div className="mt-4 space-y-4">
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                    This app uses <a href="https://formspree.io/" target="_blank" rel="noopener noreferrer" className="text-indigo-500 hover:underline">Formspree</a>, a free service, to automatically send email reports after a session.
+                </p>
+                <Input
+                    label="Formspree Endpoint URL"
+                    id="formspreeEndpoint"
+                    type="url"
+                    placeholder="https://formspree.io/f/your_form_id"
+                    value={editedProfile.emailConfig?.formspreeEndpoint || ''}
+                    onChange={(e) => handleEmailConfigChange('formspreeEndpoint', e.target.value)}
+                />
+                <div className="space-y-3 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-md border border-gray-200 dark:border-gray-700">
+                    <h4 className="font-semibold text-gray-900 dark:text-white">Setup Instructions:</h4>
+                    <ol className="list-decimal list-inside space-y-2 text-sm text-gray-700 dark:text-gray-300">
+                        <li>Sign up for a <a href="https://formspree.io/register" target="_blank" rel="noopener noreferrer" className="text-indigo-500 hover:underline">free Formspree account</a> and verify your email.</li>
+                        <li>On your dashboard, click <strong>+ New form</strong>.</li>
+                        <li>Give your form a name (e.g., "AI Agent Reports") and enter the email address where you want to receive reports. Click <strong>Create Form</strong>.</li>
+                        <li>You'll be taken to the form's <strong>Integration</strong> tab. Copy the full <strong>Endpoint URL</strong> provided.</li>
+                        <li>Paste the URL into the field above and save your changes. You're all set!</li>
+                    </ol>
+                </div>
+            </div>
         </details>
       </div>
 

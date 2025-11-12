@@ -4,8 +4,6 @@ import { GoogleGenAI, Type } from '@google/genai';
 import { blobToBase64 } from '../utils';
 import { Spinner } from './ui/Spinner';
 import { ShareRecordingModal } from './ShareRecordingModal';
-import * as emailjs from '@emailjs/browser';
-
 
 interface RecordingsPanelProps {
   recordings: Recording[];
@@ -32,18 +30,6 @@ const EmailIcon = () => (
         <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
     </svg>
 );
-
-const CheckIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-    </svg>
-);
-
-const ErrorIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-    </svg>
-)
 
 const SentimentBadge: React.FC<{ sentiment: string }> = ({ sentiment }) => {
     const sentimentColors = {
@@ -81,7 +67,6 @@ async function getCloudinaryShareableLink(cloudName: string, uploadPreset: strin
 export const RecordingsPanel: React.FC<RecordingsPanelProps> = ({ recordings, onDelete, onUpdate, apiKey, profile }) => {
   const [recordingToShare, setRecordingToShare] = useState<Recording | null>(null);
   const [sendingEmailId, setSendingEmailId] = useState<string | null>(null);
-  const [emailStatus, setEmailStatus] = useState<'idle' | 'success' | 'error'>('idle');
   
   const handleAnalyze = async (recording: Recording) => {
     onUpdate({ ...recording, isAnalyzing: true });
@@ -151,47 +136,53 @@ export const RecordingsPanel: React.FC<RecordingsPanelProps> = ({ recordings, on
 
   const handleSendEmail = async (recording: Recording) => {
     const { emailConfig, fileUploadConfig } = profile;
-    if (!emailConfig || !emailConfig.serviceId || !emailConfig.templateId || !emailConfig.publicKey || !emailConfig.recipientEmail) {
-        alert("EmailJS configuration is incomplete. Please fill it out in the Agent Configuration section.");
+    if (!emailConfig?.formspreeEndpoint) {
+        alert("Formspree endpoint is not configured. Please set it in the Agent Configuration section.");
         return;
     }
-    if (!fileUploadConfig || !fileUploadConfig.cloudinaryCloudName || !fileUploadConfig.cloudinaryUploadPreset) {
-      alert("Cloudinary configuration is incomplete. The audio link cannot be included. Please configure it in the Agent Configuration section.");
-      return;
-    }
-
+    
     setSendingEmailId(recording.id);
-    setEmailStatus('idle');
 
     try {
-        // 1. Get Cloudinary shareable link
-        const downloadUrl = await getCloudinaryShareableLink(fileUploadConfig.cloudinaryCloudName, fileUploadConfig.cloudinaryUploadPreset, recording);
+        let downloadUrl = "Not available: Cloudinary not configured.";
+        if (fileUploadConfig?.cloudinaryCloudName && fileUploadConfig.cloudinaryUploadPreset) {
+            try {
+                downloadUrl = await getCloudinaryShareableLink(fileUploadConfig.cloudinaryCloudName, fileUploadConfig.cloudinaryUploadPreset, recording);
+            } catch (error) {
+                const errorText = error instanceof Error ? error.message : JSON.stringify(error);
+                console.error("Failed to get Cloudinary link:", errorText);
+                alert(`Failed to get audio link from Cloudinary: ${errorText}. The report will be generated without it.`);
+                downloadUrl = `Failed to generate link: ${errorText}`;
+            }
+        }
 
-        // 2. Send the email with the download link
-        const templateParams = {
-            session_name: recording.name,
-            agent_name: profile.name,
-            summary: recording.summary,
-            sentiment: recording.sentiment,
-            action_items: recording.actionItems && recording.actionItems.length > 0 ? recording.actionItems.join('\n- ') : 'None',
-            email: emailConfig.recipientEmail,
-            audio_link: downloadUrl,
+        const reportData = {
+            _subject: `Session Insight Report: ${recording.name}`,
+            agent: profile.name,
+            sentiment: recording.sentiment || 'N/A',
+            summary: recording.summary || 'No summary available.',
+            actionItems: (recording.actionItems && recording.actionItems.length > 0) ? recording.actionItems.map(item => `- ${item}`).join('\n') : 'None',
+            audioLink: downloadUrl,
         };
 
-        await emailjs.send(emailConfig.serviceId, emailConfig.templateId, templateParams, { publicKey: emailConfig.publicKey });
+        const response = await fetch(emailConfig.formspreeEndpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify(reportData)
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to send report via Formspree. Check endpoint URL.');
+        }
         
-        setEmailStatus('success');
+        alert("Report sent successfully!");
 
     } catch (error) {
-        const errorText = error instanceof Error ? error.message : JSON.stringify(error);
-        console.error("Failed to send recording email:", errorText);
-        setEmailStatus('error');
-        alert(`Failed to send email: ${errorText}. Please check the browser console for details and verify your settings.`);
+        const message = error instanceof Error ? error.message : "An unknown error occurred.";
+        console.error("Failed to send report:", error);
+        alert(`Failed to send report: ${message}`);
     } finally {
-        setTimeout(() => {
-            setSendingEmailId(null);
-            setEmailStatus('idle');
-        }, 3000);
+        setSendingEmailId(null);
     }
   };
 
@@ -237,14 +228,10 @@ export const RecordingsPanel: React.FC<RecordingsPanelProps> = ({ recordings, on
                             <button
                                 onClick={() => handleSendEmail(rec)}
                                 disabled={sendingEmailId === rec.id}
-                                className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50"
                                 title="Send Report via Email"
                             >
-                                {sendingEmailId === rec.id ? (
-                                    emailStatus === 'success' ? <CheckIcon/> :
-                                    emailStatus === 'error' ? <ErrorIcon/> :
-                                    <Spinner className="w-5 h-5 text-indigo-500" />
-                                ) : <EmailIcon />}
+                                {sendingEmailId === rec.id ? <Spinner className="w-5 h-5 text-indigo-500"/> : <EmailIcon />}
                             </button>
                             <button
                                 onClick={() => setRecordingToShare(rec)}

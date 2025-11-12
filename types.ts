@@ -26,10 +26,7 @@ export enum AccentColor {
 }
 
 export interface EmailConfig {
-  serviceId: string;
-  templateId: string;
-  publicKey: string;
-  recipientEmail: string;
+  formspreeEndpoint?: string;
 }
 
 export interface FileUploadConfig {

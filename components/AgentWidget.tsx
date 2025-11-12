@@ -6,7 +6,6 @@ import { RecordingService } from '../services/recordingService';
 import { Spinner } from './ui/Spinner';
 import { GoogleGenAI, Type, Modality } from '@google/genai';
 import { blobToBase64 } from '../utils';
-import * as emailjs from '@emailjs/browser';
 import { decodePcmChunk } from '../utils/audio';
 
 interface AgentWidgetProps {
@@ -66,6 +65,12 @@ const MicrophoneIcon = ({state}: {state: WidgetState}) => (
     </svg>
 );
 
+const EmailIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+    </svg>
+);
+
 export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, isWidgetMode, onSessionEnd }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [showCallout, setShowCallout] = useState(false);
@@ -92,12 +97,11 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   
   const accentColorClass = agentProfile.accentColor;
 
-  const analyzeAndSendEmail = useCallback(async (recording: Omit<Recording, 'id' | 'url'>) => {
+  const analyzeAndSendReport = useCallback(async (recording: Omit<Recording, 'id' | 'url'>) => {
     const { emailConfig, fileUploadConfig } = agentProfile as AgentConfig;
-    if (!emailConfig?.serviceId || !emailConfig?.templateId || !emailConfig?.publicKey || !emailConfig?.recipientEmail) {
-        setErrorMessage("Email reporting is not fully configured.");
+    if (!emailConfig?.formspreeEndpoint) {
+        setErrorMessage("Formspree endpoint not configured.");
         setReportingStatus('failed');
-        setTimeout(() => setReportingStatus('idle'), 5000);
         return;
     }
 
@@ -111,7 +115,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                 audioLink = await getCloudinaryShareableLink(fileUploadConfig.cloudinaryCloudName, fileUploadConfig.cloudinaryUploadPreset, recording);
             } catch (uploadError) {
                 console.error("Audio upload to Cloudinary failed:", uploadError);
-                // Check for the specific browser network error message
                 if (uploadError instanceof TypeError || (uploadError instanceof Error && uploadError.message.includes('Failed to fetch'))) {
                      throw new Error('Upload error. Check network, ad-blockers, or website Content Security Policy (CSP).');
                 }
@@ -151,24 +154,26 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
              throw new Error("Failed to get analysis from AI. Check API key and billing.");
         }
 
+        const reportData = {
+          _subject: `Session Insight Report: ${recording.name}`,
+          agent: agentProfile.name,
+          sentiment: analysis.sentiment || 'N/A',
+          summary: analysis.summary || 'No summary available.',
+          actionItems: (analysis.actionItems && analysis.actionItems.length > 0) ? analysis.actionItems.map((item:string) => `- ${item}`).join('\n') : 'None',
+          audioLink: audioLink,
+        };
+
         setReportingStatus('sending');
 
-        const templateParams = {
-            session_name: recording.name,
-            agent_name: agentProfile.name,
-            summary: analysis.summary,
-            sentiment: analysis.sentiment,
-            action_items: analysis.actionItems?.length > 0 ? analysis.actionItems.join('\n- ') : 'None',
-            email: emailConfig.recipientEmail,
-            audio_link: audioLink,
-        };
-        
-        // --- EmailJS Send Step ---
-        try {
-            await emailjs.send(emailConfig.serviceId, emailConfig.templateId, templateParams, { publicKey: emailConfig.publicKey });
-        } catch(emailError) {
-            console.error("EmailJS send failed:", emailError);
-            throw new Error("EmailJS failed. Check service/template IDs, public key, and 'Allowed Origins' setting in your EmailJS account.");
+        // --- Formspree Sending Step ---
+        const formspreeResponse = await fetch(emailConfig.formspreeEndpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify(reportData)
+        });
+
+        if (!formspreeResponse.ok) {
+            throw new Error('Failed to send report via Formspree. Check endpoint URL.');
         }
 
         setReportingStatus('sent');
@@ -177,13 +182,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         console.error("Failed to process and send report:", error);
         setErrorMessage(message);
         setReportingStatus('failed');
-    } finally {
-        setTimeout(() => {
-            setReportingStatus('idle');
-            if (widgetStateRef.current === WidgetState.Ended) {
-                setWidgetState(WidgetState.Idle);
-            }
-        }, 5000);
     }
   }, [agentProfile, apiKey]);
 
@@ -205,7 +203,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     };
     
     if (isWidgetMode) {
-      analyzeAndSendEmail(newRecording);
+      analyzeAndSendReport(newRecording);
     } else if(onSessionEnd) {
         onSessionEnd({
             ...newRecording,
@@ -213,7 +211,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             url: URL.createObjectURL(blob),
         });
     }
-  }, [onSessionEnd, isWidgetMode, analyzeAndSendEmail]);
+  }, [onSessionEnd, isWidgetMode, analyzeAndSendReport]);
 
   const cleanupServices = useCallback(() => {
     geminiServiceRef.current?.disconnect();
@@ -349,10 +347,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
       return;
     }
     
-    // FIX: To prevent audio distortion ("transformer voice"), we let the browser
-    // create the AudioContext with its native/default sample rate. The `decodePcmChunk`
-    // function correctly creates an AudioBuffer with a 24kHz sample rate (matching the source),
-    // and the Web Audio API automatically handles resampling for clear playback.
     outputAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
     
     recordingServiceRef.current = new RecordingService(handleSessionEnd);
@@ -440,7 +434,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             case 'analyzing': return 'Analyzing & uploading...';
             case 'sending': return 'Sending report...';
             case 'sent': return 'Report sent successfully!';
-            case 'failed': return errorMessage || 'Failed to send report.';
+            case 'failed': return errorMessage || 'Failed to generate report.';
             default: return 'Session Ended';
         }
     }
@@ -518,21 +512,24 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                            Click the call button to start a conversation.
                         </p>
                     )}
+                     {(widgetState === WidgetState.Ended && (reportingStatus === 'sent' || reportingStatus === 'failed')) && (
+                         <p className="text-md text-gray-500 dark:text-gray-300 transition-opacity duration-500">
+                           You may now close the widget.
+                        </p>
+                    )}
                 </div>
 
                 <div className="h-20">
-                     {(widgetState === WidgetState.Idle || widgetState === WidgetState.Ended || widgetState === WidgetState.Error) && (
-                        // Only show start button if the session isn't in the middle of uploading/sending
-                        !(widgetState === WidgetState.Ended && (reportingStatus === 'analyzing' || reportingStatus === 'sending')) && (
-                            <button onClick={startSession} className="w-20 h-20 rounded-full bg-green-500 hover:bg-green-600 text-white flex items-center justify-center shadow-lg transition-transform transform hover:scale-105" aria-label={widgetState === WidgetState.Error ? "Retry Call" : "Start Call"}>
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10" viewBox="0 0 20 20" fill="currentColor"><path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" /></svg>
-                            </button>
-                        )
-                    )}
-                    {(widgetState === WidgetState.Connecting || widgetState === WidgetState.Listening || widgetState === WidgetState.Speaking) && (
+                    {(widgetState === WidgetState.Connecting || widgetState === WidgetState.Listening || widgetState === WidgetState.Speaking) ? (
                         <button onClick={endSession} className="w-20 h-20 rounded-full bg-red-600 hover:bg-red-700 text-white flex items-center justify-center shadow-lg transition-transform transform hover:scale-105" aria-label="End Call">
                            <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 rotate-135" viewBox="0 0 20 20" fill="currentColor"><path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" /></svg>
                         </button>
+                    ) : (
+                        !(widgetState === WidgetState.Ended && (reportingStatus === 'analyzing' || reportingStatus === 'sending' || reportingStatus === 'sent')) && (
+                            <button onClick={startSession} className="w-20 h-20 rounded-full bg-green-500 hover:bg-green-600 text-white flex items-center justify-center shadow-lg transition-transform transform hover:scale-105" aria-label={widgetState === WidgetState.Error || (widgetState === WidgetState.Ended && reportingStatus === 'failed') ? "Retry" : "Start Call"}>
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10" viewBox="0 0 20 20" fill="currentColor"><path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" /></svg>
+                            </button>
+                        )
                     )}
                 </div>
             </div>
