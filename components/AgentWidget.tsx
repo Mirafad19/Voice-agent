@@ -94,57 +94,58 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
   const analyzeAndSendEmail = useCallback(async (recording: Omit<Recording, 'id' | 'url'>) => {
     const { emailConfig, fileUploadConfig } = agentProfile as AgentConfig;
-    if (!emailConfig || !emailConfig.serviceId || !emailConfig.templateId || !emailConfig.publicKey || !emailConfig.recipientEmail) {
-      console.error("EmailJS configuration is incomplete. Skipping email report.");
-      setErrorMessage("Email reporting not configured. Update profile in dashboard.");
-      setReportingStatus('failed');
-      return;
+    if (!emailConfig?.serviceId || !emailConfig?.templateId || !emailConfig?.publicKey || !emailConfig?.recipientEmail) {
+        setErrorMessage("Email reporting is not fully configured.");
+        setReportingStatus('failed');
+        setTimeout(() => setReportingStatus('idle'), 5000);
+        return;
     }
 
     setReportingStatus('analyzing');
 
     try {
-        let audioLink = 'Audio link not available: Cloudinary is not configured in the agent profile.';
+        let audioLink = 'Audio link not available: Cloudinary is not configured.';
         if (fileUploadConfig?.cloudinaryCloudName && fileUploadConfig.cloudinaryUploadPreset) {
             try {
                 audioLink = await getCloudinaryShareableLink(fileUploadConfig.cloudinaryCloudName, fileUploadConfig.cloudinaryUploadPreset, recording);
             } catch (uploadError) {
                 console.error("Audio upload to Cloudinary failed:", uploadError);
-                throw new Error(uploadError instanceof Error ? `Cloudinary upload failed: ${uploadError.message}` : 'Cloudinary upload failed.');
+                if (uploadError instanceof Error && uploadError.message.includes('Failed to fetch')) {
+                     throw new Error('Upload failed. Check network & website Content Security Policy.');
+                }
+                throw new Error(uploadError instanceof Error ? `Cloudinary error: ${uploadError.message}` : 'Cloudinary upload failed.');
             }
         }
 
         const ai = new GoogleGenAI({ apiKey });
         const audioBase64 = await blobToBase64(recording.blob);
-
-        const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: { parts: [
-                { text: `Analyze this call recording. Provide a concise summary, the customer's sentiment ('Positive', 'Neutral', or 'Negative'), and a list of action items. Return a JSON object.` },
-                { inlineData: { mimeType: recording.mimeType, data: audioBase64 } },
-            ] },
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.OBJECT, properties: {
-                        summary: { type: Type.STRING },
-                        sentiment: { type: Type.STRING },
-                        actionItems: { type: Type.ARRAY, items: { type: Type.STRING } }
-                    }, required: ["summary", "sentiment", "actionItems"]
-                }
-            },
-        });
-
-        if (!response.text) {
-          throw new Error("Gemini analysis returned an empty response.");
-        }
         
         let analysis;
         try {
-          analysis = JSON.parse(response.text);
-        } catch (parseError) {
-          console.error("Failed to parse Gemini response:", response.text);
-          throw new Error("Gemini analysis returned invalid data.");
+            const response = await ai.models.generateContent({
+                model: "gemini-2.5-flash",
+                contents: { parts: [
+                    { text: `Analyze this call recording. Provide a concise summary, the customer's sentiment ('Positive', 'Neutral', or 'Negative'), and a list of action items. Return a JSON object.` },
+                    { inlineData: { mimeType: recording.mimeType, data: audioBase64 } },
+                ] },
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: Type.OBJECT, properties: {
+                            summary: { type: Type.STRING },
+                            sentiment: { type: Type.STRING },
+                            actionItems: { type: Type.ARRAY, items: { type: Type.STRING } }
+                        }, required: ["summary", "sentiment", "actionItems"]
+                    }
+                },
+            });
+            if (!response.text) {
+              throw new Error("Gemini analysis returned an empty response.");
+            }
+            analysis = JSON.parse(response.text);
+        } catch (geminiError) {
+             console.error("Failed to analyze with Gemini:", geminiError);
+             throw new Error("Failed to get analysis from AI.");
         }
 
         setReportingStatus('sending');
@@ -158,9 +159,14 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             email: emailConfig.recipientEmail,
             audio_link: audioLink,
         };
-
-        await emailjs.send(emailConfig.serviceId, emailConfig.templateId, templateParams, { publicKey: emailConfig.publicKey });
         
+        try {
+            await emailjs.send(emailConfig.serviceId, emailConfig.templateId, templateParams, { publicKey: emailConfig.publicKey });
+        } catch(emailError) {
+            console.error("EmailJS send failed:", emailError);
+            throw new Error("EmailJS failed. Check service/template IDs & public key.");
+        }
+
         setReportingStatus('sent');
     } catch (error) {
         const message = error instanceof Error ? error.message : 'An unknown error occurred. Check the console.';

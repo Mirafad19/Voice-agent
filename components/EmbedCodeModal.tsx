@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Modal } from './ui/Modal';
 import { Input } from './ui/Input';
@@ -31,7 +32,7 @@ export const EmbedCodeModal: React.FC<EmbedCodeModalProps> = ({ isOpen, onClose,
   <iframe
     id="${iframeId}"
     src="${finalUrl}"
-    style="border:none; background-color: transparent; width: 300px; height: 140px; transition: width 0.3s ease-in-out, height 0.3s ease-in-out;"
+    style="border: none; outline: none; background-color: transparent; width: 300px; height: 140px; transition: width 0.3s ease-in-out, height 0.3s ease-in-out;"
     allow="microphone"
     frameborder="0"
     title="${agentProfile.name}"
