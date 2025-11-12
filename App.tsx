@@ -11,7 +11,7 @@ import { AgentWidget } from './components/AgentWidget';
 import { Recording, AgentProfile } from './types';
 import { Button } from './components/ui/Button';
 
-const Header = ({ onEmbedClick, onNewProfile, onDeleteProfile, profiles, activeProfile, onSelectProfile }) => (
+const Header = ({ onEmbedClick, onNewProfile, onDeleteProfile, profiles, activeProfile, onSelectProfile, onResetApiKey }) => (
     <header className="bg-white dark:bg-gray-800 shadow-sm p-4 flex justify-between items-center">
         <div className="flex items-center space-x-4">
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">AI Voice Agent Dashboard</h1>
@@ -25,7 +25,10 @@ const Header = ({ onEmbedClick, onNewProfile, onDeleteProfile, profiles, activeP
             <Button onClick={onNewProfile} variant="secondary">New Profile</Button>
             <Button onClick={onDeleteProfile} variant="danger" disabled={profiles.length <= 1}>Delete Profile</Button>
         </div>
-        <Button onClick={onEmbedClick}>Get Embed Code</Button>
+        <div className="flex items-center space-x-2">
+          <Button onClick={onEmbedClick}>Get Embed Code</Button>
+          <Button onClick={onResetApiKey} variant="secondary">Change API Key</Button>
+        </div>
     </header>
 );
 
@@ -46,6 +49,10 @@ const App: React.FC = () => {
 
     const handleApiKeySubmit = (key: string) => {
         setApiKey(key);
+    };
+    
+    const handleResetApiKey = () => {
+        setApiKey(null);
     };
 
     const handleSessionEnd = useCallback((recording: Recording) => {
@@ -102,6 +109,7 @@ const App: React.FC = () => {
                 profiles={profiles}
                 activeProfile={activeProfile}
                 onSelectProfile={selectProfile}
+                onResetApiKey={handleResetApiKey}
             />
             {notification && (
               <div className="max-w-4xl mx-auto mt-4 px-8">
