@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AgentProfile, AgentConfig, WidgetState, Recording, ReportingStatus } from '../types';
 import { GeminiLiveService } from '../services/geminiLiveService';
@@ -100,7 +101,13 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const analyzeAndSendReport = useCallback(async (recording: Omit<Recording, 'id' | 'url'>) => {
     const { emailConfig, fileUploadConfig } = agentProfile as AgentConfig;
     if (!emailConfig?.formspreeEndpoint) {
-        setErrorMessage("Formspree endpoint not configured.");
+        let detailedError = "Formspree endpoint not configured.";
+        if (isWidgetMode) {
+          detailedError = "Email report failed: Formspree URL is missing. Please update your agent profile in the dashboard and generate a new embed code.";
+        } else {
+          detailedError = "Formspree endpoint not configured. Please add it in the Agent Configuration panel.";
+        }
+        setErrorMessage(detailedError);
         setReportingStatus('failed');
         return;
     }
@@ -183,7 +190,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         setErrorMessage(message);
         setReportingStatus('failed');
     }
-  }, [agentProfile, apiKey]);
+  }, [agentProfile, apiKey, isWidgetMode]);
 
   const endSession = useCallback(() => {
     cleanupServices();
