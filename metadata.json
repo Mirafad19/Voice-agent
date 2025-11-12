@@ -1,6 +1,6 @@
 {
-  "name": "Copy of AUDIO",
-  "description": "Test for voice ",
+  "name": "Copy of Audio (2)",
+  "description": "Test",
   "requestFramePermissions": [
     "microphone"
   ]
