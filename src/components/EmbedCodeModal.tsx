@@ -1,5 +1,4 @@
-
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
 import { AgentProfile, AgentConfig } from '../types';
