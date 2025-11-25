@@ -1,8 +1,3 @@
-/**
- * Safely encodes a UTF-8 string to a URL-safe Base64 string.
- * @param str The string to encode.
- * @returns The URL-safe Base64 encoded string.
- */
 export function safeBtoa(str: string): string {
   try {
     const base64 = btoa(
@@ -17,11 +12,6 @@ export function safeBtoa(str: string): string {
   }
 }
 
-/**
- * Safely decodes a URL-safe Base64 string to a UTF-8 string.
- * @param b64 The URL-safe Base64 string to decode.
- * @returns The decoded string.
- */
 export function safeAtob(b64: string): string {
   try {
     let urlSafeB64 = b64.replace(/-/g, '+').replace(/_/g, '/');
@@ -41,11 +31,6 @@ export function safeAtob(b64: string): string {
   }
 }
 
-/**
- * Converts a Blob to a Base64 string.
- * @param blob The Blob to convert.
- * @returns A promise that resolves with the Base64 string.
- */
 export function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
