@@ -13,12 +13,12 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm p-4" onClick={onClose}>
       <div 
-        className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-lg mx-4 text-gray-900 dark:text-gray-100 transform transition-all"
+        className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh] text-gray-900 dark:text-gray-100 transform transition-all"
         onClick={e => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
           <h3 className="text-xl font-semibold">{title}</h3>
           {showCloseButton && onClose && (
             <button
@@ -31,7 +31,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
             </button>
           )}
         </div>
-        <div className="p-6">
+        <div className="p-6 overflow-y-auto">
           {children}
         </div>
       </div>
