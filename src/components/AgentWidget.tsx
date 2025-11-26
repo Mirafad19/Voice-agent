@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AgentProfile, AgentConfig, WidgetState, Recording, ReportingStatus } from '../types';
 import { GeminiLiveService } from '../services/geminiLiveService';
@@ -14,19 +15,25 @@ interface AgentWidgetProps {
   onSessionEnd?: (recording: Recording) => void;
 }
 
+// Helper function to upload and get a shareable link from Cloudinary
 async function getCloudinaryShareableLink(cloudName: string, uploadPreset: string, recording: Omit<Recording, 'id' | 'url'>): Promise<string> {
     const formData = new FormData();
     formData.append('file', recording.blob);
-    formData.append('upload_preset', uploadPreset);
+    // IMPORTANT: We trim the preset to avoid spaces which cause "Unknown API key" error
+    formData.append('upload_preset', uploadPreset.trim());
 
-    const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/video/upload`, {
+    const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName.trim()}/video/upload`, {
         method: 'POST',
         body: formData,
     });
 
     if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(`Cloudinary upload failed: ${errorData.error.message}`);
+        const errorMsg = errorData.error.message;
+        if (errorMsg === "Unknown API key") {
+            throw new Error(`Cloudinary Error: "Unknown API key". This means the Upload Preset Name (${uploadPreset}) does not exist in your Cloudinary Dashboard. Please check the spelling exactly.`);
+        }
+        throw new Error(`Cloudinary upload failed: ${errorMsg}`);
     }
 
     const result = await response.json();
@@ -36,12 +43,19 @@ async function getCloudinaryShareableLink(cloudName: string, uploadPreset: strin
 
 const FabIcon = ({className = "h-9 w-9 text-white"}) => (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" fill="none" strokeLinecap="round" strokeLinejoin="round">
+        {/* Headphone band and earpieces */}
         <path d="M4 13.5V12a8 8 0 1116 0v1.5" />
         <path d="M4 12a2 2 0 00-2 2v3a2 2 0 002 2h1" />
         <path d="M20 12a2 2 0 012 2v3a2 2 0 01-2 2h-1" />
+        
+        {/* Eyes */}
         <path d="M9 12h.01" />
         <path d="M15 12h.01" />
+        
+        {/* Smile */}
         <path d="M9.5 16a3.5 3.5 0 005 0" />
+        
+        {/* Microphone */}
         <path d="M5 14v1a2 2 0 002 2h2" />
     </svg>
 );
@@ -56,10 +70,13 @@ const MicrophoneIcon = ({state}: {state: WidgetState}) => (
     </svg>
 );
 
-const EmailIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-    </svg>
+const NetworkIcon = ({ isOnline }: { isOnline: boolean }) => (
+    <div className={`flex items-center gap-1.5 rounded-full px-2 py-1 border transition-colors ${isOnline ? 'bg-gray-100 border-gray-200 dark:bg-gray-800 dark:border-gray-600' : 'bg-red-100 border-red-200 dark:bg-red-900/30 dark:border-red-800'}`} title={isOnline ? "Network Stable" : "Network Unstable"}>
+        <div className={`w-2.5 h-2.5 rounded-full ${isOnline ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
+        <span className={`text-[10px] font-medium uppercase tracking-wider ${isOnline ? 'text-gray-500 dark:text-gray-400' : 'text-red-600 dark:text-red-400'}`}>
+            {isOnline ? 'LIVE' : 'OFFLINE'}
+        </span>
+    </div>
 );
 
 export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, isWidgetMode, onSessionEnd }) => {
@@ -75,6 +92,9 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
   const [reportingStatus, setReportingStatus] = useState<ReportingStatus>('idle');
   const [errorMessage, setErrorMessage] = useState('');
+  
+  // Network Monitoring State
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   const geminiServiceRef = useRef<GeminiLiveService | null>(null);
   const recordingServiceRef = useRef<RecordingService | null>(null);
@@ -87,6 +107,20 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const shouldEndAfterSpeakingRef = useRef(false);
   
   const accentColorClass = agentProfile.accentColor;
+
+  // Network Monitoring Effect
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   const analyzeAndSendReport = useCallback(async (recording: Omit<Recording, 'id' | 'url'>) => {
     const { emailConfig, fileUploadConfig } = agentProfile as AgentConfig;
@@ -106,11 +140,20 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
     try {
         let audioLink = 'Audio link not available: Cloudinary is not configured.';
+        // --- Cloudinary Upload Step ---
         if (fileUploadConfig?.cloudinaryCloudName && fileUploadConfig.cloudinaryUploadPreset) {
             try {
                 audioLink = await getCloudinaryShareableLink(fileUploadConfig.cloudinaryCloudName, fileUploadConfig.cloudinaryUploadPreset, recording);
             } catch (uploadError) {
                 console.error("Audio upload to Cloudinary failed:", uploadError);
+                // Handle user-facing error for Cloudinary specifically
+                const errorMsg = uploadError instanceof Error ? uploadError.message : 'Upload failed';
+                // If it's our custom "Signed" error, we want to show that clearly
+                if (errorMsg.includes("Signed") || errorMsg.includes("Upload Preset Name")) {
+                     setErrorMessage(errorMsg);
+                     throw new Error(errorMsg);
+                }
+                
                 if (uploadError instanceof TypeError || (uploadError instanceof Error && uploadError.message.includes('Failed to fetch'))) {
                      throw new Error('Upload error. Check network, ad-blockers, or website Content Security Policy (CSP).');
                 }
@@ -122,6 +165,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         const audioBase64 = await blobToBase64(recording.blob);
         
         let analysis;
+        // --- Gemini Analysis Step ---
         try {
             const response = await ai.models.generateContent({
                 model: "gemini-2.5-flash",
@@ -160,6 +204,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
         setReportingStatus('sending');
 
+        // --- Formspree Sending Step ---
         const formspreeResponse = await fetch(emailConfig.formspreeEndpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
@@ -325,6 +370,13 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   }, []);
 
   const startSession = useCallback(async () => {
+    // Check network before starting
+    if (!navigator.onLine) {
+        setWidgetState(WidgetState.Error);
+        setErrorMessage("No internet connection.");
+        return;
+    }
+
     shouldEndAfterSpeakingRef.current = false;
     setWidgetState(WidgetState.Connecting);
     setReportingStatus('idle');
@@ -423,6 +475,8 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   };
   
   const getStatusText = () => {
+    if (!isOnline) return "Network Connection Lost";
+    
     if (widgetState === WidgetState.Ended) {
         switch(reportingStatus) {
             case 'analyzing': return 'Analyzing & uploading...';
@@ -464,12 +518,28 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     <div className={`${themeClass} ${isWidgetMode ? 'w-full h-full' : 'fixed bottom-24 right-5 w-96 h-[600px] rounded-2xl shadow-2xl z-40'}`}>
         <div className={`flex flex-col w-full h-full bg-white dark:bg-gray-900 text-black dark:text-white rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700`}>
             <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-                <h3 className="font-bold text-lg">{agentProfile.name}</h3>
+                <div className="flex items-center gap-3">
+                    <h3 className="font-bold text-lg">{agentProfile.name}</h3>
+                    <NetworkIcon isOnline={isOnline} />
+                </div>
                 <button onClick={toggleWidget} className="p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
             </div>
-            <div className="flex-grow flex flex-col items-center justify-center p-6 text-center">
+            <div className="flex-grow flex flex-col items-center justify-center p-6 text-center relative">
+                {/* Network Instability Overlay */}
+                {!isOnline && (
+                    <div className="absolute inset-0 bg-white/80 dark:bg-gray-900/80 z-10 flex flex-col items-center justify-center backdrop-blur-sm">
+                        <div className="bg-red-100 dark:bg-red-900/50 p-4 rounded-xl border border-red-200 dark:border-red-700 max-w-[80%]">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-red-600 dark:text-red-400 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-4.243 2.829a4.978 4.978 0 01-1.414-2.83m-1.414 5.658a9 9 0 01-2.167-9.238m7.824 2.167a1 1 0 111.414 1.414m-1.414-1.414L3 3m8.293 8.293l1.414 1.414" />
+                            </svg>
+                            <h4 className="font-bold text-red-800 dark:text-red-200">Network Unstable</h4>
+                            <p className="text-xs text-red-700 dark:text-red-300 mt-1">Check your internet connection. The call may glitch or disconnect.</p>
+                        </div>
+                    </div>
+                )}
+
                 <div className="relative w-48 h-48 flex items-center justify-center mb-4">
                     {widgetState === WidgetState.Connecting && <Spinner className={`w-24 h-24 text-accent-${accentColorClass}`} />}
                     

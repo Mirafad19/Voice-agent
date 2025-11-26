@@ -1,3 +1,4 @@
+
 export enum WidgetTheme {
   Light = 'light',
   Dark = 'dark',
@@ -12,6 +13,7 @@ export enum AgentVoice {
 }
 
 export enum AccentColor {
+  Red = 'red',
   Orange = 'orange',
   Gold = 'gold',
   Cyan = 'cyan',

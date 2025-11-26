@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { AgentProfile, WidgetTheme, AgentVoice, AccentColor, EmailConfig, FileUploadConfig } from '../types';
 import { Input } from './ui/Input';
@@ -10,6 +11,7 @@ interface ConfigurationPanelProps {
 }
 
 const accentColorOptions = [
+    { name: 'Red', value: AccentColor.Red, color: 'bg-accent-red' },
     { name: 'Orange', value: AccentColor.Orange, color: 'bg-accent-orange' },
     { name: 'Gold', value: AccentColor.Gold, color: 'bg-accent-gold' },
     { name: 'Cyan', value: AccentColor.Cyan, color: 'bg-accent-cyan' },
@@ -43,17 +45,20 @@ export const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({ profile,
       ...prev,
       emailConfig: {
         ...(prev.emailConfig || { formspreeEndpoint: '' }),
-        [key]: value
+        [key]: typeof value === 'string' ? value.trim() : value
       }
     }));
   };
 
   const handleFileUploadConfigChange = <K extends keyof FileUploadConfig,>(key: K, value: FileUploadConfig[K]) => {
+    // Auto-trim whitespace from Cloudinary configs to prevent "Unknown API Key" errors
+    const cleanValue = typeof value === 'string' ? value.trim() : value;
+    
     setEditedProfile(prev => ({
       ...prev,
       fileUploadConfig: {
         ...(prev.fileUploadConfig || { cloudinaryCloudName: '', cloudinaryUploadPreset: '' }),
-        [key]: value
+        [key]: cleanValue
       }
     }));
   };
@@ -231,6 +236,19 @@ export const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({ profile,
                         <li>Paste the URL into the field above and save your changes. You're all set!</li>
                     </ol>
                 </div>
+                
+                <div className="mt-4 space-y-3 p-4 bg-blue-50 dark:bg-blue-900/50 rounded-md border border-blue-200 dark:border-blue-700">
+                    <h4 className="font-semibold text-blue-900 dark:text-blue-200">⚠️ Not receiving emails?</h4>
+                    <p className="text-sm text-blue-800 dark:text-blue-300">
+                        If the app says "Report sent successfully" but you don't see it in your Inbox:
+                    </p>
+                    <ul className="list-disc list-inside space-y-1 text-sm text-blue-800 dark:text-blue-300">
+                        <li>Check your <strong>Formspree Dashboard</strong> &gt; <strong>Submissions</strong> tab.</li>
+                        <li>Look in the <strong>Spam</strong> folder there.</li>
+                        <li>If you see the report, select it and click <strong>"Not Spam"</strong>.</li>
+                        <li>This trains Formspree to trust your app, and future emails will arrive in your Gmail Inbox instantly.</li>
+                    </ul>
+                </div>
             </div>
         </details>
       </div>
@@ -243,7 +261,7 @@ export const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({ profile,
           Reset
         </Button>
         <Button onClick={handleSave} disabled={!hasChanges}>
-          Save Changes
+          Save Configuration
         </Button>
       </div>
     </div>
