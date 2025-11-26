@@ -39,20 +39,33 @@ async function getCloudinaryShareableLink(cloudName: string, uploadPreset: strin
     return result.secure_url;
 }
 
-// New Premium Filled Icon (Looks more "Real" and professional)
-const PremiumAgentIcon = ({className = "h-9 w-9 text-white"}) => (
+// New Waveform Icon (Matches the "Ready to talk" reference image)
+const WaveformIcon = ({className = "h-9 w-9 text-white"}) => (
     <svg viewBox="0 0 24 24" fill="currentColor" className={className} xmlns="http://www.w3.org/2000/svg">
-        {/* Solid Head Shape */}
-        <path fillRule="evenodd" clipRule="evenodd" d="M12 2C8.13401 2 5 5.13401 5 9V15C5 18.866 8.13401 22 12 22C15.866 22 19 18.866 19 15V9C19 5.13401 15.866 2 12 2ZM12 4C9.23858 4 7 6.23858 7 9V15C7 17.7614 9.23858 20 12 20C14.7614 20 17 17.7614 17 15V9C17 6.23858 14.7614 4 12 4Z" fillOpacity="0.5"/>
-        {/* Headset Band */}
-        <path d="M4 9C4 4.58172 7.58172 1 12 1C16.4183 1 20 4.58172 20 9V13C20 13.5523 19.5523 14 19 14H18V8C18 4.68629 15.3137 2 12 2C8.68629 2 6 4.68629 6 8V14H5C4.44772 14 4 13.5523 4 13V9Z" />
-        {/* Ear Cups */}
-        <rect x="4" y="13" width="2" height="4" rx="1" />
-        <rect x="18" y="13" width="2" height="4" rx="1" />
-        {/* Face details */}
-        <circle cx="9.5" cy="11.5" r="1.5" />
-        <circle cx="14.5" cy="11.5" r="1.5" />
-        <path d="M9 16C9 16 10 17 12 17C14 17 15 16 15 16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+        <rect x="4" y="10" width="2" height="4" rx="1" fillOpacity="0.5" />
+        <rect x="8" y="6" width="2" height="12" rx="1" fillOpacity="0.8" />
+        <rect x="12" y="3" width="2" height="18" rx="1" />
+        <rect x="16" y="6" width="2" height="12" rx="1" fillOpacity="0.8" />
+        <rect x="20" y="10" width="2" height="4" rx="1" fillOpacity="0.5" />
+    </svg>
+);
+
+const FabIcon = ({className = "h-9 w-9 text-white"}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" fill="none" strokeLinecap="round" strokeLinejoin="round">
+        {/* Headphone band and earpieces */}
+        <path d="M4 13.5V12a8 8 0 1116 0v1.5" />
+        <path d="M4 12a2 2 0 00-2 2v3a2 2 0 002 2h1" />
+        <path d="M20 12a2 2 0 012 2v3a2 2 0 01-2 2h-1" />
+        
+        {/* Eyes */}
+        <path d="M9 12h.01" />
+        <path d="M15 12h.01" />
+        
+        {/* Smile */}
+        <path d="M9.5 16a3.5 3.5 0 005 0" />
+        
+        {/* Microphone */}
+        <path d="M5 14v1a2 2 0 002 2h2" />
     </svg>
 );
 
@@ -494,7 +507,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
           </div>
         )}
         <button onClick={toggleWidget} className={`w-16 h-16 rounded-full bg-accent-${accentColorClass} shadow-lg flex items-center justify-center text-white transform hover:scale-110 transition-transform animate-pulse`}>
-          <PremiumAgentIcon />
+          <FabIcon />
         </button>
       </div>
     );
@@ -553,15 +566,15 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                             {/* Connecting Spinner */}
                             {widgetState === WidgetState.Connecting && <Spinner className={`w-20 h-20 text-accent-${accentColorClass}`} />}
                             
-                            {/* Idle Icon - NOW PREMIUM */}
+                            {/* Idle Icon - NOW WAVEFORM */}
                             {widgetState === WidgetState.Idle && (
-                                <PremiumAgentIcon className={`h-24 w-24 text-gray-300 dark:text-gray-600`} />
+                                <WaveformIcon className={`h-24 w-24 text-gray-300 dark:text-gray-600`} />
                             )}
 
-                            {/* Active Icon - NOW PREMIUM AND PERSISTENT (Not Mic) */}
+                            {/* Active Icon - NOW WAVEFORM AND PERSISTENT (Not Mic) */}
                             {(widgetState === WidgetState.Listening || widgetState === WidgetState.Speaking) && (
                                 <div className={`transition-transform duration-300 ${widgetState === WidgetState.Speaking ? 'scale-110' : 'scale-100'}`}>
-                                    <PremiumAgentIcon className={`h-24 w-24 text-accent-${accentColorClass}`} />
+                                    <WaveformIcon className={`h-24 w-24 text-accent-${accentColorClass}`} />
                                 </div>
                             )}
 
