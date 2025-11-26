@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AgentProfile, AgentConfig, WidgetState, Recording, ReportingStatus } from '../types';
 import { GeminiLiveService } from '../services/geminiLiveService';
@@ -60,8 +59,8 @@ const FabIcon = ({className = "h-9 w-9 text-white"}) => (
     </svg>
 );
 
-const MicrophoneIcon = ({state}: {state: WidgetState}) => (
-    <svg xmlns="http://www.w3.org/2000/svg" className={`h-12 w-12 transition-colors duration-300 ${state === WidgetState.Idle ? 'text-gray-800 dark:text-white' : 'text-white'}`} viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" fill="none" strokeLinecap="round" strokeLinejoin="round">
+const MicrophoneIcon = ({state, className}: {state: WidgetState, className?: string}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className || `h-12 w-12 transition-colors duration-300 ${state === WidgetState.Idle ? 'text-gray-400 dark:text-gray-500' : 'text-white'}`} viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" fill="none" strokeLinecap="round" strokeLinejoin="round">
         <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
         <path d="M9 2m0 3a3 3 0 0 1 3 -3h0a3 3 0 0 1 3 3v5a3 3 0 0 1 -3 3h0a3 3 0 0 1 -3 -3z" />
         <path d="M5 10a7 7 0 0 0 14 0" />
@@ -499,11 +498,12 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
   if (!isOpen) {
     const fabContent = (
-      <div className={`${themeClass} relative`}>
+      <div className={`${themeClass} relative group`}>
         {showCallout && agentProfile.calloutMessage && (
-          <div className="absolute top-1/2 right-full mr-4 w-max max-w-[200px] transform -translate-y-1/2 px-4 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-lg shadow-lg text-left text-sm animate-fade-in-up">
+          <div className="absolute bottom-full right-0 mb-3 w-max max-w-[200px] px-4 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-xl shadow-xl text-left text-sm animate-fade-in-up border border-gray-100 dark:border-gray-700">
             <p>{agentProfile.calloutMessage}</p>
-            <div className="absolute top-1/2 -right-2 w-0 h-0 transform -translate-y-1/2 border-y-8 border-y-transparent border-l-8 border-l-white dark:border-l-gray-800"></div>
+            {/* Arrow pointing down */}
+            <div className="absolute -bottom-2 right-6 w-4 h-4 bg-white dark:bg-gray-800 transform rotate-45 border-b border-r border-gray-100 dark:border-gray-700"></div>
           </div>
         )}
         <button onClick={toggleWidget} className={`w-16 h-16 rounded-full bg-accent-${accentColorClass} shadow-lg flex items-center justify-center text-white transform hover:scale-110 transition-transform animate-pulse`}>
@@ -526,10 +526,10 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
             </div>
-            <div className="flex-grow flex flex-col items-center justify-center p-6 text-center relative">
+            <div className="flex-grow flex flex-col items-center justify-center p-6 text-center relative overflow-hidden">
                 {/* Network Instability Overlay */}
                 {!isOnline && (
-                    <div className="absolute inset-0 bg-white/80 dark:bg-gray-900/80 z-10 flex flex-col items-center justify-center backdrop-blur-sm">
+                    <div className="absolute inset-0 bg-white/80 dark:bg-gray-900/80 z-30 flex flex-col items-center justify-center backdrop-blur-sm">
                         <div className="bg-red-100 dark:bg-red-900/50 p-4 rounded-xl border border-red-200 dark:border-red-700 max-w-[80%]">
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-red-600 dark:text-red-400 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-4.243 2.829a4.978 4.978 0 01-1.414-2.83m-1.414 5.658a9 9 0 01-2.167-9.238m7.824 2.167a1 1 0 111.414 1.414m-1.414-1.414L3 3m8.293 8.293l1.414 1.414" />
@@ -540,58 +540,79 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                     </div>
                 )}
 
-                <div className="relative w-48 h-48 flex items-center justify-center mb-4">
-                    {widgetState === WidgetState.Connecting && <Spinner className={`w-24 h-24 text-accent-${accentColorClass}`} />}
+                {/* Main Visual Area: 3D Orb Design */}
+                <div className="relative w-full flex items-center justify-center mb-8 min-h-[200px]">
                     
-                    {widgetState === WidgetState.Idle && (
-                        <FabIcon className={`h-24 w-24 text-gray-400 dark:text-gray-500`} />
-                    )}
+                    {/* Background Glow */}
+                    <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-accent-${accentColorClass} opacity-10 blur-[60px] rounded-full`}></div>
 
+                    {/* Animated Rings for Active States */}
                     {(widgetState === WidgetState.Listening || widgetState === WidgetState.Speaking) && (
-                        <div className="relative w-36 h-36 flex items-center justify-center">
-                            {(widgetState === WidgetState.Listening || widgetState === WidgetState.Speaking) && (
-                                <>
-                                    <div className={`absolute w-full h-full rounded-full bg-accent-${accentColorClass} animate-sonar-ping`}></div>
-                                    <div className={`absolute w-full h-full rounded-full bg-accent-${accentColorClass} animate-sonar-ping [animation-delay:0.5s]`}></div>
-                                </>
-                            )}
-                            <div className={`relative w-24 h-24 rounded-full flex items-center justify-center transition-colors duration-300 shadow-lg bg-accent-${accentColorClass}`}>
-                                {widgetState === WidgetState.Speaking && <div className="absolute inset-0 rounded-full bg-white opacity-20 animate-ping"></div>}
-                                <MicrophoneIcon state={widgetState} />
-                            </div>
-                        </div>
+                        <>
+                            <div className={`absolute w-64 h-64 rounded-full border-2 border-accent-${accentColorClass} opacity-20 animate-sonar-ping`}></div>
+                            <div className={`absolute w-64 h-64 rounded-full border-2 border-accent-${accentColorClass} opacity-20 animate-sonar-ping [animation-delay:1s]`}></div>
+                        </>
                     )}
 
-                    {widgetState === WidgetState.Error && <div className="text-red-500"><svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>}
-                    {widgetState === WidgetState.Ended && (reportingStatus === 'analyzing' || reportingStatus === 'sending') && <Spinner className={`w-24 h-24 text-accent-${accentColorClass}`} />}
-                    {widgetState === WidgetState.Ended && reportingStatus === 'sent' && <div className="text-green-500"><svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>}
-                    {widgetState === WidgetState.Ended && reportingStatus === 'failed' && <div className="text-red-500"><svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>}
-                    
+                    {/* The 3D Orb Container */}
+                    <div className={`relative w-48 h-48 rounded-full bg-gradient-to-br from-accent-${accentColorClass} to-gray-300 dark:to-gray-800 shadow-[0_20px_50px_rgba(0,0,0,0.15)] flex items-center justify-center transition-all duration-500 ${widgetState === WidgetState.Speaking ? 'scale-105' : 'scale-100'}`}>
+                        
+                        {/* Inner Shine/Gloss */}
+                        <div className="absolute top-0 left-0 w-full h-full rounded-full bg-gradient-to-b from-white/20 to-transparent pointer-events-none"></div>
+                        
+                        {/* Inner Circle Background */}
+                        <div className="relative w-44 h-44 rounded-full bg-white dark:bg-gray-900 flex items-center justify-center shadow-inner z-10 overflow-hidden">
+                            
+                            {/* Connecting Spinner */}
+                            {widgetState === WidgetState.Connecting && <Spinner className={`w-20 h-20 text-accent-${accentColorClass}`} />}
+                            
+                            {/* Idle Icon */}
+                            {widgetState === WidgetState.Idle && (
+                                <FabIcon className={`h-20 w-20 text-gray-300 dark:text-gray-600`} />
+                            )}
+
+                            {/* Active Icon (Mic) */}
+                            {(widgetState === WidgetState.Listening || widgetState === WidgetState.Speaking) && (
+                                <div className={`transition-transform duration-300 ${widgetState === WidgetState.Speaking ? 'scale-110' : 'scale-100'}`}>
+                                    <MicrophoneIcon state={widgetState} className={`h-20 w-20 text-accent-${accentColorClass}`} />
+                                </div>
+                            )}
+
+                            {/* Error Icon */}
+                            {widgetState === WidgetState.Error && <div className="text-red-500 animate-pulse"><svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>}
+                            
+                            {/* Finished State Icons */}
+                            {widgetState === WidgetState.Ended && (reportingStatus === 'analyzing' || reportingStatus === 'sending') && <Spinner className={`w-20 h-20 text-accent-${accentColorClass}`} />}
+                            {widgetState === WidgetState.Ended && reportingStatus === 'sent' && <div className="text-green-500"><svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>}
+                            {widgetState === WidgetState.Ended && reportingStatus === 'failed' && <div className="text-red-500"><svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>}
+                        </div>
+                    </div>
                 </div>
-                <p className="text-lg text-gray-600 dark:text-gray-400 h-8 mb-2 break-words max-w-full px-2">{getStatusText()}</p>
+
+                <p className="text-lg font-medium text-gray-700 dark:text-gray-200 h-8 mb-2 break-words max-w-full px-2">{getStatusText()}</p>
                 
                 <div className="h-10 mb-4 flex items-center justify-center">
                     {(widgetState === WidgetState.Idle || (widgetState === WidgetState.Ended && reportingStatus === 'idle')) && (
-                         <p className="text-md text-gray-500 dark:text-gray-300 transition-opacity duration-500">
+                         <p className="text-sm text-gray-500 dark:text-gray-400 transition-opacity duration-500">
                            Click the call button to start a conversation.
                         </p>
                     )}
                      {(widgetState === WidgetState.Ended && (reportingStatus === 'sent' || reportingStatus === 'failed')) && (
-                         <p className="text-md text-gray-500 dark:text-gray-300 transition-opacity duration-500">
+                         <p className="text-sm text-gray-500 dark:text-gray-400 transition-opacity duration-500">
                            You may now close the widget.
                         </p>
                     )}
                 </div>
 
-                <div className="h-20">
+                <div className="h-20 flex items-center justify-center">
                     {(widgetState === WidgetState.Connecting || widgetState === WidgetState.Listening || widgetState === WidgetState.Speaking) ? (
-                        <button onClick={endSession} className="w-20 h-20 rounded-full bg-red-600 hover:bg-red-700 text-white flex items-center justify-center shadow-lg transition-transform transform hover:scale-105" aria-label="End Call">
-                           <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 rotate-135" viewBox="0 0 20 20" fill="currentColor"><path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" /></svg>
+                        <button onClick={endSession} className="w-16 h-16 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center shadow-lg transition-transform transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-red-300 dark:focus:ring-red-900" aria-label="End Call">
+                           <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 rotate-135" viewBox="0 0 20 20" fill="currentColor"><path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" /></svg>
                         </button>
                     ) : (
                         !(widgetState === WidgetState.Ended && (reportingStatus === 'analyzing' || reportingStatus === 'sending' || reportingStatus === 'sent')) && (
-                            <button onClick={startSession} className="w-20 h-20 rounded-full bg-green-500 hover:bg-green-600 text-white flex items-center justify-center shadow-lg transition-transform transform hover:scale-105" aria-label={widgetState === WidgetState.Error || (widgetState === WidgetState.Ended && reportingStatus === 'failed') ? "Retry" : "Start Call"}>
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10" viewBox="0 0 20 20" fill="currentColor"><path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" /></svg>
+                            <button onClick={startSession} className={`w-16 h-16 rounded-full bg-accent-${accentColorClass} hover:brightness-110 text-white flex items-center justify-center shadow-lg transition-transform transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-offset-2`} aria-label={widgetState === WidgetState.Error || (widgetState === WidgetState.Ended && reportingStatus === 'failed') ? "Retry" : "Start Call"}>
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" viewBox="0 0 20 20" fill="currentColor"><path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" /></svg>
                             </button>
                         )
                     )}
