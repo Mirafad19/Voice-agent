@@ -72,7 +72,6 @@ const SendIcon = ({className = "h-5 w-5"}) => (
 async function getCloudinaryShareableLink(cloudName: string, uploadPreset: string, recording: Omit<Recording, 'id' | 'url'>): Promise<string> {
     const formData = new FormData();
     formData.append('file', recording.blob);
-    // IMPORTANT: We trim the preset to avoid spaces which cause "Unknown API key" error
     formData.append('upload_preset', uploadPreset.trim());
 
     const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName.trim()}/video/upload`, {
@@ -93,15 +92,12 @@ async function getCloudinaryShareableLink(cloudName: string, uploadPreset: strin
     return result.secure_url;
 }
 
-// Simple Markdown Parser for Chat
 const parseInline = (text: string): React.ReactNode[] => {
-    // Split by bold (**...**)
     const parts = text.split(/(\*\*.*?\*\*)/g);
     return parts.map((part, i) => {
         if (part.startsWith('**') && part.endsWith('**')) {
             return <strong key={i} className="font-bold">{part.slice(2, -2)}</strong>;
         }
-        // Basic Italics (*...*)
         if (part.startsWith('*') && part.endsWith('*') && part.length > 2) {
              return <em key={i}>{part.slice(1, -1)}</em>;
         }
@@ -117,7 +113,6 @@ const formatMessageText = (text: string) => {
   let listItems: React.ReactNode[] = [];
 
   lines.forEach((line, index) => {
-    // List item
     if (line.trim().startsWith('- ') || line.trim().startsWith('* ')) {
       const content = line.trim().substring(2);
       listItems.push(<li key={`li-${index}`} className="ml-4 pl-1 marker:text-gray-400">{parseInline(content)}</li>);
@@ -129,7 +124,6 @@ const formatMessageText = (text: string) => {
         inList = false;
       }
       if (line.trim() === '') {
-        // Only add space if not at start
         if (index > 0) elements.push(<div key={`br-${index}`} className="h-2" />);
       } else {
         elements.push(<p key={`p-${index}`} className="mb-1 leading-relaxed">{parseInline(line)}</p>);
@@ -205,14 +199,12 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     };
   }, []);
 
-  // Auto-scroll chat
   useEffect(() => {
     if (mode === 'chat') {
         chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [chatMessages, mode]);
 
-  // Handle Resize for Widget Mode
   useEffect(() => {
     if (!isWidgetMode) return;
     if (isOpen) {
@@ -222,7 +214,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     }
   }, [isOpen, isWidgetMode]);
   
-  // Callout Timer
   useEffect(() => {
     const calloutShown = sessionStorage.getItem('ai-agent-callout-shown');
     let showTimer: number;
@@ -252,16 +243,21 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
   const initChat = useCallback(() => {
       setMode('chat');
-      // Always re-create chat to ensure fresh config if profile changed
       const ai = new GoogleGenAI({ apiKey });
+      
+      // Use Chat Specific KB, fallback to Voice KB
+      const systemInstruction = agentProfile.chatKnowledgeBase || agentProfile.knowledgeBase;
+      
       chatSessionRef.current = ai.chats.create({
           model: 'gemini-2.5-flash',
-          config: { systemInstruction: agentProfile.knowledgeBase }
+          config: { systemInstruction }
       });
       
-      // If history is empty, add greeting (only locally)
-      if (chatMessages.length === 0 && agentProfile.initialGreeting) {
-          setChatMessages([{ role: 'model', text: agentProfile.initialGreeting, timestamp: new Date() }]);
+      // Use Chat Specific Greeting, fallback to Voice Greeting
+      const greeting = agentProfile.initialGreetingText || agentProfile.initialGreeting;
+
+      if (chatMessages.length === 0 && greeting) {
+          setChatMessages([{ role: 'model', text: greeting, timestamp: new Date() }]);
       }
   }, [apiKey, agentProfile, chatMessages.length]);
 
@@ -277,9 +273,10 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     try {
         if (!chatSessionRef.current) {
              const ai = new GoogleGenAI({ apiKey });
+             const systemInstruction = agentProfile.chatKnowledgeBase || agentProfile.knowledgeBase;
              chatSessionRef.current = ai.chats.create({
                 model: 'gemini-2.5-flash',
-                config: { systemInstruction: agentProfile.knowledgeBase }
+                config: { systemInstruction }
             });
         }
         const response = await chatSessionRef.current!.sendMessage({ message: userMsg });
@@ -312,7 +309,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
     try {
         let audioLink = 'Audio link not available: Cloudinary is not configured.';
-        // --- Cloudinary Upload Step ---
         if (fileUploadConfig?.cloudinaryCloudName && fileUploadConfig.cloudinaryUploadPreset) {
             try {
                 audioLink = await getCloudinaryShareableLink(fileUploadConfig.cloudinaryCloudName, fileUploadConfig.cloudinaryUploadPreset, recording);
@@ -334,7 +330,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         const audioBase64 = await blobToBase64(recording.blob);
         
         let analysis;
-        // --- Gemini Analysis Step ---
         try {
             const response = await ai.models.generateContent({
                 model: "gemini-2.5-flash",
@@ -373,7 +368,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
         setReportingStatus('sending');
 
-        // --- Formspree Sending Step ---
         const formspreeResponse = await fetch(emailConfig.formspreeEndpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
@@ -531,6 +525,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     recordingServiceRef.current = new RecordingService(handleSessionEnd);
     await recordingServiceRef.current.start(stream);
 
+    // VOICE GREETING LOGIC
     const greeting = (agentProfile as AgentConfig).initialGreeting;
     if (greeting) {
         try {
@@ -643,7 +638,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
   // --- Render Views ---
 
-  // 1. Home / Selection View (Updated to "Hero" Style)
+  // 1. Home / Selection View
   const renderHomeView = () => (
       <div className="flex flex-col h-full w-full bg-white dark:bg-gray-900 animate-fade-in-up">
           {/* Hero Header */}
@@ -659,7 +654,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
               <div className="absolute -right-10 -bottom-20 w-64 h-64 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
           </div>
 
-          {/* Action Body - Rounded overlap */}
+          {/* Action Body */}
           <div className="flex-1 bg-gray-50 dark:bg-gray-900 relative -mt-6 rounded-t-3xl px-6 pt-8 flex flex-col gap-4">
               
               {/* Fake Search Bar -> Chat */}
@@ -692,7 +687,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
       </div>
   );
 
-  // 2. Chat View (Updated Styling)
+  // 2. Chat View
   const renderChatView = () => (
       <div className="flex flex-col h-full w-full bg-white dark:bg-gray-900 animate-fade-in-up">
           {/* Header Extension for Chat */}
@@ -756,7 +751,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   // 3. Voice View
   const renderVoiceView = () => (
     <div className="flex-grow flex flex-col items-center justify-center p-6 text-center relative overflow-hidden animate-fade-in-up bg-white dark:bg-gray-900">
-        {/* Network Instability Overlay */}
         {!isOnline && (
             <div className="absolute inset-0 bg-white/80 dark:bg-gray-900/80 z-30 flex flex-col items-center justify-center backdrop-blur-sm">
                 <div className="bg-red-100 dark:bg-red-900/50 p-4 rounded-xl border border-red-200 dark:border-red-700 max-w-[80%]">
@@ -764,17 +758,14 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                         <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-4.243 2.829a4.978 4.978 0 01-1.414-2.83m-1.414 5.658a9 9 0 01-2.167-9.238m7.824 2.167a1 1 0 111.414 1.414m-1.414-1.414L3 3m8.293 8.293l1.414 1.414" />
                     </svg>
                     <h4 className="font-bold text-red-800 dark:text-red-200">Network Unstable</h4>
-                    <p className="text-xs text-red-700 dark:text-red-300 mt-1">Check your internet connection. The call may glitch or disconnect.</p>
+                    <p className="text-xs text-red-700 dark:text-red-300 mt-1">Check your internet connection.</p>
                 </div>
             </div>
         )}
 
-        {/* Main Visual Area: 3D Orb Design */}
         <div className="relative w-full flex items-center justify-center mb-8 min-h-[200px]">
-            {/* Background Glow */}
             <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-accent-${accentColorClass} opacity-10 blur-[60px] rounded-full`}></div>
 
-            {/* Animated Rings for Active States */}
             {(widgetState === WidgetState.Listening || widgetState === WidgetState.Speaking) && (
                 <>
                     <div className={`absolute w-64 h-64 rounded-full border-2 border-accent-${accentColorClass} opacity-20 animate-sonar-ping`}></div>
@@ -782,32 +773,19 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                 </>
             )}
 
-            {/* The 3D Orb Container */}
             <div className={`relative w-48 h-48 rounded-full bg-gradient-to-br from-accent-${accentColorClass} to-gray-300 dark:to-gray-800 shadow-[0_20px_50px_rgba(0,0,0,0.15)] flex items-center justify-center transition-all duration-500 ${widgetState === WidgetState.Speaking ? 'scale-105' : 'scale-100'}`}>
-                {/* Inner Shine/Gloss */}
                 <div className="absolute top-0 left-0 w-full h-full rounded-full bg-gradient-to-b from-white/20 to-transparent pointer-events-none"></div>
-                
-                {/* Inner Circle Background */}
                 <div className="relative w-44 h-44 rounded-full bg-white dark:bg-gray-900 flex items-center justify-center shadow-inner z-10 overflow-hidden">
-                    {/* Connecting Spinner */}
                     {widgetState === WidgetState.Connecting && <Spinner className={`w-20 h-20 text-accent-${accentColorClass}`} />}
-                    
-                    {/* Idle Icon */}
                     {widgetState === WidgetState.Idle && (
                         <WaveformIcon className={`h-24 w-24 text-gray-300 dark:text-gray-600`} />
                     )}
-
-                    {/* Active Icon */}
                     {(widgetState === WidgetState.Listening || widgetState === WidgetState.Speaking) && (
                         <div className={`transition-transform duration-300 ${widgetState === WidgetState.Speaking ? 'scale-110' : 'scale-100'}`}>
                             <WaveformIcon className={`h-24 w-24 text-accent-${accentColorClass}`} />
                         </div>
                     )}
-
-                    {/* Error Icon */}
                     {widgetState === WidgetState.Error && <div className="text-red-500 animate-pulse"><svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>}
-                    
-                    {/* Finished State Icons */}
                     {widgetState === WidgetState.Ended && (reportingStatus === 'analyzing' || reportingStatus === 'sending') && <Spinner className={`w-20 h-20 text-accent-${accentColorClass}`} />}
                     {widgetState === WidgetState.Ended && reportingStatus === 'sent' && <div className="text-green-500"><svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>}
                     {widgetState === WidgetState.Ended && reportingStatus === 'failed' && <div className="text-red-500"><svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>}
@@ -823,9 +801,9 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                     Click the call button to start.
                 </p>
             )}
-                {(widgetState === WidgetState.Ended && (reportingStatus === 'sent' || reportingStatus === 'failed')) && (
-                    <p className="text-sm text-gray-500 dark:text-gray-400 transition-opacity duration-500">
-                    You may now close the widget.
+            {(widgetState === WidgetState.Ended && (reportingStatus === 'sent' || reportingStatus === 'failed')) && (
+                <p className="text-sm text-gray-500 dark:text-gray-400 transition-opacity duration-500">
+                You may now close the widget.
                 </p>
             )}
         </div>
@@ -854,7 +832,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         {showCallout && agentProfile.calloutMessage && (
           <div className="absolute bottom-full right-0 mb-3 w-max max-w-[200px] px-4 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-xl shadow-xl text-left text-sm animate-fade-in-up border border-gray-100 dark:border-gray-700">
             <p>{agentProfile.calloutMessage}</p>
-            {/* Arrow pointing down */}
             <div className="absolute -bottom-2 right-6 w-4 h-4 bg-white dark:bg-gray-800 transform rotate-45 border-b border-r border-gray-100 dark:border-gray-700"></div>
           </div>
         )}

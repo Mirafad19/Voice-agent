@@ -51,9 +51,7 @@ export const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({ profile,
   };
 
   const handleFileUploadConfigChange = <K extends keyof FileUploadConfig,>(key: K, value: FileUploadConfig[K]) => {
-    // Auto-trim whitespace from Cloudinary configs to prevent "Unknown API Key" errors
     const cleanValue = typeof value === 'string' ? value.trim() : value;
-    
     setEditedProfile(prev => ({
       ...prev,
       fileUploadConfig: {
@@ -74,48 +72,26 @@ export const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({ profile,
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
       <div className="space-y-6">
-        <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Agent Configuration</h3>
+        <h3 className="text-xl font-semibold text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-700 pb-2">Global Settings</h3>
         
-        <Input
-          label="Agent Name"
-          id="agentName"
-          value={editedProfile.name}
-          onChange={(e) => handleChange('name', e.target.value)}
-        />
-
-        <div>
-          <Input
-            label="Widget Callout Message"
-            id="calloutMessage"
-            value={editedProfile.calloutMessage || ''}
-            onChange={(e) => handleChange('calloutMessage', e.target.value)}
-            placeholder="e.g., Hey there! How can I help?"
-          />
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">A short, friendly message that appears above the widget button to encourage users to click.</p>
-        </div>
-
-        <div>
-          <Input
-            label="Agent's Initial Greeting"
-            id="initialGreeting"
-            value={editedProfile.initialGreeting || ''}
-            onChange={(e) => handleChange('initialGreeting', e.target.value)}
-            placeholder="e.g., Hello, how can I help you today?"
-          />
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">The first thing the agent says to start the conversation. This will be spoken out loud.</p>
-        </div>
-
-        <div>
-          <label htmlFor="knowledgeBase" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Knowledge Base (System Instruction)
-          </label>
-          <textarea
-            id="knowledgeBase"
-            rows={8}
-            className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
-            value={editedProfile.knowledgeBase}
-            onChange={(e) => handleChange('knowledgeBase', e.target.value)}
-          />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Input
+              label="Agent Name"
+              id="agentName"
+              value={editedProfile.name}
+              onChange={(e) => handleChange('name', e.target.value)}
+            />
+            
+            <div>
+              <Input
+                label="Widget Callout Message"
+                id="calloutMessage"
+                value={editedProfile.calloutMessage || ''}
+                onChange={(e) => handleChange('calloutMessage', e.target.value)}
+                placeholder="e.g., Hey there! How can I help?"
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Pop-up message above the widget.</p>
+            </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -157,6 +133,63 @@ export const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({ profile,
             ))}
           </div>
         </div>
+        
+        {/* Voice Specific Settings */}
+        <h3 className="text-xl font-semibold text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-700 pb-2 pt-4">Voice Configuration</h3>
+        
+        <div>
+          <Input
+            label="Voice Greeting (Spoken)"
+            id="initialGreeting"
+            value={editedProfile.initialGreeting || ''}
+            onChange={(e) => handleChange('initialGreeting', e.target.value)}
+            placeholder="e.g., Hello, welcome to P-S-S-D-C."
+          />
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Spoken by the AI when the call starts. Use phonetic spelling here (e.g., "P-S-S-D-C") for better pronunciation.</p>
+        </div>
+
+        <div>
+          <label htmlFor="knowledgeBase" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Voice System Instructions (Knowledge Base)
+          </label>
+          <textarea
+            id="knowledgeBase"
+            rows={5}
+            className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+            value={editedProfile.knowledgeBase}
+            onChange={(e) => handleChange('knowledgeBase', e.target.value)}
+          />
+           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Rules for the Voice Agent. Keep responses concise and spoken-word friendly.</p>
+        </div>
+
+        {/* Chat Specific Settings */}
+        <h3 className="text-xl font-semibold text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-700 pb-2 pt-4">Chat Configuration</h3>
+
+        <div>
+          <Input
+            label="Chat Welcome Message (Text)"
+            id="initialGreetingText"
+            value={editedProfile.initialGreetingText || ''}
+            onChange={(e) => handleChange('initialGreetingText', e.target.value)}
+            placeholder="e.g., Hello! Welcome to PSSDC."
+          />
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Displayed in the chat window. Keep this clean (e.g., "PSSDC"). If left blank, it uses the Voice Greeting.</p>
+        </div>
+
+        <div>
+          <label htmlFor="chatKnowledgeBase" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Chat System Instructions (Knowledge Base)
+          </label>
+          <textarea
+            id="chatKnowledgeBase"
+            rows={5}
+            className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+            value={editedProfile.chatKnowledgeBase || ''}
+            onChange={(e) => handleChange('chatKnowledgeBase', e.target.value)}
+          />
+           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Rules for the Chat Agent. You can encourage Markdown, bullet points, and more detailed text answers. If left blank, it uses the Voice Instructions.</p>
+        </div>
+
 
         <details className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
           <summary className="font-semibold cursor-pointer text-gray-900 dark:text-white">Cloud Audio Storage (via Cloudinary)</summary>
@@ -182,33 +215,6 @@ export const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({ profile,
                       onChange={(e) => handleFileUploadConfigChange('cloudinaryUploadPreset', e.target.value)}
                   />
               </div>
-              <div className="space-y-3 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-md border border-gray-200 dark:border-gray-700">
-                  <h4 className="font-semibold text-gray-900 dark:text-white">Setup Instructions:</h4>
-                  <ol className="list-decimal list-inside space-y-2 text-gray-700 dark:text-gray-300">
-                      <li>Create or log in to your <a href="https://cloudinary.com/users/register/free" target="_blank" rel="noopener noreferrer" className="text-indigo-500 hover:underline">free Cloudinary Account</a>.</li>
-                      <li>From your main Dashboard, copy the <strong>Cloud Name</strong> and paste it into the field above.</li>
-                      <li>Go to Settings by clicking the gear icon in the sidebar, then navigate to the <strong>Upload</strong> tab.</li>
-                      <li>Scroll down to the "Upload presets" section and click <strong>Add upload preset</strong>.</li>
-                      <li>Change the "Signing Mode" from "Signed" to <strong>"Unsigned"</strong>. This is the most important step.</li>
-                      <li>(Optional) You can give the preset a more memorable name.</li>
-                      <li>Click <strong>Save</strong> at the top of the page.</li>
-                      <li>Copy the <strong>Upload preset name</strong> from the list and paste it into the field above. You're all set!</li>
-                  </ol>
-              </div>
-              <div className="mt-4 space-y-3 p-4 bg-yellow-50 dark:bg-yellow-900/50 rounded-md border border-yellow-300 dark:border-yellow-700">
-                  <h4 className="font-semibold text-yellow-900 dark:text-yellow-200">Troubleshooting</h4>
-                  <p className="text-sm text-yellow-800 dark:text-yellow-300">
-                      If your email report shows an "Audio link not available: Failed to fetch" error, it's often caused by a security policy on your website.
-                  </p>
-                  <p className="text-sm text-yellow-800 dark:text-yellow-300">
-                      <strong>Content Security Policy (CSP):</strong> If your website uses a CSP, it might be blocking the connection to Cloudinary. To fix this, you must add Cloudinary's API endpoint to your policy's <code className="bg-yellow-200 dark:bg-yellow-800/50 px-1 py-0.5 rounded">connect-src</code> directive.
-                      <br />
-                      Example: <code className="text-xs bg-yellow-200 dark:bg-yellow-800/50 px-1 py-0.5 rounded">connect-src 'self' https://api.cloudinary.com;</code>
-                  </p>
-                  <p className="text-sm text-yellow-800 dark:text-yellow-300">
-                      Browser extensions like ad-blockers can also sometimes interfere with the upload.
-                  </p>
-              </div>
           </div>
         </details>
 
@@ -226,29 +232,6 @@ export const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({ profile,
                     value={editedProfile.emailConfig?.formspreeEndpoint || ''}
                     onChange={(e) => handleEmailConfigChange('formspreeEndpoint', e.target.value)}
                 />
-                <div className="space-y-3 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-md border border-gray-200 dark:border-gray-700">
-                    <h4 className="font-semibold text-gray-900 dark:text-white">Setup Instructions:</h4>
-                    <ol className="list-decimal list-inside space-y-2 text-sm text-gray-700 dark:text-gray-300">
-                        <li>Sign up for a <a href="https://formspree.io/register" target="_blank" rel="noopener noreferrer" className="text-indigo-500 hover:underline">free Formspree account</a> and verify your email.</li>
-                        <li>On your dashboard, click <strong>+ New form</strong>.</li>
-                        <li>Give your form a name (e.g., "AI Agent Reports") and enter the email address where you want to receive reports. Click <strong>Create Form</strong>.</li>
-                        <li>You'll be taken to the form's <strong>Integration</strong> tab. Copy the full <strong>Endpoint URL</strong> provided.</li>
-                        <li>Paste the URL into the field above and save your changes. You're all set!</li>
-                    </ol>
-                </div>
-                
-                <div className="mt-4 space-y-3 p-4 bg-blue-50 dark:bg-blue-900/50 rounded-md border border-blue-200 dark:border-blue-700">
-                    <h4 className="font-semibold text-blue-900 dark:text-blue-200">⚠️ Not receiving emails?</h4>
-                    <p className="text-sm text-blue-800 dark:text-blue-300">
-                        If the app says "Report sent successfully" but you don't see it in your Inbox:
-                    </p>
-                    <ul className="list-disc list-inside space-y-1 text-sm text-blue-800 dark:text-blue-300">
-                        <li>Check your <strong>Formspree Dashboard</strong> &gt; <strong>Submissions</strong> tab.</li>
-                        <li>Look in the <strong>Spam</strong> folder there.</li>
-                        <li>If you see the report, select it and click <strong>"Not Spam"</strong>.</li>
-                        <li>This trains Formspree to trust your app, and future emails will arrive in your Gmail Inbox instantly.</li>
-                    </ul>
-                </div>
             </div>
         </details>
       </div>

@@ -39,12 +39,19 @@ export interface FileUploadConfig {
 export interface AgentProfile {
   id: string;
   name: string;
-  knowledgeBase: string;
+  
+  // Voice Settings
+  knowledgeBase: string; // Default/Voice Instructions
+  initialGreeting?: string; // Voice Greeting
+  
+  // Chat Settings
+  chatKnowledgeBase?: string; // Specific Chat Instructions
+  initialGreetingText?: string; // Chat Welcome Message
+  
   theme: WidgetTheme;
   voice: AgentVoice;
   accentColor: AccentColor;
   calloutMessage?: string;
-  initialGreeting?: string;
   emailConfig?: EmailConfig;
   fileUploadConfig?: FileUploadConfig;
 }
