@@ -15,32 +15,8 @@ interface AgentWidgetProps {
   onSessionEnd?: (recording: Recording) => void;
 }
 
-// Helper function to upload and get a shareable link from Cloudinary
-async function getCloudinaryShareableLink(cloudName: string, uploadPreset: string, recording: Omit<Recording, 'id' | 'url'>): Promise<string> {
-    const formData = new FormData();
-    formData.append('file', recording.blob);
-    // IMPORTANT: We trim the preset to avoid spaces which cause "Unknown API key" error
-    formData.append('upload_preset', uploadPreset.trim());
+// --- Icons ---
 
-    const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName.trim()}/video/upload`, {
-        method: 'POST',
-        body: formData,
-    });
-
-    if (!response.ok) {
-        const errorData = await response.json();
-        const errorMsg = errorData.error.message;
-        if (errorMsg === "Unknown API key") {
-            throw new Error(`Cloudinary Error: "Unknown API key". This means the Upload Preset Name (${uploadPreset}) does not exist in your Cloudinary Dashboard. Please check the spelling exactly.`);
-        }
-        throw new Error(`Cloudinary upload failed: ${errorMsg}`);
-    }
-
-    const result = await response.json();
-    return result.secure_url;
-}
-
-// Icons
 const WaveformIcon = ({className = "h-9 w-9 text-white"}) => (
     <svg viewBox="0 0 24 24" fill="currentColor" className={className} xmlns="http://www.w3.org/2000/svg">
         <rect x="4" y="10" width="2" height="4" rx="1" fillOpacity="0.5" />
@@ -78,12 +54,6 @@ const ChevronLeftIcon = ({className = "h-6 w-6"}) => (
     </svg>
 );
 
-const ChatBubbleIcon = ({className = "h-6 w-6"}) => (
-    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-    </svg>
-);
-
 const MicIcon = ({className = "h-6 w-6"}) => (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
@@ -96,7 +66,93 @@ const SendIcon = ({className = "h-5 w-5"}) => (
   </svg>
 );
 
+// --- Helpers ---
+
+// Helper function to upload and get a shareable link from Cloudinary
+async function getCloudinaryShareableLink(cloudName: string, uploadPreset: string, recording: Omit<Recording, 'id' | 'url'>): Promise<string> {
+    const formData = new FormData();
+    formData.append('file', recording.blob);
+    // IMPORTANT: We trim the preset to avoid spaces which cause "Unknown API key" error
+    formData.append('upload_preset', uploadPreset.trim());
+
+    const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName.trim()}/video/upload`, {
+        method: 'POST',
+        body: formData,
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json();
+        const errorMsg = errorData.error.message;
+        if (errorMsg === "Unknown API key") {
+            throw new Error(`Cloudinary Error: "Unknown API key". This means the Upload Preset Name (${uploadPreset}) does not exist in your Cloudinary Dashboard. Please check the spelling exactly.`);
+        }
+        throw new Error(`Cloudinary upload failed: ${errorMsg}`);
+    }
+
+    const result = await response.json();
+    return result.secure_url;
+}
+
+// Simple Markdown Parser for Chat
+const parseInline = (text: string): React.ReactNode[] => {
+    // Split by bold (**...**)
+    const parts = text.split(/(\*\*.*?\*\*)/g);
+    return parts.map((part, i) => {
+        if (part.startsWith('**') && part.endsWith('**')) {
+            return <strong key={i} className="font-bold">{part.slice(2, -2)}</strong>;
+        }
+        // Basic Italics (*...*)
+        if (part.startsWith('*') && part.endsWith('*') && part.length > 2) {
+             return <em key={i}>{part.slice(1, -1)}</em>;
+        }
+        return part;
+    });
+}
+
+const formatMessageText = (text: string) => {
+  const lines = text.split('\n');
+  const elements: React.ReactNode[] = [];
+  
+  let inList = false;
+  let listItems: React.ReactNode[] = [];
+
+  lines.forEach((line, index) => {
+    // List item
+    if (line.trim().startsWith('- ') || line.trim().startsWith('* ')) {
+      const content = line.trim().substring(2);
+      listItems.push(<li key={`li-${index}`} className="ml-4 pl-1 marker:text-gray-400">{parseInline(content)}</li>);
+      inList = true;
+    } else {
+      if (inList) {
+        elements.push(<ul key={`ul-${index}`} className="list-disc mb-2 space-y-1">{listItems}</ul>);
+        listItems = [];
+        inList = false;
+      }
+      if (line.trim() === '') {
+        // Only add space if not at start
+        if (index > 0) elements.push(<div key={`br-${index}`} className="h-2" />);
+      } else {
+        elements.push(<p key={`p-${index}`} className="mb-1 leading-relaxed">{parseInline(line)}</p>);
+      }
+    }
+  });
+  
+  if (inList) {
+      elements.push(<ul key={`ul-end`} className="list-disc mb-2 space-y-1">{listItems}</ul>);
+  }
+
+  return elements;
+};
+
+// --- Component ---
+
 type InteractionMode = 'home' | 'voice' | 'chat';
+
+interface ChatMessage {
+    role: 'user' | 'model';
+    text: string;
+    timestamp: Date;
+}
 
 export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, isWidgetMode, onSessionEnd }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -128,7 +184,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const shouldEndAfterSpeakingRef = useRef(false);
 
   // --- Chat State ---
-  const [chatMessages, setChatMessages] = useState<{role: 'user' | 'model', text: string}[]>([]);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [isChatLoading, setIsChatLoading] = useState(false);
   const chatSessionRef = useRef<Chat | null>(null);
@@ -205,7 +261,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
       
       // If history is empty, add greeting (only locally)
       if (chatMessages.length === 0 && agentProfile.initialGreeting) {
-          setChatMessages([{ role: 'model', text: agentProfile.initialGreeting }]);
+          setChatMessages([{ role: 'model', text: agentProfile.initialGreeting, timestamp: new Date() }]);
       }
   }, [apiKey, agentProfile, chatMessages.length]);
 
@@ -215,12 +271,11 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     
     const userMsg = chatInput;
     setChatInput('');
-    setChatMessages(prev => [...prev, { role: 'user', text: userMsg }]);
+    setChatMessages(prev => [...prev, { role: 'user', text: userMsg, timestamp: new Date() }]);
     setIsChatLoading(true);
 
     try {
         if (!chatSessionRef.current) {
-            // Re-init if missing (shouldn't happen usually)
              const ai = new GoogleGenAI({ apiKey });
              chatSessionRef.current = ai.chats.create({
                 model: 'gemini-2.5-flash',
@@ -228,10 +283,10 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             });
         }
         const response = await chatSessionRef.current!.sendMessage({ message: userMsg });
-        setChatMessages(prev => [...prev, { role: 'model', text: response.text }]);
+        setChatMessages(prev => [...prev, { role: 'model', text: response.text, timestamp: new Date() }]);
     } catch (err) {
         console.error("Chat error:", err);
-        setChatMessages(prev => [...prev, { role: 'model', text: "I'm having trouble connecting right now. Please check your network or try again later." }]);
+        setChatMessages(prev => [...prev, { role: 'model', text: "I'm having trouble connecting right now. Please check your network or try again later.", timestamp: new Date() }]);
     } finally {
         setIsChatLoading(false);
     }
@@ -549,9 +604,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
   const handleBack = () => {
     if (mode === 'voice') {
-        // Ensure voice session is cleaned up
         endSession();
-        // Reset state to avoid showing "Session Ended" screen when re-entering
         setWidgetState(WidgetState.Idle);
     }
     setMode('home');
@@ -560,7 +613,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const toggleWidget = () => {
     if (isOpen) {
       endSession();
-      // Reset mode to home on close? Optional, but feels cleaner
       setMode('home');
     }
     setIsOpen(!isOpen);
@@ -591,67 +643,85 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
   // --- Render Views ---
 
-  // 1. Home / Selection View
+  // 1. Home / Selection View (Updated to "Hero" Style)
   const renderHomeView = () => (
-      <div className="flex flex-col h-full w-full p-6 animate-fade-in-up">
-          <div className="flex flex-col items-center justify-center flex-grow space-y-6">
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white text-center">
-                  How would you like to connect?
-              </h2>
-              
-              <div className="w-full space-y-4">
-                  <button 
-                    onClick={() => setMode('voice')}
-                    className={`w-full p-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 hover:bg-white dark:hover:bg-gray-700 hover:border-accent-${accentColorClass} dark:hover:border-accent-${accentColorClass} hover:shadow-md transition-all group text-left flex items-center gap-4`}
-                  >
-                      <div className={`p-3 rounded-full bg-accent-${accentColorClass}/10 group-hover:bg-accent-${accentColorClass} transition-colors`}>
-                        <MicIcon className={`h-6 w-6 text-accent-${accentColorClass} group-hover:text-white`} />
-                      </div>
-                      <div>
-                          <h3 className="font-semibold text-gray-900 dark:text-white">Voice Call</h3>
-                          <p className="text-sm text-gray-500 dark:text-gray-400">Talk to {agentProfile.name} live</p>
-                      </div>
-                  </button>
-
-                  <button 
-                    onClick={initChat}
-                    className={`w-full p-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 hover:bg-white dark:hover:bg-gray-700 hover:border-accent-${accentColorClass} dark:hover:border-accent-${accentColorClass} hover:shadow-md transition-all group text-left flex items-center gap-4`}
-                  >
-                       <div className={`p-3 rounded-full bg-accent-${accentColorClass}/10 group-hover:bg-accent-${accentColorClass} transition-colors`}>
-                        <ChatBubbleIcon className={`h-6 w-6 text-accent-${accentColorClass} group-hover:text-white`} />
-                      </div>
-                      <div>
-                          <h3 className="font-semibold text-gray-900 dark:text-white">Text Chat</h3>
-                          <p className="text-sm text-gray-500 dark:text-gray-400">Type a message</p>
-                      </div>
-                  </button>
+      <div className="flex flex-col h-full w-full bg-white dark:bg-gray-900 animate-fade-in-up">
+          {/* Hero Header */}
+          <div className={`relative h-[40%] bg-gradient-to-br from-accent-${accentColorClass} to-gray-900 flex flex-col p-6 text-white`}>
+              <div className="flex items-center justify-between mb-4">
+                  <span className="text-xs font-bold tracking-widest uppercase opacity-80">{agentProfile.name}</span>
               </div>
+              <div className="mt-auto mb-6 relative z-10">
+                  <h1 className="text-4xl font-bold">Hi <span className="animate-wave inline-block">👋</span></h1>
+                  <p className="text-white/80 mt-2 font-medium">How can we help you today?</p>
+              </div>
+              {/* Decorative Glow */}
+              <div className="absolute -right-10 -bottom-20 w-64 h-64 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
           </div>
-          <p className="text-xs text-center text-gray-400 dark:text-gray-500 mt-4">
-              Powered by Gemini AI
-          </p>
+
+          {/* Action Body - Rounded overlap */}
+          <div className="flex-1 bg-gray-50 dark:bg-gray-900 relative -mt-6 rounded-t-3xl px-6 pt-8 flex flex-col gap-4">
+              
+              {/* Fake Search Bar -> Chat */}
+              <button 
+                  onClick={initChat}
+                  className="w-full bg-white dark:bg-gray-800 shadow-sm border border-gray-200 dark:border-gray-700 rounded-xl p-4 flex items-center justify-between group hover:shadow-md transition-all text-left"
+              >
+                  <span className="text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-colors">Ask a question...</span>
+                  <div className={`p-2 rounded-full bg-gray-100 dark:bg-gray-700 group-hover:bg-accent-${accentColorClass} transition-colors`}>
+                      <SendIcon className={`h-4 w-4 text-gray-500 dark:text-gray-400 group-hover:text-white`} />
+                  </div>
+              </button>
+
+              {/* Voice Card */}
+              <button
+                  onClick={() => setMode('voice')}
+                  className={`w-full bg-gradient-to-r from-accent-${accentColorClass} to-gray-800 rounded-xl p-1 shadow-md hover:scale-[1.02] transition-transform group`}
+              >
+                  <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 flex items-center gap-4 h-full">
+                      <div className="p-3 bg-white/20 rounded-full animate-pulse">
+                          <MicIcon className="h-6 w-6 text-white" />
+                      </div>
+                      <div className="text-left text-white">
+                          <h3 className="font-bold text-lg">Talk to Support</h3>
+                          <p className="text-xs opacity-90">Skip typing, we're listening.</p>
+                      </div>
+                  </div>
+              </button>
+          </div>
       </div>
   );
 
-  // 2. Chat View
+  // 2. Chat View (Updated Styling)
   const renderChatView = () => (
-      <div className="flex flex-col h-full w-full animate-fade-in-up">
+      <div className="flex flex-col h-full w-full bg-white dark:bg-gray-900 animate-fade-in-up">
+          {/* Header Extension for Chat */}
+          <div className={`h-1 bg-gradient-to-r from-accent-${accentColorClass} to-gray-200 dark:to-gray-800 flex-shrink-0`} />
+
           {/* Chat Messages */}
-          <div className="flex-grow overflow-y-auto p-4 space-y-4 scroll-smooth">
-              {chatMessages.map((msg, idx) => (
-                  <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                      <div className={`max-w-[80%] rounded-2xl p-3 text-sm ${
-                          msg.role === 'user' 
-                          ? `bg-accent-${accentColorClass} text-white rounded-br-none` 
-                          : 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-bl-none'
-                      }`}>
-                          {msg.text}
-                      </div>
-                  </div>
-              ))}
+          <div className="flex-grow overflow-y-auto p-4 space-y-4 scroll-smooth bg-gray-50 dark:bg-gray-900">
+              {chatMessages.map((msg, idx) => {
+                  const isUser = msg.role === 'user';
+                  return (
+                    <div key={idx} className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-[85%] rounded-2xl p-3 text-sm shadow-sm relative group ${
+                            isUser
+                            ? `bg-accent-${accentColorClass} text-white rounded-br-none` 
+                            : 'bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 text-gray-800 dark:text-gray-200 rounded-bl-none'
+                        }`}>
+                            <div className={isUser ? '' : 'markdown-body'}>
+                                {isUser ? msg.text : formatMessageText(msg.text)}
+                            </div>
+                            <span className={`text-[10px] block text-right mt-1 opacity-70 ${isUser ? 'text-white/80' : 'text-gray-400'}`}>
+                                {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                        </div>
+                    </div>
+                  );
+              })}
               {isChatLoading && (
                    <div className="flex justify-start">
-                      <div className="bg-gray-100 dark:bg-gray-800 rounded-2xl rounded-bl-none p-3 flex gap-1 items-center">
+                      <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl rounded-bl-none p-4 shadow-sm flex gap-1 items-center">
                           <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
                           <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:0.2s]"></div>
                           <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:0.4s]"></div>
@@ -669,8 +739,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                     value={chatInput}
                     onChange={(e) => setChatInput(e.target.value)}
                     placeholder="Type a message..."
-                    className="w-full pl-4 pr-12 py-3 rounded-full border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-accent-orange/50 dark:text-white transition-shadow" // Using orange as generic focus or map specific class if needed, simplistic approach:
-                    style={{ borderColor: chatInput ? undefined : '' }} // Let CSS classes handle default
+                    className="w-full pl-4 pr-12 py-3 rounded-full border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-300 dark:focus:ring-gray-600 dark:text-white transition-shadow"
                   />
                   <button 
                     type="submit"
@@ -684,9 +753,9 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
       </div>
   );
 
-  // 3. Voice View (Refactored from original render)
+  // 3. Voice View
   const renderVoiceView = () => (
-    <div className="flex-grow flex flex-col items-center justify-center p-6 text-center relative overflow-hidden animate-fade-in-up">
+    <div className="flex-grow flex flex-col items-center justify-center p-6 text-center relative overflow-hidden animate-fade-in-up bg-white dark:bg-gray-900">
         {/* Network Instability Overlay */}
         {!isOnline && (
             <div className="absolute inset-0 bg-white/80 dark:bg-gray-900/80 z-30 flex flex-col items-center justify-center backdrop-blur-sm">
@@ -801,17 +870,19 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     <div className={`${themeClass} ${isWidgetMode ? 'w-full h-full' : 'fixed bottom-24 right-5 w-96 h-[600px] rounded-2xl shadow-2xl z-40'}`}>
         <div className={`flex flex-col w-full h-full bg-white dark:bg-gray-900 text-black dark:text-white rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700`}>
             {/* Widget Header */}
-            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0 bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm z-10">
+            <div className={`flex items-center justify-between p-4 flex-shrink-0 z-20 ${mode === 'home' ? 'absolute top-0 left-0 w-full text-white' : 'border-b border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md'}`}>
                 <div className="flex items-center gap-2">
                     {mode !== 'home' && (
                         <button onClick={handleBack} className="p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors" title="Back">
                             <ChevronLeftIcon />
                         </button>
                     )}
-                    <h3 className="font-bold text-lg truncate max-w-[180px]">{agentProfile.name}</h3>
+                    {mode !== 'home' && (
+                       <h3 className="font-bold text-lg truncate max-w-[180px]">{agentProfile.name}</h3>
+                    )}
                     {mode === 'voice' && <NetworkIcon isOnline={isOnline} />}
                 </div>
-                <button onClick={toggleWidget} className="p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+                <button onClick={toggleWidget} className={`p-1 rounded-full transition-colors ${mode === 'home' ? 'hover:bg-white/20 text-white' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`}>
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
             </div>
