@@ -683,7 +683,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                           <MicIcon className="h-6 w-6 text-white" />
                       </div>
                       <div className="text-left text-white">
-                          <h3 className="font-bold text-lg">Talk to Support</h3>
+                          <h3 className="font-bold text-lg">Talk to AI Assistant</h3>
                           <p className="text-xs opacity-90">Skip typing, we're listening.</p>
                       </div>
                   </div>
