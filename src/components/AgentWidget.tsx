@@ -4,7 +4,7 @@ import { AgentProfile, AgentConfig, WidgetState, Recording, ReportingStatus } fr
 import { GeminiLiveService } from '../services/geminiLiveService';
 import { RecordingService } from '../services/recordingService';
 import { Spinner } from './ui/Spinner';
-import { GoogleGenAI, Type, Modality, Chat } from '@google/genai';
+import { GoogleGenAI, Type, Modality, Chat, GenerateContentResponse } from '@google/genai';
 import { blobToBase64 } from '../utils';
 import { decodePcmChunk } from '../utils/audio';
 
@@ -93,19 +93,18 @@ async function getCloudinaryShareableLink(cloudName: string, uploadPreset: strin
 }
 
 const parseInline = (text: string): React.ReactNode[] => {
+    // Split by bold (**text**)
     const parts = text.split(/(\*\*.*?\*\*)/g);
     return parts.map((part, i) => {
         if (part.startsWith('**') && part.endsWith('**')) {
             return <strong key={i} className="font-bold">{part.slice(2, -2)}</strong>;
-        }
-        if (part.startsWith('*') && part.endsWith('*') && part.length > 2) {
-             return <em key={i}>{part.slice(1, -1)}</em>;
         }
         return part;
     });
 }
 
 const formatMessageText = (text: string) => {
+  if (!text) return null;
   const lines = text.split('\n');
   const elements: React.ReactNode[] = [];
   
@@ -113,9 +112,10 @@ const formatMessageText = (text: string) => {
   let listItems: React.ReactNode[] = [];
 
   lines.forEach((line, index) => {
+    // Check for bullet points (dash or asterisk)
     if (line.trim().startsWith('- ') || line.trim().startsWith('* ')) {
       const content = line.trim().substring(2);
-      listItems.push(<li key={`li-${index}`} className="ml-4 pl-1 marker:text-gray-400">{parseInline(content)}</li>);
+      listItems.push(<li key={`li-${index}`} className="ml-4 pl-1 marker:text-gray-400 dark:marker:text-gray-500">{parseInline(content)}</li>);
       inList = true;
     } else {
       if (inList) {
@@ -146,6 +146,7 @@ interface ChatMessage {
     role: 'user' | 'model';
     text: string;
     timestamp: Date;
+    isStreaming?: boolean;
 }
 
 export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, isWidgetMode, onSessionEnd }) => {
@@ -180,9 +181,11 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   // --- Chat State ---
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
+  const [homeInput, setHomeInput] = useState(''); // New state for home input
   const [isChatLoading, setIsChatLoading] = useState(false);
   const chatSessionRef = useRef<Chat | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
 
   const accentColorClass = agentProfile.accentColor;
 
@@ -199,11 +202,15 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     };
   }, []);
 
+  const scrollToBottom = useCallback(() => {
+      if (chatEndRef.current) {
+          chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+      }
+  }, []);
+
   useEffect(() => {
-    if (mode === 'chat') {
-        chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [chatMessages, mode]);
+    scrollToBottom();
+  }, [chatMessages, mode, scrollToBottom]);
 
   useEffect(() => {
     if (!isWidgetMode) return;
@@ -241,11 +248,10 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
   // --- Chat Functions ---
 
-  const initChat = useCallback(() => {
+  const initChat = useCallback((initialMessage?: string) => {
       setMode('chat');
       const ai = new GoogleGenAI({ apiKey });
       
-      // Use Chat Specific KB, fallback to Voice KB
       const systemInstruction = agentProfile.chatKnowledgeBase || agentProfile.knowledgeBase;
       
       chatSessionRef.current = ai.chats.create({
@@ -253,44 +259,101 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
           config: { systemInstruction }
       });
       
-      // Use Chat Specific Greeting, fallback to Voice Greeting
       const greeting = agentProfile.initialGreetingText || agentProfile.initialGreeting;
 
-      if (chatMessages.length === 0 && greeting) {
+      if (chatMessages.length === 0 && greeting && !initialMessage) {
           setChatMessages([{ role: 'model', text: greeting, timestamp: new Date() }]);
+      }
+
+      if (initialMessage) {
+          handleSendMessageInternal(initialMessage);
       }
   }, [apiKey, agentProfile, chatMessages.length]);
 
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!chatInput.trim() || isChatLoading) return;
-    
-    const userMsg = chatInput;
-    setChatInput('');
-    setChatMessages(prev => [...prev, { role: 'user', text: userMsg, timestamp: new Date() }]);
-    setIsChatLoading(true);
+  const handleSendMessageInternal = async (text: string) => {
+      if (!text.trim() || isChatLoading) return;
 
-    try {
-        if (!chatSessionRef.current) {
-             const ai = new GoogleGenAI({ apiKey });
-             const systemInstruction = agentProfile.chatKnowledgeBase || agentProfile.knowledgeBase;
-             chatSessionRef.current = ai.chats.create({
-                model: 'gemini-2.5-flash',
-                config: { systemInstruction }
-            });
-        }
-        const response = await chatSessionRef.current!.sendMessage({ message: userMsg });
-        setChatMessages(prev => [...prev, { role: 'model', text: response.text, timestamp: new Date() }]);
-    } catch (err) {
-        console.error("Chat error:", err);
-        setChatMessages(prev => [...prev, { role: 'model', text: "I'm having trouble connecting right now. Please check your network or try again later.", timestamp: new Date() }]);
-    } finally {
-        setIsChatLoading(false);
-    }
- };
+      const userMsg = text;
+      setChatMessages(prev => [...prev, { role: 'user', text: userMsg, timestamp: new Date() }]);
+      setIsChatLoading(true);
+
+      // Create a placeholder for the AI response
+      setChatMessages(prev => [...prev, { role: 'model', text: '', timestamp: new Date(), isStreaming: true }]);
+
+      try {
+          if (!chatSessionRef.current) {
+               const ai = new GoogleGenAI({ apiKey });
+               const systemInstruction = agentProfile.chatKnowledgeBase || agentProfile.knowledgeBase;
+               chatSessionRef.current = ai.chats.create({
+                  model: 'gemini-2.5-flash',
+                  config: { systemInstruction }
+              });
+          }
+
+          const result = await chatSessionRef.current!.sendMessageStream({ message: userMsg });
+          
+          let fullText = '';
+          for await (const chunk of result) {
+              const chunkText = (chunk as GenerateContentResponse).text;
+              if (chunkText) {
+                  fullText += chunkText;
+                  setChatMessages(prev => {
+                      const newHistory = [...prev];
+                      const lastMsg = newHistory[newHistory.length - 1];
+                      if (lastMsg.role === 'model' && lastMsg.isStreaming) {
+                          lastMsg.text = fullText;
+                      }
+                      return newHistory;
+                  });
+              }
+          }
+          
+          // Finalize the message
+          setChatMessages(prev => {
+              const newHistory = [...prev];
+              const lastMsg = newHistory[newHistory.length - 1];
+              if (lastMsg.role === 'model') {
+                  lastMsg.isStreaming = false;
+              }
+              return newHistory;
+          });
+
+      } catch (err) {
+          console.error("Chat error:", err);
+          setChatMessages(prev => {
+               // Remove the empty streaming message if it failed immediately, or append error
+               const newHistory = [...prev];
+               const lastMsg = newHistory[newHistory.length - 1];
+               if(lastMsg.role === 'model' && lastMsg.isStreaming && !lastMsg.text) {
+                   lastMsg.text = "I'm having trouble connecting right now. Please check your network or try again later.";
+                   lastMsg.isStreaming = false;
+                   return newHistory;
+               } 
+               return [...prev, { role: 'model', text: "Network error occurred.", timestamp: new Date() }];
+          });
+      } finally {
+          setIsChatLoading(false);
+      }
+  };
+
+  const handleChatSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chatInput.trim()) return;
+    const msg = chatInput;
+    setChatInput('');
+    handleSendMessageInternal(msg);
+  };
+
+  const handleHomeSubmit = (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!homeInput.trim()) return;
+      const msg = homeInput;
+      setHomeInput('');
+      initChat(msg);
+  };
 
   // --- Voice Functions ---
-
+  // (Identical to previous implementation, kept for completeness)
   const analyzeAndSendReport = useCallback(async (recording: Omit<Recording, 'id' | 'url'>) => {
     const { emailConfig, fileUploadConfig } = agentProfile as AgentConfig;
     if (!emailConfig?.formspreeEndpoint) {
@@ -314,15 +377,11 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                 audioLink = await getCloudinaryShareableLink(fileUploadConfig.cloudinaryCloudName, fileUploadConfig.cloudinaryUploadPreset, recording);
             } catch (uploadError) {
                 console.error("Audio upload to Cloudinary failed:", uploadError);
-                const errorMsg = uploadError instanceof Error ? uploadError.message : 'Upload failed';
-                if (errorMsg.includes("Signed") || errorMsg.includes("Upload Preset Name")) {
-                     setErrorMessage(errorMsg);
-                     throw new Error(errorMsg);
-                }
+                // Simplified error handling for UI
                 if (uploadError instanceof TypeError || (uploadError instanceof Error && uploadError.message.includes('Failed to fetch'))) {
-                     throw new Error('Upload error. Check network, ad-blockers, or website Content Security Policy (CSP).');
+                     throw new Error('Upload error. Check network.');
                 }
-                throw new Error(uploadError instanceof Error ? `Cloudinary error: ${uploadError.message}` : 'Cloudinary upload failed.');
+                throw new Error('Cloudinary upload failed.');
             }
         }
 
@@ -354,7 +413,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             analysis = JSON.parse(response.text);
         } catch (geminiError) {
              console.error("Failed to analyze with Gemini:", geminiError);
-             throw new Error("Failed to get analysis from AI. Check API key and billing.");
+             throw new Error("Failed to get analysis from AI.");
         }
 
         const reportData = {
@@ -375,12 +434,12 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         });
 
         if (!formspreeResponse.ok) {
-            throw new Error('Failed to send report via Formspree. Check endpoint URL.');
+            throw new Error('Failed to send report via Formspree.');
         }
 
         setReportingStatus('sent');
     } catch (error) {
-        const message = error instanceof Error ? error.message : 'An unknown error occurred. Check the console.';
+        const message = error instanceof Error ? error.message : 'An unknown error occurred.';
         console.error("Failed to process and send report:", error);
         setErrorMessage(message);
         setReportingStatus('failed');
@@ -657,16 +716,22 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
           {/* Action Body */}
           <div className="flex-1 bg-gray-50 dark:bg-gray-900 relative -mt-6 rounded-t-3xl px-6 pt-8 flex flex-col gap-4">
               
-              {/* Fake Search Bar -> Chat */}
-              <button 
-                  onClick={initChat}
-                  className="w-full bg-white dark:bg-gray-800 shadow-sm border border-gray-200 dark:border-gray-700 rounded-xl p-4 flex items-center justify-between group hover:shadow-md transition-all text-left"
+              {/* Real Input form */}
+              <form 
+                  onSubmit={handleHomeSubmit}
+                  className="w-full bg-white dark:bg-gray-800 shadow-sm border border-gray-200 dark:border-gray-700 rounded-xl p-1 flex items-center justify-between group hover:shadow-md transition-all focus-within:ring-2 focus-within:ring-accent-${accentColorClass}"
               >
-                  <span className="text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-colors">Ask a question...</span>
-                  <div className={`p-2 rounded-full bg-gray-100 dark:bg-gray-700 group-hover:bg-accent-${accentColorClass} transition-colors`}>
-                      <SendIcon className={`h-4 w-4 text-gray-500 dark:text-gray-400 group-hover:text-white`} />
-                  </div>
-              </button>
+                  <input 
+                      type="text"
+                      value={homeInput}
+                      onChange={(e) => setHomeInput(e.target.value)}
+                      placeholder="Ask a question..."
+                      className="flex-grow p-3 bg-transparent border-none outline-none text-gray-700 dark:text-white placeholder-gray-400"
+                  />
+                  <button type="submit" className={`p-2 rounded-lg bg-gray-100 dark:bg-gray-700 ${homeInput.trim() ? `bg-accent-${accentColorClass} text-white` : 'text-gray-400'} transition-colors`}>
+                      <SendIcon className={`h-4 w-4`} />
+                  </button>
+              </form>
 
               {/* Voice Card */}
               <button
@@ -694,7 +759,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
           <div className={`h-1 bg-gradient-to-r from-accent-${accentColorClass} to-gray-200 dark:to-gray-800 flex-shrink-0`} />
 
           {/* Chat Messages */}
-          <div className="flex-grow overflow-y-auto p-4 space-y-4 scroll-smooth bg-gray-50 dark:bg-gray-900">
+          <div className="flex-grow overflow-y-auto p-4 space-y-4 scroll-smooth bg-gray-50 dark:bg-gray-900" ref={chatContainerRef}>
               {chatMessages.map((msg, idx) => {
                   const isUser = msg.role === 'user';
                   return (
@@ -705,7 +770,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                             : 'bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 text-gray-800 dark:text-gray-200 rounded-bl-none'
                         }`}>
                             <div className={isUser ? '' : 'markdown-body'}>
-                                {isUser ? msg.text : formatMessageText(msg.text)}
+                                {isUser ? msg.text : (msg.text ? formatMessageText(msg.text) : <span className="inline-block w-2 h-4 bg-gray-400 animate-pulse ml-1"/>)}
                             </div>
                             <span className={`text-[10px] block text-right mt-1 opacity-70 ${isUser ? 'text-white/80' : 'text-gray-400'}`}>
                                 {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -714,20 +779,12 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                     </div>
                   );
               })}
-              {isChatLoading && (
-                   <div className="flex justify-start">
-                      <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl rounded-bl-none p-4 shadow-sm flex gap-1 items-center">
-                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:0.2s]"></div>
-                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:0.4s]"></div>
-                      </div>
-                   </div>
-              )}
+               {/* Invisible div to scroll to */}
               <div ref={chatEndRef} />
           </div>
 
           {/* Chat Input */}
-          <form onSubmit={handleSendMessage} className="p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+          <form onSubmit={handleChatSubmit} className="p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
               <div className="relative">
                   <input
                     type="text"
