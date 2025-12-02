@@ -64,6 +64,7 @@ export interface Recording {
   blob: Blob;
   url: string;
   mimeType: string;
+  transcript?: string; // Added transcript field
   summary?: string;
   sentiment?: 'Positive' | 'Neutral' | 'Negative' | string;
   actionItems?: string[];

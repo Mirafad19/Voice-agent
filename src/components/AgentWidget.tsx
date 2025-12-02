@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AgentProfile, AgentConfig, WidgetState, Recording, ReportingStatus } from '../types';
 import { GeminiLiveService } from '../services/geminiLiveService';
@@ -69,7 +68,6 @@ const SendIcon = ({className = "h-5 w-5"}) => (
 
 // --- Helpers ---
 
-// Helper function to upload and get a shareable link from Cloudinary
 async function getCloudinaryShareableLink(cloudName: string, uploadPreset: string, recording: Omit<Recording, 'id' | 'url'>): Promise<string> {
     const formData = new FormData();
     formData.append('file', recording.blob);
@@ -177,6 +175,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const activeAudioSourcesRef = useRef(new Set<AudioBufferSourceNode>());
   const nextStartTimeRef = useRef(0);
   const shouldEndAfterSpeakingRef = useRef(false);
+  const fullTranscriptRef = useRef<string>(''); // Capture full conversation
 
   // --- Chat State ---
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -246,7 +245,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
       setMode('chat');
       const ai = new GoogleGenAI({ apiKey });
       
-      // Use Chat Specific KB, fallback to Voice KB
       const systemInstruction = agentProfile.chatKnowledgeBase || agentProfile.knowledgeBase;
       
       chatSessionRef.current = ai.chats.create({
@@ -254,7 +252,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
           config: { systemInstruction }
       });
       
-      // Use Chat Specific Greeting, fallback to Voice Greeting
       const greeting = agentProfile.initialGreetingText || agentProfile.initialGreeting;
 
       if (chatMessages.length === 0 && greeting) {
@@ -328,27 +325,37 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             audioLink = await getCloudinaryShareableLink(fileUploadConfig.cloudinaryCloudName, fileUploadConfig.cloudinaryUploadPreset, recording);
         } catch (uploadError) {
             console.error("Audio upload to Cloudinary failed:", uploadError);
-            // Soft fail: we continue even if upload fails
             audioLink = "Upload unavailable";
         }
     }
 
     // 2. Gemini Analysis (Soft-Fail)
+    // PREFER TRANSCRIPT OVER AUDIO FOR STABILITY
     let analysis = { summary: 'Analysis unavailable due to network/model error.', sentiment: 'N/A', actionItems: [] };
     
     try {
         const ai = new GoogleGenAI({ apiKey });
-        const audioBase64 = await blobToBase64(recording.blob);
         
-        // Clean mime type to avoid "invalid argument" errors
-        const cleanMimeType = recording.mimeType.split(';')[0];
+        let contents;
+        // Prioritize Text Transcript if available (Faster, Cheaper, More Reliable)
+        if (recording.transcript && recording.transcript.length > 50) {
+            contents = { parts: [
+                { text: `Analyze this call transcript. Return JSON: { summary, sentiment (Positive/Neutral/Negative), actionItems[] }.` },
+                { text: `TRANSCRIPT:\n${recording.transcript}` }
+            ] };
+        } else {
+            // Fallback to Audio if transcript is empty/missing
+            const audioBase64 = await blobToBase64(recording.blob);
+            const cleanMimeType = recording.mimeType.split(';')[0];
+            contents = { parts: [
+                { text: `Analyze this call audio. Return JSON: { summary, sentiment (Positive/Neutral/Negative), actionItems[] }.` },
+                { inlineData: { mimeType: cleanMimeType, data: audioBase64 } },
+            ] };
+        }
         
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash",
-            contents: { parts: [
-                { text: `Analyze this call. Return JSON: { summary, sentiment (Positive/Neutral/Negative), actionItems[] }.` },
-                { inlineData: { mimeType: cleanMimeType, data: audioBase64 } },
-            ] },
+            contents: contents,
             config: {
                 responseMimeType: "application/json",
             },
@@ -358,7 +365,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         }
     } catch (geminiError) {
          console.warn("AI Analysis failed (proceeding without it):", geminiError);
-         // Soft fail: We proceed to send the email with default "N/A" data
     }
 
     // 3. Send Email (Hard-Fail)
@@ -372,6 +378,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
           summary: analysis.summary || 'No summary available.',
           actionItems: (analysis.actionItems && analysis.actionItems.length > 0) ? analysis.actionItems.map((item:string) => `- ${item}`).join('\n') : 'None',
           audioLink: audioLink,
+          // Optional: You could attach the transcript to the email body if Formspree supports large payloads
         };
 
         const formspreeResponse = await fetch(emailConfig.formspreeEndpoint, {
@@ -429,6 +436,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         name: `Recording - ${dateString}, ${timeString}`,
         blob,
         mimeType,
+        transcript: fullTranscriptRef.current, // Attach the captured transcript
     };
     
     if (isWidgetMode) {
@@ -514,6 +522,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     setWidgetState(WidgetState.Connecting);
     setReportingStatus('idle');
     setErrorMessage('');
+    fullTranscriptRef.current = ''; // Reset transcript
 
     let stream: MediaStream;
     try {
@@ -534,6 +543,8 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     // VOICE GREETING LOGIC
     const greeting = (agentProfile as AgentConfig).initialGreeting;
     if (greeting) {
+        // Append Agent Greeting to transcript
+        fullTranscriptRef.current += `Agent: ${greeting}\n`;
         try {
             const ai = new GoogleGenAI({ apiKey });
             const response = await ai.models.generateContent({
@@ -578,12 +589,17 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         }
       },
       onTranscriptUpdate: (isFinal, text, type) => {
-        if (isFinal && type === 'output') {
-          const lowerCaseText = text.toLowerCase();
-          const endKeywords = ['goodbye', 'farewell', 'take care', 'talk to you later', 'bye bye', 'bye'];
-          if (endKeywords.some(keyword => lowerCaseText.includes(keyword))) {
-            shouldEndAfterSpeakingRef.current = true;
-          }
+        if (isFinal) {
+             const prefix = type === 'input' ? 'User: ' : 'Agent: ';
+             fullTranscriptRef.current += `${prefix}${text}\n`;
+             
+             if (type === 'output') {
+                const lowerCaseText = text.toLowerCase();
+                const endKeywords = ['goodbye', 'farewell', 'take care', 'talk to you later', 'bye bye', 'bye'];
+                if (endKeywords.some(keyword => lowerCaseText.includes(keyword))) {
+                    shouldEndAfterSpeakingRef.current = true;
+                }
+             }
         }
       },
       onAudioChunk: (chunk) => {

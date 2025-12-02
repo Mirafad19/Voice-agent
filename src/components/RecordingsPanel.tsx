@@ -1,5 +1,4 @@
 
-
 import React, { useState } from 'react';
 import { AgentProfile, Recording } from '../types';
 import { GoogleGenAI, Type } from '@google/genai';
@@ -75,29 +74,51 @@ export const RecordingsPanel: React.FC<RecordingsPanelProps> = ({ recordings, on
 
     try {
         const ai = new GoogleGenAI({ apiKey });
-        const audioBase64 = await blobToBase64(recording.blob);
         
-        // Clean MimeType to remove codecs parameters
-        const cleanMimeType = recording.mimeType.split(';')[0];
+        let contents;
 
-        const textPart = {
-            text: `You are a highly skilled call center analyst. Your task is to analyze the following customer service call recording.
-            Please provide a concise summary of the conversation, assess the customer's sentiment, and list any explicit action items for the support agent.
-            Return the analysis in a JSON object.`,
-        };
+        // Prefer Transcript if available (Faster & More Reliable)
+        if (recording.transcript && recording.transcript.length > 50) {
+             contents = { parts: [
+                { text: `You are a highly skilled call center analyst. Analyze this transcript. Provide a concise summary, sentiment (Positive/Neutral/Negative), and action items. Return JSON.` },
+                { text: `TRANSCRIPT:\n${recording.transcript}` }
+            ] };
+        } else {
+            // Fallback to Audio
+            const audioBase64 = await blobToBase64(recording.blob);
+            const cleanMimeType = recording.mimeType.split(';')[0];
+            contents = { parts: [
+                { text: `You are a highly skilled call center analyst. Analyze this call audio. Provide a concise summary, sentiment (Positive/Neutral/Negative), and action items. Return JSON.` },
+                { inlineData: { mimeType: cleanMimeType, data: audioBase64 } },
+            ] };
+        }
 
-        const audioPart = {
-            inlineData: {
-                mimeType: cleanMimeType,
-                data: audioBase64,
+        const responseSchema = {
+            type: Type.OBJECT,
+            properties: {
+                summary: {
+                    type: Type.STRING,
+                    description: "A brief paragraph summarizing the call."
+                },
+                sentiment: {
+                    type: Type.STRING,
+                    description: "One of the following: 'Positive', 'Neutral', 'Negative'."
+                },
+                actionItems: {
+                    type: Type.ARRAY,
+                    items: { type: Type.STRING },
+                    description: "A list of clear action items. Return an empty array if there are none."
+                }
             },
+            required: ["summary", "sentiment", "actionItems"]
         };
-
+        
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash",
-            contents: { parts: [textPart, audioPart] },
+            contents: contents,
             config: {
                 responseMimeType: "application/json",
+                responseSchema
             },
         });
         
