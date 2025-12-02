@@ -1,3 +1,5 @@
+
+
 import React, { useState } from 'react';
 import { AgentProfile, Recording } from '../types';
 import { GoogleGenAI, Type } from '@google/genai';
@@ -74,6 +76,9 @@ export const RecordingsPanel: React.FC<RecordingsPanelProps> = ({ recordings, on
     try {
         const ai = new GoogleGenAI({ apiKey });
         const audioBase64 = await blobToBase64(recording.blob);
+        
+        // Clean MimeType
+        const cleanMimeType = recording.mimeType.split(';')[0];
 
         const textPart = {
             text: `You are a highly skilled call center analyst. Your task is to analyze the following customer service call recording.
@@ -83,41 +88,22 @@ export const RecordingsPanel: React.FC<RecordingsPanelProps> = ({ recordings, on
 
         const audioPart = {
             inlineData: {
-                mimeType: recording.mimeType,
+                mimeType: cleanMimeType,
                 data: audioBase64,
             },
         };
 
-        const responseSchema = {
-            type: Type.OBJECT,
-            properties: {
-                summary: {
-                    type: Type.STRING,
-                    description: "A brief paragraph summarizing the call."
-                },
-                sentiment: {
-                    type: Type.STRING,
-                    description: "One of the following: 'Positive', 'Neutral', 'Negative'."
-                },
-                actionItems: {
-                    type: Type.ARRAY,
-                    items: { type: Type.STRING },
-                    description: "A list of clear action items. Return an empty array if there are none."
-                }
-            },
-            required: ["summary", "sentiment", "actionItems"]
-        };
-        
+        // We use responseMimeType without the strict schema object to avoid validation errors
+        // on slightly malformed JSON from the model, or complex schema issues.
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash",
             contents: { parts: [textPart, audioPart] },
             config: {
                 responseMimeType: "application/json",
-                responseSchema
             },
         });
         
-        const result = JSON.parse(response.text);
+        const result = JSON.parse(response.text || '{}');
         
         onUpdate({
             ...recording,
