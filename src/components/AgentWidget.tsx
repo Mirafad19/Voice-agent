@@ -280,8 +280,20 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                 config: { systemInstruction }
             });
         }
-        const response = await chatSessionRef.current!.sendMessage({ message: userMsg });
-        setChatMessages(prev => [...prev, { role: 'model', text: response.text, timestamp: new Date() }]);
+        const response = await chatSessionRef.current!.sendMessageStream({ message: userMsg });
+        
+        let fullText = '';
+        setChatMessages(prev => [...prev, { role: 'model', text: '', timestamp: new Date() }]);
+        
+        for await (const chunk of response) {
+            const text = chunk.text;
+            fullText += text;
+            setChatMessages(prev => {
+                const newArr = [...prev];
+                newArr[newArr.length - 1] = { ...newArr[newArr.length - 1], text: fullText };
+                return newArr;
+            });
+        }
     } catch (err) {
         console.error("Chat error:", err);
         setChatMessages(prev => [...prev, { role: 'model', text: "I'm having trouble connecting right now. Please check your network or try again later.", timestamp: new Date() }]);
@@ -308,55 +320,51 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
     setReportingStatus('analyzing');
 
-    try {
-        let audioLink = 'Audio link not available: Cloudinary is not configured.';
-        if (fileUploadConfig?.cloudinaryCloudName && fileUploadConfig.cloudinaryUploadPreset) {
-            try {
-                audioLink = await getCloudinaryShareableLink(fileUploadConfig.cloudinaryCloudName, fileUploadConfig.cloudinaryUploadPreset, recording);
-            } catch (uploadError) {
-                console.error("Audio upload to Cloudinary failed:", uploadError);
-                const errorMsg = uploadError instanceof Error ? uploadError.message : 'Upload failed';
-                if (errorMsg.includes("Signed") || errorMsg.includes("Upload Preset Name")) {
-                     setErrorMessage(errorMsg);
-                     throw new Error(errorMsg);
-                }
-                if (uploadError instanceof TypeError || (uploadError instanceof Error && uploadError.message.includes('Failed to fetch'))) {
-                     throw new Error('Upload error. Check network, ad-blockers, or website Content Security Policy (CSP).');
-                }
-                throw new Error(uploadError instanceof Error ? `Cloudinary error: ${uploadError.message}` : 'Cloudinary upload failed.');
-            }
-        }
+    let audioLink = 'Not configured';
 
+    // 1. Cloudinary Upload (Soft-Fail)
+    if (fileUploadConfig?.cloudinaryCloudName && fileUploadConfig.cloudinaryUploadPreset) {
+        try {
+            audioLink = await getCloudinaryShareableLink(fileUploadConfig.cloudinaryCloudName, fileUploadConfig.cloudinaryUploadPreset, recording);
+        } catch (uploadError) {
+            console.error("Audio upload to Cloudinary failed:", uploadError);
+            // Soft fail: we continue even if upload fails
+            audioLink = "Upload unavailable";
+        }
+    }
+
+    // 2. Gemini Analysis (Soft-Fail)
+    let analysis = { summary: 'Analysis unavailable due to network/model error.', sentiment: 'N/A', actionItems: [] };
+    
+    try {
         const ai = new GoogleGenAI({ apiKey });
         const audioBase64 = await blobToBase64(recording.blob);
         
-        // Fix: Strip codec information from mimeType (e.g., 'audio/webm;codecs=opus' -> 'audio/webm')
-        // This is crucial as Gemini API can sometimes reject complex mime types in inlineData.
+        // Clean mime type to avoid "invalid argument" errors
         const cleanMimeType = recording.mimeType.split(';')[0];
         
-        let analysis;
-        try {
-            const response = await ai.models.generateContent({
-                model: "gemini-2.5-flash",
-                contents: { parts: [
-                    { text: `Analyze this call recording. Provide a concise summary, the customer's sentiment ('Positive', 'Neutral', or 'Negative'), and a list of action items. Return a JSON object.` },
-                    { inlineData: { mimeType: cleanMimeType, data: audioBase64 } },
-                ] },
-                config: {
-                    // Relaxed schema: We remove the strict `responseSchema` to prevent 500 errors 
-                    // if the model's JSON structure is slightly off. We rely on the prompt to enforce structure.
-                    responseMimeType: "application/json",
-                },
-            });
-            if (!response.text) {
-              throw new Error("Gemini analysis returned an empty response.");
-            }
-            analysis = JSON.parse(response.text);
-        } catch (geminiError) {
-             console.error("Failed to analyze with Gemini:", geminiError);
-             throw new Error("Failed to get analysis from AI. Check API key and billing.");
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: { parts: [
+                { text: `Analyze this call. Return JSON: { summary, sentiment (Positive/Neutral/Negative), actionItems[] }.` },
+                { inlineData: { mimeType: cleanMimeType, data: audioBase64 } },
+            ] },
+            config: {
+                responseMimeType: "application/json",
+            },
+        });
+        if (response.text) {
+             analysis = JSON.parse(response.text);
         }
+    } catch (geminiError) {
+         console.warn("AI Analysis failed (proceeding without it):", geminiError);
+         // Soft fail: We proceed to send the email with default "N/A" data
+    }
 
+    // 3. Send Email (Hard-Fail)
+    setReportingStatus('sending');
+
+    try {
         const reportData = {
           _subject: `Session Insight Report: ${recording.name}`,
           agent: agentProfile.name,
@@ -366,8 +374,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
           audioLink: audioLink,
         };
 
-        setReportingStatus('sending');
-
         const formspreeResponse = await fetch(emailConfig.formspreeEndpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
@@ -375,13 +381,13 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         });
 
         if (!formspreeResponse.ok) {
-            throw new Error('Failed to send report via Formspree. Check endpoint URL.');
+            throw new Error('Failed to send report via Formspree.');
         }
 
         setReportingStatus('sent');
     } catch (error) {
-        const message = error instanceof Error ? error.message : 'An unknown error occurred. Check the console.';
-        console.error("Failed to process and send report:", error);
+        const message = error instanceof Error ? error.message : 'An unknown error occurred.';
+        console.error("Failed to send report:", error);
         setErrorMessage(message);
         setReportingStatus('failed');
     }

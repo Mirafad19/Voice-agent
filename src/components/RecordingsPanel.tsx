@@ -77,7 +77,7 @@ export const RecordingsPanel: React.FC<RecordingsPanelProps> = ({ recordings, on
         const ai = new GoogleGenAI({ apiKey });
         const audioBase64 = await blobToBase64(recording.blob);
         
-        // Clean MimeType
+        // Clean MimeType to remove codecs parameters
         const cleanMimeType = recording.mimeType.split(';')[0];
 
         const textPart = {
@@ -93,8 +93,6 @@ export const RecordingsPanel: React.FC<RecordingsPanelProps> = ({ recordings, on
             },
         };
 
-        // We use responseMimeType without the strict schema object to avoid validation errors
-        // on slightly malformed JSON from the model, or complex schema issues.
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash",
             contents: { parts: [textPart, audioPart] },
