@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AgentProfile, AgentConfig, WidgetState, Recording, ReportingStatus } from '../types';
 import { GeminiLiveService } from '../services/geminiLiveService';
@@ -664,14 +663,13 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   // 1. Home / Selection View
   const renderHomeView = () => (
       <div className="flex flex-col h-full w-full bg-white dark:bg-gray-900 animate-fade-in-up">
-          {/* Hero Header - Mobile: shorter, Desktop: taller */}
-          <div className={`relative flex-shrink-0 h-[25%] min-h-[140px] md:h-[35%] md:min-h-[180px] bg-gradient-to-br from-accent-${accentColorClass} to-gray-900 flex flex-col p-6 text-white transition-all duration-300`}>
+          {/* Hero Header */}
+          <div className={`relative flex-shrink-0 h-[35%] min-h-[180px] bg-gradient-to-br from-accent-${accentColorClass} to-gray-900 flex flex-col p-6 text-white`}>
               <div className="flex items-center justify-between mb-4">
                   <span className="text-xs font-bold tracking-widest uppercase opacity-80 truncate">{agentProfile.name}</span>
               </div>
               <div className="mt-auto mb-6 relative z-10">
-                  {/* Mobile: smaller text, Desktop: larger */}
-                  <h1 className="text-3xl md:text-4xl font-bold">Hi <span className="animate-wave inline-block">👋</span></h1>
+                  <h1 className="text-4xl font-bold">Hi <span className="animate-wave inline-block">👋</span></h1>
                   <p className="text-white/80 mt-2 font-medium text-sm">How can we help you today?</p>
               </div>
               {/* Decorative Glow */}
@@ -679,7 +677,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
           </div>
 
           {/* Action Body */}
-          <div className="flex-1 bg-gray-50 dark:bg-gray-900 relative -mt-6 rounded-t-3xl px-4 pt-6 md:px-6 md:pt-8 flex flex-col gap-3 md:gap-4 overflow-y-auto">
+          <div className="flex-1 bg-gray-50 dark:bg-gray-900 relative -mt-6 rounded-t-3xl px-6 pt-8 flex flex-col gap-4 overflow-y-auto">
               
               {/* Fake Search Bar -> Chat */}
               <button 
@@ -868,11 +866,11 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   }
 
   // FIXED: Responsive container logic
-  // - Mobile: fixed inset-0 (full screen), rounded-none, use 100dvh
+  // - Mobile: fixed inset-0 (full screen), rounded-none
   // - Desktop (md): fixed bottom-24 right-5, w-96 h-[600px], rounded-2xl
   const containerClasses = isWidgetMode 
-    ? 'w-full h-full md:rounded-2xl' // In widget mode (iframe), height is controlled by iframe size
-    : 'fixed z-[9999] transition-all duration-300 ease-in-out inset-0 w-full h-[100dvh] md:inset-auto md:bottom-24 md:right-5 md:w-96 md:h-[600px] md:rounded-2xl shadow-2xl';
+    ? 'w-full h-full rounded-none md:rounded-2xl' 
+    : 'fixed z-[9999] transition-all duration-300 ease-in-out inset-0 w-full h-full md:inset-auto md:bottom-24 md:right-5 md:w-96 md:h-[600px] md:rounded-2xl shadow-2xl';
 
   return (
     <div className={`${themeClass} ${containerClasses}`}>
