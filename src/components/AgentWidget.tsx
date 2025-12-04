@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AgentProfile, AgentConfig, WidgetState, Recording, ReportingStatus } from '../types';
 import { GeminiLiveService } from '../services/geminiLiveService';
@@ -866,16 +865,9 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     return isWidgetMode ? <div className="w-full h-full p-2 flex items-end justify-end bg-transparent">{fabContent}</div> : <div className="fixed bottom-5 right-5 z-50">{fabContent}</div>;
   }
 
-  // FIXED: Responsive container logic
-  // - Mobile: fixed inset-0 (full screen), rounded-none
-  // - Desktop (md): fixed bottom-24 right-5, w-96 h-[600px], rounded-2xl
-  const containerClasses = isWidgetMode 
-    ? 'w-full h-full' 
-    : 'fixed z-50 transition-all duration-300 ease-in-out inset-0 w-full h-full md:inset-auto md:bottom-24 md:right-5 md:w-96 md:h-[600px] md:rounded-2xl shadow-2xl';
-
   return (
-    <div className={`${themeClass} ${containerClasses}`}>
-        <div className={`flex flex-col w-full h-full bg-white dark:bg-gray-900 text-black dark:text-white md:rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700`}>
+    <div className={`${themeClass} ${isWidgetMode ? 'w-full h-full' : 'fixed bottom-24 right-5 w-96 h-[600px] rounded-2xl shadow-2xl z-40'}`}>
+        <div className={`flex flex-col w-full h-full bg-white dark:bg-gray-900 text-black dark:text-white rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700`}>
             {/* Widget Header */}
             <div className={`flex items-center justify-between p-4 flex-shrink-0 z-20 ${mode === 'home' ? 'absolute top-0 left-0 w-full text-white' : 'border-b border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md'}`}>
                 <div className="flex items-center gap-2">
