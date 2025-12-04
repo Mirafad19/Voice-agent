@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo } from 'react';
 import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
@@ -57,7 +58,7 @@ export const EmbedCodeModal: React.FC<EmbedCodeModalProps> = ({ isOpen, onClose,
             container.style.left = '0';
             container.style.top = '0';
             iframe.style.width = '100%';
-            iframe.style.height = '100%';
+            iframe.style.height = '100dvh'; // Use 100dvh to ignore address bar
             iframe.style.borderRadius = '0';
         } else {
             // Floating widget on desktop or closed state
