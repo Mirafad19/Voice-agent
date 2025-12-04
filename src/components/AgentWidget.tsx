@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AgentProfile, AgentConfig, WidgetState, Recording, ReportingStatus } from '../types';
 import { GeminiLiveService } from '../services/geminiLiveService';
@@ -207,11 +208,10 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
   useEffect(() => {
     if (!isWidgetMode) return;
-    // Notify parent about open/close state to handle mobile full-screen toggling
     if (isOpen) {
-      window.parent.postMessage({ type: 'agent-widget-resize', width: 400, height: 600, isOpen: true }, '*');
+      window.parent.postMessage({ type: 'agent-widget-resize', width: 400, height: 600 }, '*');
     } else {
-      window.parent.postMessage({ type: 'agent-widget-resize', width: 300, height: 140, isOpen: false }, '*');
+      window.parent.postMessage({ type: 'agent-widget-resize', width: 300, height: 140 }, '*');
     }
   }, [isOpen, isWidgetMode]);
   
@@ -379,6 +379,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
           summary: analysis.summary || 'No summary available.',
           actionItems: (analysis.actionItems && analysis.actionItems.length > 0) ? analysis.actionItems.map((item:string) => `- ${item}`).join('\n') : 'None',
           audioLink: audioLink,
+          // Optional: You could attach the transcript to the email body if Formspree supports large payloads
         };
 
         const formspreeResponse = await fetch(emailConfig.formspreeEndpoint, {
@@ -664,25 +665,25 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const renderHomeView = () => (
       <div className="flex flex-col h-full w-full bg-white dark:bg-gray-900 animate-fade-in-up">
           {/* Hero Header */}
-          <div className={`relative flex-shrink-0 h-[35%] min-h-[180px] bg-gradient-to-br from-accent-${accentColorClass} to-gray-900 flex flex-col p-6 text-white`}>
+          <div className={`relative h-[40%] bg-gradient-to-br from-accent-${accentColorClass} to-gray-900 flex flex-col p-6 text-white`}>
               <div className="flex items-center justify-between mb-4">
-                  <span className="text-xs font-bold tracking-widest uppercase opacity-80 truncate">{agentProfile.name}</span>
+                  <span className="text-xs font-bold tracking-widest uppercase opacity-80">{agentProfile.name}</span>
               </div>
               <div className="mt-auto mb-6 relative z-10">
                   <h1 className="text-4xl font-bold">Hi <span className="animate-wave inline-block">👋</span></h1>
-                  <p className="text-white/80 mt-2 font-medium text-sm">How can we help you today?</p>
+                  <p className="text-white/80 mt-2 font-medium">How can we help you today?</p>
               </div>
               {/* Decorative Glow */}
               <div className="absolute -right-10 -bottom-20 w-64 h-64 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
           </div>
 
           {/* Action Body */}
-          <div className="flex-1 bg-gray-50 dark:bg-gray-900 relative -mt-6 rounded-t-3xl px-6 pt-8 flex flex-col gap-4 overflow-y-auto">
+          <div className="flex-1 bg-gray-50 dark:bg-gray-900 relative -mt-6 rounded-t-3xl px-6 pt-8 flex flex-col gap-4">
               
               {/* Fake Search Bar -> Chat */}
               <button 
                   onClick={initChat}
-                  className="w-full bg-white dark:bg-gray-800 shadow-sm border border-gray-200 dark:border-gray-700 rounded-xl p-4 flex items-center justify-between group hover:shadow-md transition-all text-left flex-shrink-0"
+                  className="w-full bg-white dark:bg-gray-800 shadow-sm border border-gray-200 dark:border-gray-700 rounded-xl p-4 flex items-center justify-between group hover:shadow-md transition-all text-left"
               >
                   <span className="text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-colors">Ask a question...</span>
                   <div className={`p-2 rounded-full bg-gray-100 dark:bg-gray-700 group-hover:bg-accent-${accentColorClass} transition-colors`}>
@@ -693,7 +694,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
               {/* Voice Card */}
               <button
                   onClick={() => setMode('voice')}
-                  className={`w-full bg-gradient-to-r from-accent-${accentColorClass} to-gray-800 rounded-xl p-1 shadow-md hover:scale-[1.02] transition-transform group flex-shrink-0`}
+                  className={`w-full bg-gradient-to-r from-accent-${accentColorClass} to-gray-800 rounded-xl p-1 shadow-md hover:scale-[1.02] transition-transform group`}
               >
                   <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 flex items-center gap-4 h-full">
                       <div className="p-3 bg-white/20 rounded-full animate-pulse">
@@ -749,7 +750,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
           </div>
 
           {/* Chat Input */}
-          <form onSubmit={handleSendMessage} className="p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 flex-shrink-0">
+          <form onSubmit={handleSendMessage} className="p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
               <div className="relative">
                   <input
                     type="text"
@@ -862,15 +863,15 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         </button>
       </div>
     );
-    return isWidgetMode ? <div className="w-full h-full p-2 flex items-end justify-end bg-transparent">{fabContent}</div> : <div className="fixed bottom-5 right-5 z-[9999]">{fabContent}</div>;
+    return isWidgetMode ? <div className="w-full h-full p-2 flex items-end justify-end bg-transparent">{fabContent}</div> : <div className="fixed bottom-5 right-5 z-50">{fabContent}</div>;
   }
 
   // FIXED: Responsive container logic
   // - Mobile: fixed inset-0 (full screen), rounded-none
   // - Desktop (md): fixed bottom-24 right-5, w-96 h-[600px], rounded-2xl
   const containerClasses = isWidgetMode 
-    ? 'w-full h-full rounded-none md:rounded-2xl' 
-    : 'fixed z-[9999] transition-all duration-300 ease-in-out inset-0 w-full h-full md:inset-auto md:bottom-24 md:right-5 md:w-96 md:h-[600px] md:rounded-2xl shadow-2xl';
+    ? 'w-full h-full' 
+    : 'fixed z-50 transition-all duration-300 ease-in-out inset-0 w-full h-full md:inset-auto md:bottom-24 md:right-5 md:w-96 md:h-[600px] md:rounded-2xl shadow-2xl';
 
   return (
     <div className={`${themeClass} ${containerClasses}`}>
