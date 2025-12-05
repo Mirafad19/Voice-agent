@@ -18,6 +18,7 @@ interface AgentWidgetProps {
 interface Message {
     role: 'user' | 'model';
     text: string;
+    timestamp: Date;
 }
 
 type ViewState = 'home' | 'voice' | 'chat';
@@ -44,6 +45,17 @@ async function getCloudinaryShareableLink(cloudName: string, uploadPreset: strin
     return result.secure_url;
 }
 
+// --- Icons ---
+
+const WaveformIcon = ({className = "h-9 w-9 text-white"}) => (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} xmlns="http://www.w3.org/2000/svg">
+        <rect x="4" y="10" width="2" height="4" rx="1" fillOpacity="0.5" />
+        <rect x="8" y="6" width="2" height="12" rx="1" fillOpacity="0.8" />
+        <rect x="12" y="3" width="2" height="18" rx="1" />
+        <rect x="16" y="6" width="2" height="12" rx="1" fillOpacity="0.8" />
+        <rect x="20" y="10" width="2" height="4" rx="1" fillOpacity="0.5" />
+    </svg>
+);
 
 const FabIcon = ({className = "h-9 w-9 text-white"}) => (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" fill="none" strokeLinecap="round" strokeLinejoin="round">
@@ -58,7 +70,7 @@ const FabIcon = ({className = "h-9 w-9 text-white"}) => (
 );
 
 const MicrophoneIcon = ({state}: {state: WidgetState}) => (
-    <svg xmlns="http://www.w3.org/2000/svg" className={`h-12 w-12 transition-colors duration-300 ${state === WidgetState.Idle ? 'text-gray-800 dark:text-white' : 'text-white'}`} viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" fill="none" strokeLinecap="round" strokeLinejoin="round">
+    <svg xmlns="http://www.w3.org/2000/svg" className={`h-8 w-8 transition-colors duration-300 ${state === WidgetState.Idle ? 'text-white' : 'text-white'}`} viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" fill="none" strokeLinecap="round" strokeLinejoin="round">
         <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
         <path d="M9 2m0 3a3 3 0 0 1 3 -3h0a3 3 0 0 1 3 3v5a3 3 0 0 1 -3 3h0a3 3 0 0 1 -3 -3z" />
         <path d="M5 10a7 7 0 0 0 14 0" />
@@ -67,10 +79,25 @@ const MicrophoneIcon = ({state}: {state: WidgetState}) => (
     </svg>
 );
 
-const SendIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-        <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
+const SendIcon = ({className = "h-5 w-5"}) => (
+  <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 20 20" fill="currentColor">
+    <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
+  </svg>
+);
+
+const ChevronLeftIcon = ({className = "h-6 w-6"}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
     </svg>
+);
+
+const NetworkIcon = ({ isOnline }: { isOnline: boolean }) => (
+    <div className={`flex items-center gap-1.5 rounded-full px-2 py-1 border transition-colors ${isOnline ? 'bg-gray-100 border-gray-200 dark:bg-gray-800 dark:border-gray-600' : 'bg-red-100 border-red-200 dark:bg-red-900/30 dark:border-red-800'}`} title={isOnline ? "Network Stable" : "Network Unstable"}>
+        <div className={`w-2.5 h-2.5 rounded-full ${isOnline ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
+        <span className={`text-[10px] font-medium uppercase tracking-wider ${isOnline ? 'text-gray-500 dark:text-gray-400' : 'text-red-600 dark:text-red-400'}`}>
+            {isOnline ? 'LIVE' : 'OFFLINE'}
+        </span>
+    </div>
 );
 
 export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, isWidgetMode, onSessionEnd }) => {
@@ -87,6 +114,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   };
   const [voiceReportingStatus, setVoiceReportingStatus] = useState<ReportingStatus>('idle');
   const fullTranscriptRef = useRef('');
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   // Chat State
   const [messages, setMessages] = useState<Message[]>([]);
@@ -110,7 +138,18 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   
   const accentColorClass = agentProfile.accentColor;
 
-  // --- Scrolling ---
+  // --- Effects ---
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -160,7 +199,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                 { inlineData: { mimeType: recording.mimeType, data: audioBase64 } },
             ] };
         } else {
-             // Fallback for empty chat
              contents = { parts: [{ text: "This was a short session with no content. Return neutral sentiment." }] };
         }
 
@@ -230,7 +268,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
     const welcomeText = config.initialGreetingText || config.initialGreeting || "Hello! How can I help you?";
     
-    setMessages([{ role: 'model', text: welcomeText }]);
+    setMessages([{ role: 'model', text: welcomeText, timestamp: new Date() }]);
     setView('chat');
 
     if (initialMessage) {
@@ -241,7 +279,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const handleChatMessage = async (text: string) => {
     if (!text.trim() || !chatSessionRef.current) return;
 
-    const userMsg: Message = { role: 'user', text };
+    const userMsg: Message = { role: 'user', text, timestamp: new Date() };
     setMessages(prev => [...prev, userMsg]);
     setChatInput('');
     setIsChatTyping(true);
@@ -250,20 +288,20 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         const result = await chatSessionRef.current.sendMessageStream({ message: text });
         
         let fullResponse = "";
-        setMessages(prev => [...prev, { role: 'model', text: "" }]); // Placeholder
+        setMessages(prev => [...prev, { role: 'model', text: "", timestamp: new Date() }]); // Placeholder
 
         for await (const chunk of result) {
             const chunkText = chunk.text;
             fullResponse += chunkText;
             setMessages(prev => {
                 const newArr = [...prev];
-                newArr[newArr.length - 1] = { role: 'model', text: fullResponse };
+                newArr[newArr.length - 1] = { role: 'model', text: fullResponse, timestamp: new Date() };
                 return newArr;
             });
         }
     } catch (e) {
         console.error("Chat error:", e);
-        setMessages(prev => [...prev, { role: 'model', text: "I'm having trouble connecting right now. Please try again." }]);
+        setMessages(prev => [...prev, { role: 'model', text: "I'm having trouble connecting right now. Please try again.", timestamp: new Date() }]);
     } finally {
         setIsChatTyping(false);
     }
@@ -515,13 +553,11 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   
   const toggleWidget = () => {
     if (isOpen) {
-      // Logic: If user closes widget while in a session, end it and report.
       if (view === 'chat' && messages.length > 1) {
           endChatSession();
       } else if (view === 'voice' && widgetState !== WidgetState.Idle && widgetState !== WidgetState.Ended) {
           endVoiceSession();
       }
-      // Reset view to home after closing
       setTimeout(() => setView('home'), 300);
     }
     setIsOpen(!isOpen);
@@ -555,7 +591,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     }
   }, [isOpen, isWidgetMode]);
   
-  // Callout logic
   useEffect(() => {
     const calloutShown = sessionStorage.getItem('ai-agent-callout-shown');
     let showTimer: number;
@@ -574,217 +609,235 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
   const themeClass = agentProfile.theme === 'dark' ? 'dark' : '';
 
-  // --- Render Functions ---
+  // --- Render Views ---
 
+  // 1. Home / Selection View (Restored Design)
   const renderHomeView = () => (
-      <div className="flex flex-col h-full bg-white dark:bg-gray-900 w-full">
-          {/* Hero Section */}
-          <div className={`relative h-[40%] min-h-[220px] bg-gradient-to-br from-accent-${accentColorClass} to-gray-900 p-6 flex flex-col justify-between text-white overflow-hidden`}>
-               {/* Decorative Background Elements */}
-               <div className="absolute top-0 right-0 p-4 opacity-20 transform translate-x-1/4 -translate-y-1/4">
-                   <div className="w-32 h-32 rounded-full bg-white blur-3xl"></div>
-               </div>
-               
-               {/* Header Top */}
-               <div className="relative z-10">
-                   <span className="text-xs font-bold tracking-widest uppercase opacity-80">{agentProfile.name}</span>
-               </div>
-
-               {/* Greeting */}
-               <div className="relative z-10 mb-8">
-                   <h1 className="text-4xl font-bold mb-2">Hi <span className="animate-wave inline-block">👋</span></h1>
-                   <p className="text-white/90 font-medium text-lg">How can we help you today?</p>
-               </div>
+      <div className="flex flex-col h-full w-full bg-white dark:bg-gray-900 animate-fade-in-up">
+          {/* Hero Header */}
+          <div className={`relative h-[40%] bg-gradient-to-br from-accent-${accentColorClass} to-gray-900 flex flex-col p-6 text-white`}>
+              <div className="flex items-center justify-between mb-4">
+                  <span className="text-xs font-bold tracking-widest uppercase opacity-80">{agentProfile.name}</span>
+              </div>
+              <div className="mt-auto mb-6 relative z-10">
+                  <h1 className="text-4xl font-bold">Hi <span className="animate-wave inline-block">👋</span></h1>
+                  <p className="text-white/80 mt-2 font-medium">How can we help you today?</p>
+              </div>
+              {/* Decorative Glow */}
+              <div className="absolute -right-10 -bottom-20 w-64 h-64 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
           </div>
 
-          {/* Action Area (Overlapping Card) */}
-          <div className="flex-1 bg-gray-50 dark:bg-gray-900 relative -mt-8 rounded-t-[2rem] px-6 pt-8 flex flex-col gap-4 shadow-[0_-4px_20px_rgba(0,0,0,0.1)] z-20">
+          {/* Action Body (Curved Overlap) */}
+          <div className="flex-1 bg-gray-50 dark:bg-gray-900 relative -mt-6 rounded-t-3xl px-6 pt-8 flex flex-col gap-4 shadow-lg z-20">
               
-               {/* Chat Input Trigger */}
-              <form onSubmit={handleHomeInputSubmit} className="relative">
+              {/* Fake Search Bar -> Chat */}
+              <form onSubmit={handleHomeInputSubmit} className="relative w-full">
                   <input 
                     type="text" 
                     placeholder="Ask a question..." 
                     value={chatInput}
                     onChange={(e) => setChatInput(e.target.value)}
-                    className="w-full pl-5 pr-12 py-4 rounded-2xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-accent-${accentColorClass} focus:outline-none shadow-sm transition-all"
+                    className="w-full pl-5 pr-12 py-4 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-accent-${accentColorClass} text-gray-900 dark:text-white transition-all text-left"
                   />
-                  <button type="submit" className={`absolute right-3 top-1/2 transform -translate-y-1/2 p-2 bg-gray-100 dark:bg-gray-700 rounded-xl text-gray-400 hover:text-accent-${accentColorClass} transition-colors`}>
-                      <SendIcon />
+                  <button type="submit" className={`absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-400 group-hover:text-accent-${accentColorClass} hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors`}>
+                      <SendIcon className="h-4 w-4" />
                   </button>
               </form>
 
-              {/* Voice Card Trigger */}
-              <button 
-                onClick={startVoiceSession}
-                className={`w-full text-left p-1 rounded-2xl bg-gradient-to-r from-accent-${accentColorClass} to-gray-800 shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all group`}
+              {/* Voice Card */}
+              <button
+                  onClick={startVoiceSession}
+                  className={`w-full bg-gradient-to-r from-accent-${accentColorClass} to-gray-800 rounded-xl p-1 shadow-md hover:scale-[1.02] transition-transform group text-left`}
               >
-                  <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 flex items-center gap-4 h-full">
-                      <div className="h-12 w-12 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-md group-hover:scale-110 transition-transform">
-                         <MicrophoneIcon state={WidgetState.Idle} />
+                  <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 flex items-center gap-4 h-full">
+                      <div className="p-3 bg-white/20 rounded-full animate-pulse">
+                          <MicrophoneIcon state={WidgetState.Idle} />
                       </div>
-                      <div className="text-white">
-                          <h4 className="font-bold text-lg">Talk to AI Assistant</h4>
-                          <p className="text-sm opacity-90">Skip typing, we're listening.</p>
+                      <div className="text-left text-white">
+                          <h3 className="font-bold text-lg">Talk to AI Assistant</h3>
+                          <p className="text-xs opacity-90">Skip typing, we're listening.</p>
                       </div>
                   </div>
               </button>
-
           </div>
       </div>
   );
 
   const renderChatView = () => (
-      <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-900 w-full">
+      <div className="flex flex-col h-full w-full bg-white dark:bg-gray-900 animate-fade-in-up">
           {/* Header */}
-          <div className={`bg-white dark:bg-gray-800 p-4 shadow-sm border-b border-gray-200 dark:border-gray-700 flex items-center justify-between z-10`}>
-              <div className="flex items-center gap-3">
-                  <button onClick={handleBack} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+          <div className={`flex items-center justify-between p-4 flex-shrink-0 z-20 border-b border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md`}>
+              <div className="flex items-center gap-2">
+                  <button onClick={handleBack} className="p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors" title="Back">
+                      <ChevronLeftIcon />
                   </button>
-                  <div className="flex flex-col">
-                      <span className="font-bold text-gray-900 dark:text-white leading-tight">{agentProfile.name}</span>
-                      <span className="text-xs text-green-500 font-medium flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span> Online
-                      </span>
-                  </div>
+                  <h3 className="font-bold text-lg truncate max-w-[180px]">{agentProfile.name}</h3>
               </div>
-              <button onClick={endChatSession} className="text-xs bg-red-50 text-red-600 hover:bg-red-100 px-3 py-1.5 rounded-full font-medium transition-colors border border-red-100">
+              <button onClick={endChatSession} className="text-xs font-medium text-red-500 hover:bg-red-50 px-3 py-1 rounded-full border border-red-100 transition-colors">
                   End Chat
               </button>
           </div>
 
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {messages.map((msg, idx) => (
-                  <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                      <div className={`max-w-[85%] rounded-2xl px-4 py-3 shadow-sm text-sm whitespace-pre-wrap leading-relaxed ${
-                          msg.role === 'user' 
-                          ? `bg-accent-${accentColorClass} text-white rounded-br-none` 
-                          : 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 rounded-bl-none border border-gray-100 dark:border-gray-700'
-                      }`}>
-                          {msg.text}
-                      </div>
-                  </div>
-              ))}
+          {/* Chat Messages */}
+          <div className="flex-grow overflow-y-auto p-4 space-y-4 scroll-smooth bg-gray-50 dark:bg-gray-900">
+              {messages.map((msg, idx) => {
+                  const isUser = msg.role === 'user';
+                  return (
+                    <div key={idx} className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-[85%] rounded-2xl p-3 text-sm shadow-sm relative group whitespace-pre-wrap leading-relaxed ${
+                            isUser
+                            ? `bg-accent-${accentColorClass} text-white rounded-br-none` 
+                            : 'bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 text-gray-800 dark:text-gray-200 rounded-bl-none'
+                        }`}>
+                            {msg.text}
+                            <span className={`text-[10px] block text-right mt-1 opacity-70 ${isUser ? 'text-white/80' : 'text-gray-400'}`}>
+                                {msg.timestamp ? msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                            </span>
+                        </div>
+                    </div>
+                  );
+              })}
               {isChatTyping && (
-                  <div className="flex justify-start">
-                      <div className="bg-white dark:bg-gray-800 rounded-2xl rounded-bl-none px-4 py-3 shadow-sm border border-gray-100 dark:border-gray-700">
-                          <div className="flex space-x-1">
-                              <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                              <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:0.2s]"></div>
-                              <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:0.4s]"></div>
-                          </div>
+                   <div className="flex justify-start">
+                      <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl rounded-bl-none p-4 shadow-sm flex gap-1 items-center">
+                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:0.2s]"></div>
+                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:0.4s]"></div>
                       </div>
-                  </div>
+                   </div>
               )}
               <div ref={messagesEndRef} />
           </div>
 
-          {/* Input Area */}
-          <div className="p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
-              <form onSubmit={handleHomeInputSubmit} className="flex gap-2">
+          {/* Chat Input */}
+          <form onSubmit={handleHomeInputSubmit} className="p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+              <div className="relative">
                   <input
-                      type="text"
-                      value={chatInput}
-                      onChange={(e) => setChatInput(e.target.value)}
-                      placeholder="Type a message..."
-                      className="flex-1 p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent-${accentColorClass} dark:text-white"
+                    type="text"
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    placeholder="Type a message..."
+                    className="w-full pl-4 pr-12 py-3 rounded-full border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-300 dark:focus:ring-gray-600 dark:text-white transition-shadow"
                   />
-                  <button type="submit" disabled={!chatInput.trim()} className={`p-3 bg-accent-${accentColorClass} text-white rounded-xl hover:opacity-90 disabled:opacity-50 transition-opacity`}>
-                      <SendIcon />
+                  <button 
+                    type="submit"
+                    disabled={!chatInput.trim()}
+                    className={`absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full text-white bg-accent-${accentColorClass} hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition-all`}
+                  >
+                      <SendIcon className="h-4 w-4" />
                   </button>
-              </form>
-          </div>
+              </div>
+          </form>
       </div>
   );
 
   const renderVoiceView = () => (
-      <div className="flex flex-col h-full bg-white dark:bg-gray-900 relative w-full">
-          <button onClick={handleBack} className="absolute top-4 left-4 z-50 p-2 bg-gray-100/50 dark:bg-gray-800/50 backdrop-blur-md rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
-               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-          </button>
-          
-          <div className="flex-grow flex flex-col items-center justify-center p-6 text-center relative overflow-hidden">
-               {/* Background Ambient Effect */}
-               <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-accent-${accentColorClass} opacity-5 rounded-full blur-3xl pointer-events-none`}></div>
+    <div className="flex-grow flex flex-col items-center justify-center p-6 text-center relative overflow-hidden animate-fade-in-up bg-white dark:bg-gray-900 h-full w-full">
+        {/* Header with Back Button */}
+        <div className="absolute top-4 left-4 z-30">
+             <button onClick={handleBack} className="p-2 rounded-full bg-gray-100/50 dark:bg-gray-800/50 backdrop-blur-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+                <ChevronLeftIcon />
+            </button>
+        </div>
+        
+        <div className="absolute top-4 right-4 z-30">
+            <NetworkIcon isOnline={isOnline} />
+        </div>
 
-                <div className="relative w-48 h-48 flex items-center justify-center mb-8">
-                    {widgetState === WidgetState.Connecting && <Spinner className={`w-24 h-24 text-accent-${accentColorClass}`} />}
-                    
-                    {(widgetState === WidgetState.Listening || widgetState === WidgetState.Speaking) && (
-                        <div className="relative w-36 h-36 flex items-center justify-center">
-                            <div className={`absolute w-full h-full rounded-full bg-accent-${accentColorClass} animate-sonar-ping opacity-20`}></div>
-                            <div className={`absolute w-full h-full rounded-full bg-accent-${accentColorClass} animate-sonar-ping [animation-delay:0.5s] opacity-20`}></div>
-                            <div className={`relative w-24 h-24 rounded-full flex items-center justify-center transition-all duration-300 shadow-2xl bg-gradient-to-br from-accent-${accentColorClass} to-gray-800 scale-110`}>
-                                {widgetState === WidgetState.Speaking && <div className="absolute inset-0 rounded-full bg-white opacity-30 animate-ping"></div>}
-                                <MicrophoneIcon state={widgetState} />
-                            </div>
+        <div className="relative w-full flex items-center justify-center mb-8 min-h-[200px]">
+            <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-accent-${accentColorClass} opacity-10 blur-[60px] rounded-full`}></div>
+
+            {(widgetState === WidgetState.Listening || widgetState === WidgetState.Speaking) && (
+                <>
+                    <div className={`absolute w-64 h-64 rounded-full border-2 border-accent-${accentColorClass} opacity-20 animate-sonar-ping`}></div>
+                    <div className={`absolute w-64 h-64 rounded-full border-2 border-accent-${accentColorClass} opacity-20 animate-sonar-ping [animation-delay:1s]`}></div>
+                </>
+            )}
+
+            <div className={`relative w-48 h-48 rounded-full bg-gradient-to-br from-accent-${accentColorClass} to-gray-300 dark:to-gray-800 shadow-[0_20px_50px_rgba(0,0,0,0.15)] flex items-center justify-center transition-all duration-500 ${widgetState === WidgetState.Speaking ? 'scale-105' : 'scale-100'}`}>
+                <div className="absolute top-0 left-0 w-full h-full rounded-full bg-gradient-to-b from-white/20 to-transparent pointer-events-none"></div>
+                <div className="relative w-44 h-44 rounded-full bg-white dark:bg-gray-900 flex items-center justify-center shadow-inner z-10 overflow-hidden">
+                    {widgetState === WidgetState.Connecting && <Spinner className={`w-20 h-20 text-accent-${accentColorClass}`} />}
+                    {(widgetState === WidgetState.Idle || widgetState === WidgetState.Listening || widgetState === WidgetState.Speaking) && (
+                        <div className={`transition-transform duration-300 ${widgetState === WidgetState.Speaking ? 'scale-110' : 'scale-100'}`}>
+                            <WaveformIcon className={`h-24 w-24 ${widgetState === WidgetState.Idle ? 'text-gray-300 dark:text-gray-600' : `text-accent-${accentColorClass}`}`} />
                         </div>
                     )}
+                    {widgetState === WidgetState.Error && <div className="text-red-500 animate-pulse"><svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>}
+                    {widgetState === WidgetState.Ended && (voiceReportingStatus === 'analyzing' || voiceReportingStatus === 'sending') && <Spinner className={`w-20 h-20 text-accent-${accentColorClass}`} />}
+                    {widgetState === WidgetState.Ended && voiceReportingStatus === 'sent' && <div className="text-green-500"><svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>}
+                    {widgetState === WidgetState.Ended && voiceReportingStatus === 'failed' && <div className="text-red-500"><svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>}
+                </div>
+            </div>
+        </div>
 
-                    {widgetState === WidgetState.Error && <div className="text-red-500"><svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>}
-                    {widgetState === WidgetState.Ended && (voiceReportingStatus === 'analyzing' || voiceReportingStatus === 'sending') && <Spinner className={`w-24 h-24 text-accent-${accentColorClass}`} />}
-                    {widgetState === WidgetState.Ended && voiceReportingStatus === 'sent' && <div className="text-green-500"><svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>}
-                    {widgetState === WidgetState.Ended && voiceReportingStatus === 'failed' && <div className="text-red-500"><svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>}
-                </div>
+        <p className="text-lg font-medium text-gray-700 dark:text-gray-200 h-8 mb-2 break-words max-w-full px-2">
+            {widgetState === WidgetState.Connecting && "Connecting..."}
+            {widgetState === WidgetState.Listening && "Listening..."}
+            {widgetState === WidgetState.Speaking && "Speaking..."}
+            {widgetState === WidgetState.Error && (errorMessage || "Connection Error")}
+            {widgetState === WidgetState.Ended && (
+                    voiceReportingStatus === 'analyzing' ? 'Analyzing Session...' :
+                    voiceReportingStatus === 'sending' ? 'Sending Report...' :
+                    voiceReportingStatus === 'sent' ? 'Session Report Sent' : 
+                    voiceReportingStatus === 'failed' ? 'Report Generation Failed' : 'Session Ended'
+            )}
+        </p>
+        
+        <div className="h-10 mb-4 flex items-center justify-center">
+            {(widgetState === WidgetState.Idle) && (
+                    <p className="text-sm text-gray-500 dark:text-gray-400 transition-opacity duration-500">
+                    Click the call button to start.
+                </p>
+            )}
+            {(widgetState === WidgetState.Ended && (voiceReportingStatus === 'sent' || voiceReportingStatus === 'failed')) && (
+                <p className="text-sm text-gray-500 dark:text-gray-400 transition-opacity duration-500">
+                You may now close the widget.
+                </p>
+            )}
+        </div>
 
-                <div className="h-12 flex flex-col justify-center">
-                    <p className="text-lg font-medium text-gray-700 dark:text-gray-200">
-                        {widgetState === WidgetState.Connecting && "Connecting..."}
-                        {widgetState === WidgetState.Listening && "Listening..."}
-                        {widgetState === WidgetState.Speaking && "Speaking..."}
-                        {widgetState === WidgetState.Error && (errorMessage || "Connection Error")}
-                        {widgetState === WidgetState.Ended && (
-                             voiceReportingStatus === 'analyzing' ? 'Analyzing Session...' :
-                             voiceReportingStatus === 'sending' ? 'Sending Report...' :
-                             voiceReportingStatus === 'sent' ? 'Session Report Sent' : 
-                             voiceReportingStatus === 'failed' ? 'Report Generation Failed' : 'Session Ended'
-                        )}
-                    </p>
-                </div>
-                
-                 {/* Controls */}
-                <div className="mt-8">
-                     {(widgetState === WidgetState.Connecting || widgetState === WidgetState.Listening || widgetState === WidgetState.Speaking) && (
-                        <button onClick={endVoiceSession} className="px-8 py-3 rounded-full bg-red-100 text-red-600 hover:bg-red-200 font-semibold transition-colors flex items-center gap-2">
-                           <span className="w-3 h-3 bg-red-600 rounded-full animate-pulse"></span> End Call
-                        </button>
-                    )}
-                     {(widgetState === WidgetState.Error || widgetState === WidgetState.Ended) && (
-                         <div className="flex gap-4">
-                             <button onClick={() => setView('home')} className="px-6 py-2 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-white font-medium">Close</button>
-                             <button onClick={startVoiceSession} className="px-6 py-2 rounded-lg bg-accent-${accentColorClass} text-white font-medium">Try Again</button>
-                         </div>
-                    )}
-                </div>
-          </div>
-      </div>
+        <div className="h-20 flex items-center justify-center">
+            {(widgetState === WidgetState.Connecting || widgetState === WidgetState.Listening || widgetState === WidgetState.Speaking) ? (
+                <button onClick={endVoiceSession} className="w-16 h-16 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center shadow-lg transition-transform transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-red-300 dark:focus:ring-red-900" aria-label="End Call">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 rotate-135" viewBox="0 0 20 20" fill="currentColor"><path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" /></svg>
+                </button>
+            ) : (
+                !(widgetState === WidgetState.Ended && (voiceReportingStatus === 'analyzing' || voiceReportingStatus === 'sending' || voiceReportingStatus === 'sent')) && (
+                    <button onClick={startVoiceSession} className={`w-16 h-16 rounded-full bg-accent-${accentColorClass} hover:brightness-110 text-white flex items-center justify-center shadow-lg transition-transform transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-offset-2`} aria-label={widgetState === WidgetState.Error || (widgetState === WidgetState.Ended && voiceReportingStatus === 'failed') ? "Retry" : "Start Call"}>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" viewBox="0 0 20 20" fill="currentColor"><path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" /></svg>
+                    </button>
+                )
+            )}
+        </div>
+    </div>
   );
 
   // --- Main Render ---
 
   if (!isOpen) {
     const fabContent = (
-      <div className={`${themeClass} relative`}>
+      <div className={`${themeClass} relative group`}>
         {showCallout && agentProfile.calloutMessage && (
-          <div className="absolute top-1/2 right-full mr-4 w-max max-w-[200px] transform -translate-y-1/2 px-4 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-lg shadow-lg text-left text-sm animate-fade-in-up border border-gray-100 dark:border-gray-700">
+          <div className="absolute bottom-full right-0 mb-3 w-max max-w-[200px] px-4 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-xl shadow-xl text-left text-sm animate-fade-in-up border border-gray-100 dark:border-gray-700">
             <p>{agentProfile.calloutMessage}</p>
-            <div className="absolute top-1/2 -right-2 w-0 h-0 transform -translate-y-1/2 border-y-8 border-y-transparent border-l-8 border-l-white dark:border-l-gray-800"></div>
+            <div className="absolute -bottom-2 right-6 w-4 h-4 bg-white dark:bg-gray-800 transform rotate-45 border-b border-r border-gray-100 dark:border-gray-700"></div>
           </div>
         )}
-        <button onClick={toggleWidget} className={`w-14 h-14 md:w-16 md:h-16 rounded-full bg-gradient-to-br from-accent-${accentColorClass} to-gray-800 shadow-lg shadow-accent-${accentColorClass}/30 flex items-center justify-center text-white transform hover:scale-105 transition-all duration-300`}>
-          <FabIcon className="w-7 h-7 md:w-9 md:h-9" />
+        <button onClick={toggleWidget} className={`w-16 h-16 rounded-full bg-accent-${accentColorClass} shadow-lg flex items-center justify-center text-white transform hover:scale-110 transition-transform animate-pulse`}>
+          <FabIcon />
         </button>
       </div>
     );
     return isWidgetMode ? <div className="w-full h-full p-2 flex items-end justify-end bg-transparent">{fabContent}</div> : <div className="fixed bottom-5 right-5 z-[9999]">{fabContent}</div>;
   }
 
-  // Mobile check is handled via CSS queries mostly, but for layout we treat widget mode container specially
+  // CONTAINER LOGIC: 
+  // Mobile: fixed full screen (h-100dvh). 
+  // Desktop: Fixed bottom-right card.
   const containerClasses = isWidgetMode 
     ? 'w-full h-full' 
-    : 'fixed bottom-0 right-0 md:bottom-24 md:right-5 w-full h-[100dvh] md:w-[400px] md:h-[650px] md:rounded-2xl shadow-2xl z-[9999] transition-all duration-300';
+    : 'fixed bottom-0 right-0 md:bottom-24 md:right-5 w-full h-[100dvh] md:w-96 md:h-[600px] md:rounded-2xl shadow-2xl z-[9999] transition-all duration-300';
 
   return (
     <div className={`${themeClass} ${containerClasses}`}>
