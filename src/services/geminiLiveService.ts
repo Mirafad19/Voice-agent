@@ -1,6 +1,7 @@
 import { GoogleGenAI, Modality, LiveServerMessage } from '@google/genai';
 import { AgentConfig } from '../types';
 
+// Inferred the LiveSession type from the connect method's return type to fix build error.
 type LiveSession = Awaited<ReturnType<InstanceType<typeof GoogleGenAI>['live']['connect']>>;
 
 type ServiceState = 'idle' | 'connecting' | 'connected' | 'error' | 'ended';
@@ -13,6 +14,7 @@ interface Callbacks {
   onError: (error: string) => void;
 }
 
+// Manual base64 encode/decode to avoid external libraries
 function encode(bytes: Uint8Array): string {
     let binary = '';
     const len = bytes.byteLength;
@@ -74,6 +76,24 @@ export class GeminiLiveService {
     } catch (e) {
       this.handleError(e instanceof Error ? `Failed to connect: ${e.message}` : 'An unknown connection error occurred.');
     }
+  }
+
+  public sendText(text: string) {
+      if (this.sessionPromise) {
+          this.sessionPromise.then(session => {
+              // Use 'any' cast to access raw send method for clientContent, 
+              // as sendRealtimeInput only supports media chunks in the current type definition.
+              (session as any).send({
+                  clientContent: {
+                      turns: [{
+                          role: 'user',
+                          parts: [{ text }]
+                      }],
+                      turnComplete: true
+                  }
+              });
+          });
+      }
   }
 
   private async handleSessionOpen(mediaStream: MediaStream): Promise<void> {
@@ -180,6 +200,8 @@ export class GeminiLiveService {
     this.inputAudioContext = null;
     this.session = null;
     this.sessionPromise = null;
+    // The mediaStream lifecycle is managed by the parent component (AgentWidget)
+    // so we just release the reference here.
     this.mediaStream = null;
   }
 }
