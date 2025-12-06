@@ -733,21 +733,21 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
   const renderVoiceView = () => (
     <div className="flex-grow flex flex-col items-center justify-center p-6 text-center relative overflow-hidden animate-fade-in-up bg-white dark:bg-gray-900 h-full w-full">
-        {/* Header with Back Button */}
-        <div className="absolute top-4 left-4 z-30">
+        {/* Header with Back Button and Name */}
+        <div className="absolute top-0 left-0 w-full z-50 p-4 flex items-center justify-between">
              <button onClick={handleBack} className="p-2 rounded-full bg-gray-100/50 dark:bg-gray-800/50 backdrop-blur-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
                 <ChevronLeftIcon />
             </button>
-        </div>
-        
-        <div className="absolute top-4 right-4 z-30">
+            <div className="absolute left-1/2 -translate-x-1/2 font-bold text-gray-800 dark:text-white text-sm uppercase tracking-wide truncate max-w-[150px] drop-shadow-sm">
+                {agentProfile.name}
+            </div>
             <NetworkIcon isOnline={isOnline} />
         </div>
 
         <div className="relative w-full flex items-center justify-center mb-8 min-h-[200px]">
             <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-accent-${accentColorClass} opacity-10 blur-[60px] rounded-full`}></div>
 
-            {(widgetState === WidgetState.Listening || widgetState === WidgetState.Speaking) && (
+            {(widgetState === WidgetState.Speaking) && (
                 <>
                     <div className={`absolute w-64 h-64 rounded-full border-2 border-accent-${accentColorClass} opacity-20 animate-sonar-ping`}></div>
                     <div className={`absolute w-64 h-64 rounded-full border-2 border-accent-${accentColorClass} opacity-20 animate-sonar-ping [animation-delay:1s]`}></div>
