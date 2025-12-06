@@ -5,11 +5,37 @@ export enum WidgetTheme {
 }
 
 export enum AgentVoice {
+  // Standard Live Voices
   Zephyr = 'Zephyr',
   Puck = 'Puck',
   Charon = 'Charon',
   Kore = 'Kore',
   Fenrir = 'Fenrir',
+  
+  // Extended Star/Mythology Voices (TTS & Pro Preview)
+  Aoede = 'Aoede',
+  Callirrhoe = 'Callirrhoe',
+  Autonoe = 'Autonoe',
+  Enceladus = 'Enceladus',
+  Iapetus = 'Iapetus',
+  Sol = 'Sol',
+  Algieba = 'Algieba',
+  Despina = 'Despina',
+  Erinome = 'Erinome',
+  Algenib = 'Algenib',
+  Rasalgethi = 'Rasalgethi',
+  Laomedeia = 'Laomedeia',
+  Achernar = 'Achernar',
+  Alnilam = 'Alnilam',
+  Schedar = 'Schedar',
+  Gacrux = 'Gacrux',
+  Pulcherrima = 'Pulcherrima',
+  Achird = 'Achird',
+  Zubenelgenubi = 'Zubenelgenubi',
+  Vindemiatrix = 'Vindemiatrix',
+  Sadachbia = 'Sadachbia',
+  Sadaltager = 'Sadaltager',
+  Sulafat = 'Sulafat',
 }
 
 export enum AccentColor {

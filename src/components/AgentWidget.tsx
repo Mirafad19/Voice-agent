@@ -738,7 +738,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
              <button onClick={handleBack} className="p-2 rounded-full bg-gray-100/50 dark:bg-gray-800/50 backdrop-blur-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
                 <ChevronLeftIcon />
             </button>
-            <div className="absolute left-1/2 -translate-x-1/2 font-bold text-gray-800 dark:text-white text-sm uppercase tracking-wide truncate max-w-[150px] drop-shadow-sm">
+            <div className="absolute left-1/2 -translate-x-1/2 font-bold text-gray-800 dark:text-white text-sm uppercase tracking-wide truncate max-w-[150px] drop-shadow-sm bg-white/50 dark:bg-black/50 px-2 py-1 rounded-md backdrop-blur-sm">
                 {agentProfile.name}
             </div>
             <NetworkIcon isOnline={isOnline} />
