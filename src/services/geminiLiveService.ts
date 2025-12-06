@@ -61,7 +61,11 @@ export class GeminiLiveService {
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: this.config.voice } },
           },
-          systemInstruction: `You must only speak and respond in English. Do not use any other language under any circumstances. ${this.config.knowledgeBase}`,
+          systemInstruction: `You must only speak and respond in English. Do not use any other language under any circumstances. 
+          
+          IMPORTANT BEHAVIORAL RULES:
+          1. ${this.config.knowledgeBase}
+          2. SILENCE HANDLING: If you receive a message starting with "SYSTEM ALERT: User is silent", you MUST immediately speak to the user. Ask "Are you still there?", "Did you have a question?", or "I'm listening if you need help." Do not ignore this alert.`,
           inputAudioTranscription: {},
           outputAudioTranscription: {},
         },

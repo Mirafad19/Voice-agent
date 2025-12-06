@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AgentProfile, AgentConfig, WidgetState, Recording, ReportingStatus } from '../types';
 import { GeminiLiveService } from '../services/geminiLiveService';
@@ -355,7 +354,8 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
       }
       silenceTimerRef.current = setTimeout(() => {
           console.log("User is silent, triggering nudge...");
-          geminiServiceRef.current?.sendText("The user has been silent for 8 seconds. Gently check if they are still there or if they have a question.");
+          // Sends a clearer, imperative system instruction to force a response
+          geminiServiceRef.current?.sendText("SYSTEM ALERT: User is silent for 8 seconds. Speak now and ask: 'Are you still there?'");
       }, 8000); // 8 seconds silence detection
   }, []);
 
@@ -903,7 +903,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             {/* Header / Close Button (Only visible on Home view or handled within views) */}
             {view === 'home' && (
                 <button onClick={toggleWidget} className="absolute top-4 right-4 z-50 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
             )}
 
