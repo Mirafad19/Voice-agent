@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Modality, LiveServerMessage } from '@google/genai';
 import { AgentConfig } from '../types';
 
@@ -55,6 +54,13 @@ export class GeminiLiveService {
     this.setState('connecting');
     try {
       this.mediaStream = mediaStream;
+      
+      // Dynamic Greeting Instruction
+      // We tell the model exactly what was just said via TTS so it knows the conversation state.
+      const greetingContext = this.config.initialGreeting 
+        ? `INITIALIZATION: You have just spoken the following greeting to the user: "${this.config.initialGreeting}". The user has heard this. Do NOT repeat it. Your goal is to WAIT for the user to reply to this greeting.` 
+        : `INITIALIZATION: Wait for the user to speak first.`;
+
       this.sessionPromise = this.ai.live.connect({
         model: 'gemini-2.5-flash-native-audio-preview-09-2025',
         config: {
@@ -64,9 +70,10 @@ export class GeminiLiveService {
           },
           systemInstruction: `
           CRITICAL OPERATIONAL RULES:
-          1. INITIALIZATION: Do NOT speak first. Remain silent and wait for the user to speak or for a system command.
-          2. SOURCE OF TRUTH: You have been provided with a YAML/Text Knowledge Base. When answering questions covered by this data, you must use the EXACT phrasing provided in the 'prompt' fields. Do not summarize or paraphrase unless specifically asked for a summary.
-          3. SILENCE HANDLING: If you receive the specific text code "[[SILENCE_DETECTED]]", you must IMMEDIATELY speak up and ask: "Are you still there?" or "Hello?".
+          1. LANGUAGE ENFORCEMENT: You must speak ONLY in English. If you hear what sounds like a foreign language or unclear noise, ignore it or ask for clarification in English. NEVER switch languages.
+          2. ${greetingContext}
+          3. SOURCE OF TRUTH: You have been provided with a YAML/Text Knowledge Base. When answering questions covered by this data, you must use the EXACT phrasing provided in the 'prompt' fields. Do not summarize or paraphrase unless specifically asked for a summary.
+          4. SILENCE HANDLING: If you receive the specific text code "[[SILENCE_DETECTED]]", you must IMMEDIATELY speak up and ask: "Are you still there?" or "Hello?".
           
           KNOWLEDGE BASE:
           ${this.config.knowledgeBase}`,

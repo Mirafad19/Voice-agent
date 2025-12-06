@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AgentProfile, AgentConfig, WidgetState, Recording, ReportingStatus } from '../types';
 import { GeminiLiveService } from '../services/geminiLiveService';
@@ -354,7 +353,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
           clearTimeout(silenceTimerRef.current);
       }
       silenceTimerRef.current = setTimeout(() => {
-          console.log("User is silent, triggering nudge...");
           // Sending the strict silence code to the AI
           geminiServiceRef.current?.sendText("[[SILENCE_DETECTED]]");
       }, 8000); // 8 seconds silence detection
@@ -399,6 +397,9 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     // Initial Greeting Audio
     const greeting = (agentProfile as AgentConfig).initialGreeting;
     if (greeting) {
+        // Pre-append greeting to transcript so context is aware
+        fullTranscriptRef.current = `Agent: ${greeting}\n`;
+        
         try {
             const ai = new GoogleGenAI({ apiKey });
             const response = await ai.models.generateContent({
