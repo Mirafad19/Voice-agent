@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AgentProfile, AgentConfig, WidgetState, Recording, ReportingStatus } from '../types';
 import { GeminiLiveService } from '../services/geminiLiveService';
@@ -354,8 +355,8 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
       }
       silenceTimerRef.current = setTimeout(() => {
           console.log("User is silent, triggering nudge...");
-          // Sends a clearer, imperative system instruction to force a response
-          geminiServiceRef.current?.sendText("SYSTEM ALERT: User is silent for 8 seconds. Speak now and ask: 'Are you still there?'");
+          // Sending the strict silence code to the AI
+          geminiServiceRef.current?.sendText("[[SILENCE_DETECTED]]");
       }, 8000); // 8 seconds silence detection
   }, []);
 

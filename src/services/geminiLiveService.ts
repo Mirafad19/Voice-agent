@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Modality, LiveServerMessage } from '@google/genai';
 import { AgentConfig } from '../types';
 
@@ -61,11 +62,14 @@ export class GeminiLiveService {
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: this.config.voice } },
           },
-          systemInstruction: `You must only speak and respond in English. Do not use any other language under any circumstances. 
+          systemInstruction: `
+          CRITICAL OPERATIONAL RULES:
+          1. INITIALIZATION: Do NOT speak first. Remain silent and wait for the user to speak or for a system command.
+          2. SOURCE OF TRUTH: You have been provided with a YAML/Text Knowledge Base. When answering questions covered by this data, you must use the EXACT phrasing provided in the 'prompt' fields. Do not summarize or paraphrase unless specifically asked for a summary.
+          3. SILENCE HANDLING: If you receive the specific text code "[[SILENCE_DETECTED]]", you must IMMEDIATELY speak up and ask: "Are you still there?" or "Hello?".
           
-          IMPORTANT BEHAVIORAL RULES:
-          1. ${this.config.knowledgeBase}
-          2. SILENCE HANDLING: If you receive a message starting with "SYSTEM ALERT: User is silent", you MUST immediately speak to the user. Ask "Are you still there?", "Did you have a question?", or "I'm listening if you need help." Do not ignore this alert.`,
+          KNOWLEDGE BASE:
+          ${this.config.knowledgeBase}`,
           inputAudioTranscription: {},
           outputAudioTranscription: {},
         },
