@@ -125,10 +125,17 @@ export class GeminiLiveService {
       this.scriptProcessor.onaudioprocess = (audioProcessingEvent) => {
         const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
         const l = inputData.length;
+        
+        // Simple downsampling/conversion to 16kHz Int16 PCM
         const int16 = new Int16Array(l);
         for (let i = 0; i < l; i++) {
-          int16[i] = inputData[i] * 32768;
+          // Clip to [-1, 1] to prevent distortion
+          let s = Math.max(-1, Math.min(1, inputData[i]));
+          // Convert to 16-bit PCM
+          s = s < 0 ? s * 0x8000 : s * 0x7FFF;
+          int16[i] = s;
         }
+
         const pcmBlob = {
             data: encode(new Uint8Array(int16.buffer)),
             mimeType: 'audio/pcm;rate=16000',

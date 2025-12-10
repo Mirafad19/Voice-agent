@@ -135,7 +135,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const nextStartTimeRef = useRef(0);
   const shouldEndAfterSpeakingRef = useRef(false);
   const chatSessionRef = useRef<Chat | null>(null);
-  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const silenceTimerRef = useRef<number | null>(null);
   
   const accentColorClass = agentProfile.accentColor;
 
@@ -352,7 +352,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
       if (silenceTimerRef.current) {
           clearTimeout(silenceTimerRef.current);
       }
-      silenceTimerRef.current = setTimeout(() => {
+      silenceTimerRef.current = window.setTimeout(() => {
           // Sending the strict silence code to the AI
           geminiServiceRef.current?.sendText("[[SILENCE_DETECTED]]");
       }, 8000); // 8 seconds silence detection
@@ -378,7 +378,17 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
     let stream: MediaStream;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // CRITICAL FIX FOR MOBILE: Enable Echo Cancellation, Noise Suppression, and Auto Gain
+      // This prevents the "screeching" feedback loop where the mic hears the speaker.
+      stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            sampleRate: 16000,
+            channelCount: 1
+        } 
+      });
       mediaStreamRef.current = stream;
     } catch (e) {
       setWidgetState(WidgetState.Error);
