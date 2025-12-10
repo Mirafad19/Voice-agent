@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AgentProfile, AgentConfig, WidgetState, Recording, ReportingStatus } from '../types';
 import { GeminiLiveService } from '../services/geminiLiveService';
@@ -378,8 +379,9 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
     let stream: MediaStream;
     try {
-      // CRITICAL FIX FOR MOBILE: Enable Echo Cancellation, Noise Suppression, and Auto Gain
+      // CRITICAL FIX: Enable Echo Cancellation, Noise Suppression, and Auto Gain
       // This prevents the "screeching" feedback loop where the mic hears the speaker.
+      // 16kHz sample rate matches Gemini Live API recommendation to reduce resampling artifacts.
       stream = await navigator.mediaDevices.getUserMedia({ 
         audio: {
             echoCancellation: true,
@@ -392,19 +394,24 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
       mediaStreamRef.current = stream;
     } catch (e) {
       setWidgetState(WidgetState.Error);
-      setErrorMessage("Failed to get microphone access.");
+      setErrorMessage("Failed to get microphone access. Please ensure permission is granted.");
       cleanupServices();
       return;
     } finally {
         setPermissionRequested(false);
     }
     
-    outputAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+    // Create and RESUME AudioContext immediately after user interaction to ensure playback works on mobile
+    const AudioContextClass = (window.AudioContext || (window as any).webkitAudioContext);
+    outputAudioContextRef.current = new AudioContextClass();
+    if (outputAudioContextRef.current.state === 'suspended') {
+        await outputAudioContextRef.current.resume();
+    }
     
     recordingServiceRef.current = new RecordingService(handleVoiceSessionEnd);
     await recordingServiceRef.current.start(stream);
 
-    // Initial Greeting Audio
+    // Initial Greeting Audio - Triggered AFTER mic is ready to ensure context is active
     const greeting = (agentProfile as AgentConfig).initialGreeting;
     if (greeting) {
         // Pre-append greeting to transcript so context is aware
@@ -438,6 +445,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             }
         } catch (error) {
             console.error("Failed to generate greeting audio:", error);
+            // Non-critical error, continue to connection
         }
     }
 
@@ -578,7 +586,17 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             activeAudioSourcesRef.current.delete(source);
         });
 
-        const startTime = Math.max(nextStartTimeRef.current, audioContext.currentTime);
+        // JITTER BUFFER LOGIC:
+        // If this is the start of a sequence (or we fell behind), ensure we schedule slightly in the future
+        // to build a buffer. This prevents "breaking" voice due to network jitter.
+        const currentTime = audioContext.currentTime;
+        let startTime = nextStartTimeRef.current;
+        
+        if (startTime < currentTime) {
+            // We are behind or just starting. Add a small 0.2s latency buffer.
+            startTime = currentTime + 0.15;
+        }
+
         source.start(startTime);
         nextStartTimeRef.current = startTime + audioBuffer.duration;
         source.onended = processNextChunk;
@@ -635,12 +653,22 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   // --- Effects ---
   useEffect(() => {
     if (!isWidgetMode) return;
+    
+    // Dynamic resizing based on open state AND callout visibility
+    let width = 300;
+    let height = 140; // Default closed size with callout space
+    
     if (isOpen) {
-      window.parent.postMessage({ type: 'agent-widget-resize', isOpen: true, width: 400, height: 600 }, '*');
-    } else {
-      window.parent.postMessage({ type: 'agent-widget-resize', isOpen: false, width: 300, height: 140 }, '*');
+        width = 400;
+        height = 600;
+    } else if (!showCallout) {
+        // If closed and NO callout, shrink to just the button size to avoid transparent blocking
+        width = 80;
+        height = 80;
     }
-  }, [isOpen, isWidgetMode]);
+    
+    window.parent.postMessage({ type: 'agent-widget-resize', isOpen, width, height }, '*');
+  }, [isOpen, isWidgetMode, showCallout]);
   
   // Callout logic
   useEffect(() => {
@@ -670,7 +698,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
           {/* Hero Header */}
           <div className={`relative h-[40%] bg-gradient-to-br from-accent-${accentColorClass} to-gray-900 flex flex-col p-6 text-white`}>
               <div className="flex items-center justify-between mb-4">
-                  <span className="text-xs font-bold tracking-widest uppercase opacity-80">{agentProfile.name}</span>
+                  <span className="text-xs font-bold tracking-widest uppercase opacity-80 truncate max-w-[200px]">{agentProfile.name}</span>
               </div>
               <div className="mt-auto mb-6 relative z-10">
                   <h1 className="text-4xl font-bold">Hi <span className="animate-wave inline-block">👋</span></h1>
@@ -805,11 +833,13 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
         {/* Header with Back Button and Name */}
         <div className="absolute top-0 left-0 w-full z-50 p-4 flex items-center justify-between">
-             <button onClick={handleBack} className="p-2 rounded-full bg-gray-100/50 dark:bg-gray-800/50 backdrop-blur-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
-                <ChevronLeftIcon />
-            </button>
-            <div className="absolute left-1/2 -translate-x-1/2 font-bold text-gray-800 dark:text-white text-sm uppercase tracking-wide truncate max-w-[150px] drop-shadow-sm bg-white/50 dark:bg-black/50 px-2 py-1 rounded-md backdrop-blur-sm">
-                {agentProfile.name}
+             <div className="flex items-center gap-3">
+                 <button onClick={handleBack} className="p-2 rounded-full bg-gray-100/50 dark:bg-gray-800/50 backdrop-blur-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+                    <ChevronLeftIcon />
+                </button>
+                <div className="font-bold text-gray-800 dark:text-white text-sm uppercase tracking-wide truncate max-w-[180px] drop-shadow-sm bg-white/50 dark:bg-black/50 px-3 py-1.5 rounded-full backdrop-blur-sm">
+                    {agentProfile.name}
+                </div>
             </div>
             <NetworkIcon isOnline={isOnline} />
         </div>

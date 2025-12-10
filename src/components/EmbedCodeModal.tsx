@@ -33,7 +33,7 @@ export const EmbedCodeModal: React.FC<EmbedCodeModalProps> = ({ isOpen, onClose,
   <iframe
     id="${iframeId}"
     src="${finalUrl}"
-    style="border: none; outline: none; background-color: transparent; width: 300px; height: 140px; transition: width 0.3s ease-in-out, height 0.3s ease-in-out; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);"
+    style="border: none; outline: none; background-color: transparent; width: 300px; height: 140px; transition: width 0.3s ease-in-out, height 0.3s ease-in-out; border-radius: 12px;"
     allow="microphone"
     frameborder="0"
     title="${agentProfile.name}"
@@ -67,7 +67,8 @@ export const EmbedCodeModal: React.FC<EmbedCodeModalProps> = ({ isOpen, onClose,
             container.style.top = 'auto';
             iframe.style.width = event.data.width + 'px';
             iframe.style.height = event.data.height + 'px';
-            iframe.style.borderRadius = '12px';
+            iframe.style.borderRadius = isOpen ? '16px' : '0px'; // Remove border radius if it's just a button
+            iframe.style.boxShadow = isOpen ? '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)' : 'none';
         }
       }
     });
