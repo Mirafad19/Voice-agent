@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Modality, LiveServerMessage } from '@google/genai';
 import { AgentConfig } from '../types';
 
@@ -54,6 +55,13 @@ export class GeminiLiveService {
     this.setState('connecting');
     try {
       this.mediaStream = mediaStream;
+      
+      // Dynamic Greeting Instruction
+      // We tell the model exactly what was just said via TTS so it knows the conversation state.
+      const greetingContext = this.config.initialGreeting 
+        ? `INITIALIZATION: You have just spoken the following greeting to the user: "${this.config.initialGreeting}". The user has heard this. Do NOT repeat it. Your goal is to WAIT for the user to reply to this greeting.` 
+        : `INITIALIZATION: Wait for the user to speak first.`;
+
       this.sessionPromise = this.ai.live.connect({
         model: 'gemini-2.5-flash-native-audio-preview-09-2025',
         config: {
@@ -61,7 +69,15 @@ export class GeminiLiveService {
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: this.config.voice } },
           },
-          systemInstruction: `You must only speak and respond in English. Do not use any other language under any circumstances. ${this.config.knowledgeBase}`,
+          systemInstruction: `
+          CRITICAL OPERATIONAL RULES:
+          1. LANGUAGE ENFORCEMENT: You must speak ONLY in English. If you hear what sounds like a foreign language or unclear noise, ignore it or ask for clarification in English. NEVER switch languages.
+          2. ${greetingContext}
+          3. SOURCE OF TRUTH: You have been provided with a YAML/Text Knowledge Base. When answering questions covered by this data, you must use the EXACT phrasing provided in the 'prompt' fields. Do not summarize or paraphrase unless specifically asked for a summary.
+          4. SILENCE HANDLING: If you receive the specific text code "[[SILENCE_DETECTED]]", you must IMMEDIATELY speak up and ask: "Are you still there?" or "Hello?".
+          
+          KNOWLEDGE BASE:
+          ${this.config.knowledgeBase}`,
           inputAudioTranscription: {},
           outputAudioTranscription: {},
         },
@@ -78,6 +94,22 @@ export class GeminiLiveService {
     }
   }
 
+  public sendText(text: string) {
+      if (this.sessionPromise) {
+          this.sessionPromise.then(session => {
+              (session as any).send({
+                  clientContent: {
+                      turns: [{
+                          role: 'user',
+                          parts: [{ text }]
+                      }],
+                      turnComplete: true
+                  }
+              });
+          });
+      }
+  }
+
   private async handleSessionOpen(mediaStream: MediaStream): Promise<void> {
     try {
       if (!mediaStream) {
@@ -85,17 +117,27 @@ export class GeminiLiveService {
       }
       this.mediaStream = mediaStream;
       
+      // Use 16kHz context to force browser to resample input to the model's native rate
       this.inputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
       this.mediaStreamSource = this.inputAudioContext.createMediaStreamSource(mediaStream);
-      this.scriptProcessor = this.inputAudioContext.createScriptProcessor(4096, 1, 1);
+      
+      // Reduced buffer size from 4096 to 2048 to improve latency
+      this.scriptProcessor = this.inputAudioContext.createScriptProcessor(2048, 1, 1);
       
       this.scriptProcessor.onaudioprocess = (audioProcessingEvent) => {
         const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
         const l = inputData.length;
+        
+        // Simple downsampling/conversion to 16kHz Int16 PCM
         const int16 = new Int16Array(l);
         for (let i = 0; i < l; i++) {
-          int16[i] = inputData[i] * 32768;
+          // Clip to [-1, 1] to prevent distortion
+          let s = Math.max(-1, Math.min(1, inputData[i]));
+          // Convert to 16-bit PCM
+          s = s < 0 ? s * 0x8000 : s * 0x7FFF;
+          int16[i] = s;
         }
+
         const pcmBlob = {
             data: encode(new Uint8Array(int16.buffer)),
             mimeType: 'audio/pcm;rate=16000',
