@@ -411,7 +411,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     nextStartTimeRef.current = 0;
   }, [clearSilenceTimer]);
 
-  // AUDIO CRACKING FIX: Replaced sequential scheduling with a loop
   const playAudioQueue = useCallback(() => {
     const audioContext = outputAudioContextRef.current;
     if (!audioContext) return;
@@ -490,7 +489,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
     let stream: MediaStream;
     try {
-      // AUDIO FIX: Enable Echo Cancellation, Noise Suppression, and Auto Gain
+      // CRITICAL FIX: Enable Echo Cancellation, Noise Suppression, and Auto Gain
       // This prevents the "screeching" feedback loop where the mic hears the speaker.
       // 16kHz sample rate matches Gemini Live API recommendation to reduce resampling artifacts.
       stream = await navigator.mediaDevices.getUserMedia({ 

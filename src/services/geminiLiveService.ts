@@ -97,8 +97,6 @@ export class GeminiLiveService {
   public sendText(text: string) {
       if (this.sessionPromise) {
           this.sessionPromise.then(session => {
-              // Use 'any' cast to access raw send method for clientContent, 
-              // as sendRealtimeInput only supports media chunks in the current type definition.
               (session as any).send({
                   clientContent: {
                       turns: [{
@@ -123,7 +121,7 @@ export class GeminiLiveService {
       this.inputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
       this.mediaStreamSource = this.inputAudioContext.createMediaStreamSource(mediaStream);
       
-      // Reduced buffer size from 4096 to 2048 to improve latency (AUDIO FIX)
+      // Reduced buffer size from 4096 to 2048 to improve latency
       this.scriptProcessor = this.inputAudioContext.createScriptProcessor(2048, 1, 1);
       
       this.scriptProcessor.onaudioprocess = (audioProcessingEvent) => {
