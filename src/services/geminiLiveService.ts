@@ -1,5 +1,4 @@
 
-
 import { GoogleGenAI, Modality, LiveServerMessage } from '@google/genai';
 import { AgentConfig } from '../types';
 
@@ -124,7 +123,7 @@ export class GeminiLiveService {
       this.inputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
       this.mediaStreamSource = this.inputAudioContext.createMediaStreamSource(mediaStream);
       
-      // Reduced buffer size from 4096 to 2048 to improve latency
+      // Reduced buffer size from 4096 to 2048 to improve latency (AUDIO FIX)
       this.scriptProcessor = this.inputAudioContext.createScriptProcessor(2048, 1, 1);
       
       this.scriptProcessor.onaudioprocess = (audioProcessingEvent) => {
