@@ -1,8 +1,7 @@
 
 
 import { GoogleGenAI, Modality, LiveServerMessage } from '@google/genai';
-import { AgentConfig, VoiceProvider } from '../types';
-import { generateAzureSpeech } from './azureTtsService';
+import { AgentConfig } from '../types';
 
 // Inferred the LiveSession type from the connect method's return type to fix build error.
 type LiveSession = Awaited<ReturnType<InstanceType<typeof GoogleGenAI>['live']['connect']>>;
@@ -43,11 +42,6 @@ export class GeminiLiveService {
   private currentInputTranscription = '';
   private currentOutputTranscription = '';
 
-  // Azure specific buffering
-  private textBuffer = '';
-  private isProcessingAzureTTS = false;
-  private processingQueue: string[] = [];
-
   constructor(apiKey: string, config: AgentConfig, callbacks: Callbacks) {
     this.ai = new GoogleGenAI({ apiKey });
     this.config = config;
@@ -63,9 +57,8 @@ export class GeminiLiveService {
     try {
       this.mediaStream = mediaStream;
       
-      const isAzure = this.config.voiceProvider === VoiceProvider.Azure;
-      
       // Dynamic Greeting Instruction
+      // We tell the model exactly what was just said via TTS so it knows the conversation state.
       const greetingContext = this.config.initialGreeting 
         ? `INITIALIZATION: You have just spoken the following greeting to the user: "${this.config.initialGreeting}". The user has heard this. Do NOT repeat it. Your goal is to WAIT for the user to reply to this greeting.` 
         : `INITIALIZATION: Wait for the user to speak first.`;
@@ -73,23 +66,21 @@ export class GeminiLiveService {
       this.sessionPromise = this.ai.live.connect({
         model: 'gemini-2.5-flash-native-audio-preview-09-2025',
         config: {
-          // If using Azure, we only want TEXT from Gemini. If native, we want AUDIO.
-          responseModalities: isAzure ? [Modality.TEXT] : [Modality.AUDIO],
-          speechConfig: !isAzure ? {
+          responseModalities: [Modality.AUDIO],
+          speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: this.config.voice } },
-          } : undefined,
+          },
           systemInstruction: `
           CRITICAL OPERATIONAL RULES:
           1. LANGUAGE ENFORCEMENT: You must speak ONLY in English. If you hear what sounds like a foreign language or unclear noise, ignore it or ask for clarification in English. NEVER switch languages.
           2. ${greetingContext}
-          3. SOURCE OF TRUTH: You have been provided with a YAML/Text Knowledge Base. When answering questions covered by this data, you must use the EXACT phrasing provided in the 'prompt' fields.
+          3. SOURCE OF TRUTH: You have been provided with a YAML/Text Knowledge Base. When answering questions covered by this data, you must use the EXACT phrasing provided in the 'prompt' fields. Do not summarize or paraphrase unless specifically asked for a summary.
           4. SILENCE HANDLING: If you receive the specific text code "[[SILENCE_DETECTED]]", you must IMMEDIATELY speak up and ask: "Are you still there?" or "Hello?".
-          ${isAzure ? '5. OUTPUT FORMAT: You are generating text that will be read by a TTS engine. Keep sentences concise. Avoid emojis or markdown formatting like **bold**.' : ''}
           
           KNOWLEDGE BASE:
           ${this.config.knowledgeBase}`,
           inputAudioTranscription: {},
-          outputAudioTranscription: {}, // Still need this for native, but for Azure we get text directly
+          outputAudioTranscription: {},
         },
         callbacks: {
           onopen: () => this.handleSessionOpen(mediaStream),
@@ -107,6 +98,8 @@ export class GeminiLiveService {
   public sendText(text: string) {
       if (this.sessionPromise) {
           this.sessionPromise.then(session => {
+              // Use 'any' cast to access raw send method for clientContent, 
+              // as sendRealtimeInput only supports media chunks in the current type definition.
               (session as any).send({
                   clientContent: {
                       turns: [{
@@ -131,7 +124,7 @@ export class GeminiLiveService {
       this.inputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
       this.mediaStreamSource = this.inputAudioContext.createMediaStreamSource(mediaStream);
       
-      // Reduced buffer size for low latency
+      // Reduced buffer size from 4096 to 2048 to improve latency
       this.scriptProcessor = this.inputAudioContext.createScriptProcessor(2048, 1, 1);
       
       this.scriptProcessor.onaudioprocess = (audioProcessingEvent) => {
@@ -141,7 +134,9 @@ export class GeminiLiveService {
         // Simple downsampling/conversion to 16kHz Int16 PCM
         const int16 = new Int16Array(l);
         for (let i = 0; i < l; i++) {
+          // Clip to [-1, 1] to prevent distortion
           let s = Math.max(-1, Math.min(1, inputData[i]));
+          // Convert to 16-bit PCM
           s = s < 0 ? s * 0x8000 : s * 0x7FFF;
           int16[i] = s;
         }
@@ -167,46 +162,12 @@ export class GeminiLiveService {
     }
   }
 
-  private async processAzureQueue() {
-      if (this.isProcessingAzureTTS || this.processingQueue.length === 0) return;
-      
-      this.isProcessingAzureTTS = true;
-      const textToSpeak = this.processingQueue.shift();
-      
-      try {
-          if (textToSpeak && this.config.azureConfig) {
-              const audioData = await generateAzureSpeech(
-                  textToSpeak, 
-                  this.config.voice, 
-                  this.config.azureConfig.region, 
-                  this.config.azureConfig.subscriptionKey
-              );
-              this.callbacks.onAudioChunk(audioData);
-          }
-      } catch (e) {
-          console.error("Azure TTS Generation Error:", e);
-      } finally {
-          this.isProcessingAzureTTS = false;
-          // Process next chunk if exists
-          if (this.processingQueue.length > 0) {
-              this.processAzureQueue();
-          }
-      }
-  }
-
   private handleSessionMessage(message: LiveServerMessage): void {
-    const isAzure = this.config.voiceProvider === VoiceProvider.Azure;
-
     if (message.serverContent?.interrupted) {
       this.callbacks.onInterruption();
-      this.textBuffer = '';
-      this.processingQueue = [];
     }
     
-    // --- TRANSCRIPTION HANDLING ---
-    // If native, transcription comes via outputTranscription.
-    // If Azure, the model text IS the transcription.
-    if (message.serverContent?.outputTranscription && !isAzure) {
+    if (message.serverContent?.outputTranscription) {
       const text = message.serverContent.outputTranscription.text;
       this.currentOutputTranscription += text;
       this.callbacks.onTranscriptUpdate(false, this.currentOutputTranscription, 'output');
@@ -220,58 +181,22 @@ export class GeminiLiveService {
       if (this.currentInputTranscription) {
         this.callbacks.onTranscriptUpdate(true, this.currentInputTranscription, 'input');
       }
-      if (this.currentOutputTranscription && !isAzure) {
+      if (this.currentOutputTranscription) {
         this.callbacks.onTranscriptUpdate(true, this.currentOutputTranscription, 'output');
       }
       this.currentInputTranscription = '';
       this.currentOutputTranscription = '';
-      
-      // Flush remaining Azure text
-      if (isAzure && this.textBuffer.trim()) {
-           this.processingQueue.push(this.textBuffer.trim());
-           this.textBuffer = '';
-           this.processAzureQueue();
-      }
     }
 
-    // --- AUDIO / TTS HANDLING ---
-    
-    if (isAzure) {
-        // Handle TEXT output -> Azure TTS
-        const parts = message.serverContent?.modelTurn?.parts;
-        if (parts && parts.length > 0 && parts[0].text) {
-            const textChunk = parts[0].text;
-            this.textBuffer += textChunk;
-            this.currentOutputTranscription += textChunk; // Update transcript for Azure mode
-            this.callbacks.onTranscriptUpdate(false, this.currentOutputTranscription, 'output');
-
-            // Heuristic to split sentences for natural flow and lower latency
-            // Split by punctuation followed by space or newline
-            const sentenceMatch = this.textBuffer.match(/([.?!]+)[\s\n]+/);
-            if (sentenceMatch && sentenceMatch.index !== undefined) {
-                const splitIndex = sentenceMatch.index + sentenceMatch[0].length;
-                const sentence = this.textBuffer.substring(0, splitIndex).trim();
-                const remainder = this.textBuffer.substring(splitIndex);
-                
-                if (sentence) {
-                    this.processingQueue.push(sentence);
-                    this.processAzureQueue();
-                }
-                this.textBuffer = remainder;
-            }
-        }
-    } else {
-        // Handle NATIVE AUDIO output
-        const base64Audio = message.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
-        if (base64Audio) {
-          const binaryString = atob(base64Audio);
-          const len = binaryString.length;
-          const bytes = new Uint8Array(len);
-          for (let i = 0; i < len; i++) {
-            bytes[i] = binaryString.charCodeAt(i);
-          }
-          this.callbacks.onAudioChunk(bytes);
-        }
+    const base64Audio = message.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
+    if (base64Audio) {
+      const binaryString = atob(base64Audio);
+      const len = binaryString.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      this.callbacks.onAudioChunk(bytes);
     }
   }
 
@@ -302,8 +227,8 @@ export class GeminiLiveService {
     this.inputAudioContext = null;
     this.session = null;
     this.sessionPromise = null;
+    // The mediaStream lifecycle is managed by the parent component (AgentWidget)
+    // so we just release the reference here.
     this.mediaStream = null;
-    this.textBuffer = '';
-    this.processingQueue = [];
   }
 }
