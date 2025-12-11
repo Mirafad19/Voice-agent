@@ -1,9 +1,11 @@
 
+
 import React, { useState, useEffect, useMemo } from 'react';
-import { AgentProfile, WidgetTheme, AgentVoice, AccentColor, EmailConfig, FileUploadConfig } from '../types';
+import { AgentProfile, WidgetTheme, AgentVoice, AccentColor, EmailConfig, FileUploadConfig, VoiceProvider } from '../types';
 import { Input } from './ui/Input';
 import { Select } from './ui/Select';
 import { Button } from './ui/Button';
+import { AZURE_VOICES } from '../constants';
 
 interface ConfigurationPanelProps {
   profile: AgentProfile;
@@ -61,6 +63,16 @@ export const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({ profile,
     }));
   };
 
+  const handleAzureConfigChange = (key: 'region' | 'subscriptionKey', value: string) => {
+    setEditedProfile(prev => ({
+        ...prev,
+        azureConfig: {
+            ...(prev.azureConfig || { region: 'eastus', subscriptionKey: '' }),
+            [key]: value.trim()
+        }
+    }));
+  };
+
   const handleSave = () => {
     onProfileChange(editedProfile);
   };
@@ -68,6 +80,8 @@ export const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({ profile,
   const handleReset = () => {
     setEditedProfile(profile);
   };
+
+  const isAzure = editedProfile.voiceProvider === VoiceProvider.Azure;
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
@@ -104,39 +118,85 @@ export const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({ profile,
             <option value={WidgetTheme.Light}>Light</option>
             <option value={WidgetTheme.Dark}>Dark</option>
           </Select>
-
-          <Select
-            label="Agent Voice"
-            id="voice"
-            value={editedProfile.voice}
-            onChange={(e) => handleChange('voice', e.target.value as AgentVoice)}
-          >
-            {Object.values(AgentVoice).map(voice => (
-              <option key={voice} value={voice}>{voice}</option>
-            ))}
-          </Select>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            Accent Color
-          </label>
-          <div className="flex flex-wrap items-center gap-3">
-            {accentColorOptions.map(option => (
-              <button
-                key={option.value}
-                type="button"
-                className={`w-8 h-8 rounded-full ${option.color} transition-transform transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-gray-800 focus:ring-${option.value}-500 ${editedProfile.accentColor === option.value ? 'ring-2 ring-offset-2 ring-offset-white dark:ring-offset-gray-800 ring-black dark:ring-white' : ''}`}
-                onClick={() => handleChange('accentColor', option.value)}
-                title={option.name}
-              />
-            ))}
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Accent Color
+            </label>
+            <div className="flex flex-wrap items-center gap-3">
+                {accentColorOptions.map(option => (
+                <button
+                    key={option.value}
+                    type="button"
+                    className={`w-8 h-8 rounded-full ${option.color} transition-transform transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-gray-800 focus:ring-${option.value}-500 ${editedProfile.accentColor === option.value ? 'ring-2 ring-offset-2 ring-offset-white dark:ring-offset-gray-800 ring-black dark:ring-white' : ''}`}
+                    onClick={() => handleChange('accentColor', option.value)}
+                    title={option.name}
+                />
+                ))}
+            </div>
           </div>
         </div>
         
         {/* Voice Specific Settings */}
         <h3 className="text-xl font-semibold text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-700 pb-2 pt-4">Voice Configuration</h3>
         
+        <div className="bg-gray-50 dark:bg-gray-700/30 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+            <div className="mb-4">
+                <Select
+                    label="Voice Provider"
+                    id="voiceProvider"
+                    value={editedProfile.voiceProvider || VoiceProvider.Gemini}
+                    onChange={(e) => {
+                         const newProvider = e.target.value as VoiceProvider;
+                         handleChange('voiceProvider', newProvider);
+                         // Set default voice for provider to avoid invalid state
+                         if (newProvider === VoiceProvider.Azure) handleChange('voice', AZURE_VOICES[0].value);
+                         else handleChange('voice', AgentVoice.Zephyr);
+                    }}
+                >
+                    <option value={VoiceProvider.Gemini}>Google Gemini (Native - Low Latency)</option>
+                    <option value={VoiceProvider.Azure}>Azure Speech (TTS - More Accents)</option>
+                </Select>
+            </div>
+
+            {isAzure && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 animate-fade-in-up">
+                     <Input
+                        label="Azure Region"
+                        id="azureRegion"
+                        placeholder="e.g., eastus, westeurope"
+                        value={editedProfile.azureConfig?.region || ''}
+                        onChange={(e) => handleAzureConfigChange('region', e.target.value)}
+                    />
+                     <Input
+                        label="Azure Subscription Key"
+                        id="azureKey"
+                        type="password"
+                        placeholder="Your Azure Speech Key"
+                        value={editedProfile.azureConfig?.subscriptionKey || ''}
+                        onChange={(e) => handleAzureConfigChange('subscriptionKey', e.target.value)}
+                    />
+                </div>
+            )}
+
+            <Select
+                label={isAzure ? "Azure Voice" : "Gemini Voice"}
+                id="voice"
+                value={editedProfile.voice}
+                onChange={(e) => handleChange('voice', e.target.value)}
+            >
+                {isAzure ? (
+                    AZURE_VOICES.map(v => (
+                        <option key={v.value} value={v.value}>{v.name}</option>
+                    ))
+                ) : (
+                    Object.values(AgentVoice).map(voice => (
+                        <option key={voice} value={voice}>{voice}</option>
+                    ))
+                )}
+            </Select>
+        </div>
+
         <div>
           <Input
             label="Voice Greeting (Spoken)"
