@@ -1,7 +1,13 @@
 
+
 export enum WidgetTheme {
   Light = 'light',
   Dark = 'dark',
+}
+
+export enum VoiceProvider {
+  Gemini = 'gemini',
+  Azure = 'azure',
 }
 
 export enum AgentVoice {
@@ -62,6 +68,11 @@ export interface FileUploadConfig {
   cloudinaryUploadPreset: string;
 }
 
+export interface AzureConfig {
+  region: string;
+  subscriptionKey: string;
+}
+
 export interface AgentProfile {
   id: string;
   name: string;
@@ -75,7 +86,12 @@ export interface AgentProfile {
   initialGreetingText?: string; // Chat Welcome Message
   
   theme: WidgetTheme;
-  voice: AgentVoice;
+  
+  // Voice Provider Settings
+  voiceProvider: VoiceProvider; 
+  voice: string; // Changed from AgentVoice enum to string to support Azure voice names
+  azureConfig?: AzureConfig;
+
   accentColor: AccentColor;
   calloutMessage?: string;
   emailConfig?: EmailConfig;

@@ -1,13 +1,14 @@
 
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { AgentProfile, AgentConfig, WidgetState, Recording, ReportingStatus } from '../types';
+import { AgentProfile, AgentConfig, WidgetState, Recording, ReportingStatus, VoiceProvider } from '../types';
 import { GeminiLiveService } from '../services/geminiLiveService';
 import { RecordingService } from '../services/recordingService';
 import { Spinner } from './ui/Spinner';
 import { GoogleGenAI, Type, Modality, Chat } from '@google/genai';
 import { blobToBase64 } from '../utils';
 import { decodePcmChunk } from '../utils/audio';
+import { generateAzureSpeech } from '../services/azureTtsService';
 
 interface AgentWidgetProps {
   agentProfile: AgentProfile | AgentConfig;
@@ -523,40 +524,61 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     await recordingServiceRef.current.start(stream);
 
     // Initial Greeting Audio - Triggered AFTER mic is ready to ensure context is active
-    const greeting = (agentProfile as AgentConfig).initialGreeting;
+    const config = agentProfile as AgentConfig;
+    const greeting = config.initialGreeting;
     if (greeting) {
         // Pre-append greeting to transcript so context is aware
         fullTranscriptRef.current = `Agent: ${greeting}\n`;
         
-        try {
-            const ai = new GoogleGenAI({ apiKey });
-            const response = await ai.models.generateContent({
-                model: "gemini-2.5-flash-preview-tts",
-                contents: [{ parts: [{ text: greeting }] }],
-                config: {
-                    responseModalities: [Modality.AUDIO],
-                    speechConfig: {
-                        voiceConfig: {
-                            prebuiltVoiceConfig: { voiceName: (agentProfile as AgentConfig).voice },
+        // --- GREETING GENERATION ---
+        // If Azure provider is selected, we should try to use Azure TTS for greeting consistency.
+        // If not configured or if using Gemini, use Gemini TTS.
+        let audioGenerated = false;
+        
+        if (config.voiceProvider === VoiceProvider.Azure && config.azureConfig?.subscriptionKey && config.azureConfig?.region) {
+            try {
+                const bytes = await generateAzureSpeech(greeting, config.voice, config.azureConfig.region, config.azureConfig.subscriptionKey);
+                 audioQueueRef.current.push(bytes);
+                 recordingServiceRef.current?.addAgentAudioChunk(bytes);
+                 playAudioQueue();
+                 audioGenerated = true;
+            } catch(e) {
+                console.warn("Azure Greeting failed, falling back to Gemini", e);
+            }
+        }
+        
+        if (!audioGenerated) {
+            try {
+                const ai = new GoogleGenAI({ apiKey });
+                const response = await ai.models.generateContent({
+                    model: "gemini-2.5-flash-preview-tts",
+                    contents: [{ parts: [{ text: greeting }] }],
+                    config: {
+                        responseModalities: [Modality.AUDIO],
+                        speechConfig: {
+                            voiceConfig: {
+                                // Fallback to Zephyr if voice name is an Azure name
+                                prebuiltVoiceConfig: { voiceName: config.voice.includes('-') ? 'Zephyr' : config.voice },
+                            },
                         },
                     },
-                },
-            });
-            const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-            if (base64Audio) {
-                const binaryString = atob(base64Audio);
-                const len = binaryString.length;
-                const bytes = new Uint8Array(len);
-                for (let i = 0; i < len; i++) {
-                    bytes[i] = binaryString.charCodeAt(i);
+                });
+                const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+                if (base64Audio) {
+                    const binaryString = atob(base64Audio);
+                    const len = binaryString.length;
+                    const bytes = new Uint8Array(len);
+                    for (let i = 0; i < len; i++) {
+                        bytes[i] = binaryString.charCodeAt(i);
+                    }
+                    audioQueueRef.current.push(bytes);
+                    recordingServiceRef.current?.addAgentAudioChunk(bytes);
+                    playAudioQueue();
                 }
-                audioQueueRef.current.push(bytes);
-                recordingServiceRef.current?.addAgentAudioChunk(bytes);
-                playAudioQueue();
+            } catch (error) {
+                console.error("Failed to generate greeting audio:", error);
+                // Non-critical error, continue to connection
             }
-        } catch (error) {
-            console.error("Failed to generate greeting audio:", error);
-            // Non-critical error, continue to connection
         }
     }
 
