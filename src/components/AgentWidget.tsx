@@ -423,7 +423,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         }
     }
 
-    // Schedule all available chunks
+    // Schedule all available chunks in a loop - CONTINUOUS PLAYBACK FIX
     while (audioQueueRef.current.length > 0) {
         const chunk = audioQueueRef.current.shift()!;
         const audioBuffer = decodePcmChunk(chunk, audioContext);
