@@ -104,41 +104,39 @@ export const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({ profile,
             <option value={WidgetTheme.Light}>Light</option>
             <option value={WidgetTheme.Dark}>Dark</option>
           </Select>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Accent Color
-            </label>
-            <div className="flex flex-wrap items-center gap-3">
-                {accentColorOptions.map(option => (
-                <button
-                    key={option.value}
-                    type="button"
-                    className={`w-8 h-8 rounded-full ${option.color} transition-transform transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-gray-800 focus:ring-${option.value}-500 ${editedProfile.accentColor === option.value ? 'ring-2 ring-offset-2 ring-offset-white dark:ring-offset-gray-800 ring-black dark:ring-white' : ''}`}
-                    onClick={() => handleChange('accentColor', option.value)}
-                    title={option.name}
-                />
-                ))}
-            </div>
+
+          <Select
+            label="Agent Voice"
+            id="voice"
+            value={editedProfile.voice}
+            onChange={(e) => handleChange('voice', e.target.value as AgentVoice)}
+          >
+            {Object.values(AgentVoice).map(voice => (
+              <option key={voice} value={voice}>{voice}</option>
+            ))}
+          </Select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Accent Color
+          </label>
+          <div className="flex flex-wrap items-center gap-3">
+            {accentColorOptions.map(option => (
+              <button
+                key={option.value}
+                type="button"
+                className={`w-8 h-8 rounded-full ${option.color} transition-transform transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-gray-800 focus:ring-${option.value}-500 ${editedProfile.accentColor === option.value ? 'ring-2 ring-offset-2 ring-offset-white dark:ring-offset-gray-800 ring-black dark:ring-white' : ''}`}
+                onClick={() => handleChange('accentColor', option.value)}
+                title={option.name}
+              />
+            ))}
           </div>
         </div>
         
         {/* Voice Specific Settings */}
         <h3 className="text-xl font-semibold text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-700 pb-2 pt-4">Voice Configuration</h3>
         
-        <div className="bg-gray-50 dark:bg-gray-700/30 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
-            <Select
-                label="Gemini Voice"
-                id="voice"
-                value={editedProfile.voice}
-                onChange={(e) => handleChange('voice', e.target.value as AgentVoice)}
-            >
-                {Object.values(AgentVoice).map(voice => (
-                    <option key={voice} value={voice}>{voice}</option>
-                ))}
-            </Select>
-        </div>
-
         <div>
           <Input
             label="Voice Greeting (Spoken)"

@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AgentProfile, AgentConfig, WidgetState, Recording, ReportingStatus } from '../types';
 import { GeminiLiveService } from '../services/geminiLiveService';
@@ -423,7 +424,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         }
     }
 
-    // Schedule all available chunks in a loop - CONTINUOUS PLAYBACK FIX
+    // Schedule all available chunks
     while (audioQueueRef.current.length > 0) {
         const chunk = audioQueueRef.current.shift()!;
         const audioBuffer = decodePcmChunk(chunk, audioContext);

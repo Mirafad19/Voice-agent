@@ -1,4 +1,5 @@
 
+
 import { GoogleGenAI, Modality, LiveServerMessage } from '@google/genai';
 import { AgentConfig } from '../types';
 
@@ -57,6 +58,7 @@ export class GeminiLiveService {
       this.mediaStream = mediaStream;
       
       // Dynamic Greeting Instruction
+      // We tell the model exactly what was just said via TTS so it knows the conversation state.
       const greetingContext = this.config.initialGreeting 
         ? `INITIALIZATION: You have just spoken the following greeting to the user: "${this.config.initialGreeting}". The user has heard this. Do NOT repeat it. Your goal is to WAIT for the user to reply to this greeting.` 
         : `INITIALIZATION: Wait for the user to speak first.`;
@@ -96,6 +98,8 @@ export class GeminiLiveService {
   public sendText(text: string) {
       if (this.sessionPromise) {
           this.sessionPromise.then(session => {
+              // Use 'any' cast to access raw send method for clientContent, 
+              // as sendRealtimeInput only supports media chunks in the current type definition.
               (session as any).send({
                   clientContent: {
                       turns: [{
@@ -120,7 +124,7 @@ export class GeminiLiveService {
       this.inputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
       this.mediaStreamSource = this.inputAudioContext.createMediaStreamSource(mediaStream);
       
-      // Buffer size 2048: Good balance for latency and audio quality without artifacts
+      // Reduced buffer size from 4096 to 2048 to improve latency
       this.scriptProcessor = this.inputAudioContext.createScriptProcessor(2048, 1, 1);
       
       this.scriptProcessor.onaudioprocess = (audioProcessingEvent) => {
@@ -130,7 +134,9 @@ export class GeminiLiveService {
         // Simple downsampling/conversion to 16kHz Int16 PCM
         const int16 = new Int16Array(l);
         for (let i = 0; i < l; i++) {
+          // Clip to [-1, 1] to prevent distortion
           let s = Math.max(-1, Math.min(1, inputData[i]));
+          // Convert to 16-bit PCM
           s = s < 0 ? s * 0x8000 : s * 0x7FFF;
           int16[i] = s;
         }
@@ -221,6 +227,8 @@ export class GeminiLiveService {
     this.inputAudioContext = null;
     this.session = null;
     this.sessionPromise = null;
+    // The mediaStream lifecycle is managed by the parent component (AgentWidget)
+    // so we just release the reference here.
     this.mediaStream = null;
   }
 }
