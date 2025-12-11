@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AgentProfile, AgentConfig, WidgetState, Recording, ReportingStatus } from '../types';
 import { GeminiLiveService } from '../services/geminiLiveService';
@@ -110,11 +109,10 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   // Voice State
   const [widgetState, _setWidgetState] = useState<WidgetState>(WidgetState.Idle);
   const widgetStateRef = useRef(widgetState);
-  const setWidgetState = useCallback((state: WidgetState) => {
+  const setWidgetState = (state: WidgetState) => {
     widgetStateRef.current = state;
     _setWidgetState(state);
-  }, []);
-
+  };
   const [voiceReportingStatus, setVoiceReportingStatus] = useState<ReportingStatus>('idle');
   const fullTranscriptRef = useRef('');
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -132,6 +130,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const recordingServiceRef = useRef<RecordingService | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const audioQueueRef = useRef<Uint8Array[]>([]);
+  const isPlayingRef = useRef(false);
   const outputAudioContextRef = useRef<AudioContext | null>(null);
   const activeAudioSourcesRef = useRef(new Set<AudioBufferSourceNode>());
   const nextStartTimeRef = useRef(0);
@@ -367,116 +366,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
       }
   }, []);
 
-  const endVoiceSession = useCallback(() => {
-    cleanupServices();
-    setWidgetState(WidgetState.Ended);
-  }, [setWidgetState]);
-
-  const handleVoiceSessionEnd = useCallback((blob: Blob, mimeType: string) => {
-    if (blob.size === 0) return;
-    const now = new Date();
-    const dateString = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-    const newRecording: Omit<Recording, 'id' | 'url'> = {
-        name: `Voice Call - ${dateString}, ${timeString}`,
-        blob,
-        mimeType,
-        transcript: fullTranscriptRef.current
-    };
-    
-    if (isWidgetMode) {
-      analyzeAndSendReport(newRecording);
-    } else if(onSessionEnd) {
-        onSessionEnd({
-            ...newRecording,
-            id: `rec-${now.getTime()}`,
-            url: URL.createObjectURL(blob),
-        });
-    }
-  }, [onSessionEnd, isWidgetMode, analyzeAndSendReport]);
-
-  const cleanupServices = useCallback(() => {
-    clearSilenceTimer();
-    geminiServiceRef.current?.disconnect();
-    geminiServiceRef.current = null;
-    recordingServiceRef.current?.stop();
-    recordingServiceRef.current = null;
-    mediaStreamRef.current?.getTracks().forEach(track => track.stop());
-    mediaStreamRef.current = null;
-    activeAudioSourcesRef.current.forEach(source => source.stop());
-    activeAudioSourcesRef.current.clear();
-    outputAudioContextRef.current?.close().catch(console.error);
-    outputAudioContextRef.current = null;
-    audioQueueRef.current = [];
-    nextStartTimeRef.current = 0;
-  }, [clearSilenceTimer]);
-
-  const playAudioQueue = useCallback(() => {
-    const audioContext = outputAudioContextRef.current;
-    if (!audioContext) return;
-
-    // Check if we need to start speaking state
-    if (audioQueueRef.current.length > 0) {
-        clearSilenceTimer(); // Don't interrupt while agent is speaking
-        if (widgetStateRef.current !== WidgetState.Speaking && widgetStateRef.current !== WidgetState.Error) {
-            setWidgetState(WidgetState.Speaking);
-        }
-    }
-
-    // Schedule all available chunks
-    while (audioQueueRef.current.length > 0) {
-        const chunk = audioQueueRef.current.shift()!;
-        const audioBuffer = decodePcmChunk(chunk, audioContext);
-
-        const source = audioContext.createBufferSource();
-        source.buffer = audioBuffer;
-        source.connect(audioContext.destination);
-
-        // JITTER BUFFER FIX:
-        // Ensure continuous playback. Only reset time if we truly underrun.
-        // We give a tiny 20ms buffer to ensure the browser schedules it cleanly.
-        if (nextStartTimeRef.current < audioContext.currentTime) {
-            nextStartTimeRef.current = audioContext.currentTime + 0.02;
-        }
-
-        source.start(nextStartTimeRef.current);
-        nextStartTimeRef.current += audioBuffer.duration;
-
-        activeAudioSourcesRef.current.add(source);
-        
-        // Handle source cleanup and session state when specific sources end
-        source.onended = () => {
-            activeAudioSourcesRef.current.delete(source);
-            
-            // If no more sources are playing and queue is empty, the agent has finished speaking this turn.
-            if (activeAudioSourcesRef.current.size === 0 && audioQueueRef.current.length === 0) {
-                if (shouldEndAfterSpeakingRef.current) {
-                    endVoiceSession();
-                    return;
-                }
-                if (widgetStateRef.current === WidgetState.Speaking) {
-                    setWidgetState(WidgetState.Listening);
-                    resetSilenceTimer();
-                }
-            }
-        };
-    }
-  }, [endVoiceSession, clearSilenceTimer, resetSilenceTimer, setWidgetState]);
-
-  const handleInterruption = useCallback(() => {
-    activeAudioSourcesRef.current.forEach(source => source.stop());
-    activeAudioSourcesRef.current.clear();
-    audioQueueRef.current = [];
-    nextStartTimeRef.current = 0;
-    if (widgetStateRef.current === WidgetState.Speaking) {
-        setWidgetState(WidgetState.Listening);
-        // Interruption implies user is speaking/interacting, reset timer
-        resetSilenceTimer();
-    }
-  }, [resetSilenceTimer, setWidgetState]);
-
-
   const startVoiceSession = useCallback(async () => {
     setView('voice');
     shouldEndAfterSpeakingRef.current = false;
@@ -605,7 +494,129 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
       },
     });
     geminiServiceRef.current.connect(stream);
-  }, [apiKey, agentProfile, resetSilenceTimer, playAudioQueue, handleInterruption, cleanupServices, handleVoiceSessionEnd, setWidgetState]);
+  }, [apiKey, agentProfile, resetSilenceTimer]);
+
+  const endVoiceSession = useCallback(() => {
+    cleanupServices();
+    setWidgetState(WidgetState.Ended);
+  }, []);
+
+  const handleVoiceSessionEnd = useCallback((blob: Blob, mimeType: string) => {
+    if (blob.size === 0) return;
+    const now = new Date();
+    const dateString = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    const newRecording: Omit<Recording, 'id' | 'url'> = {
+        name: `Voice Call - ${dateString}, ${timeString}`,
+        blob,
+        mimeType,
+        transcript: fullTranscriptRef.current
+    };
+    
+    if (isWidgetMode) {
+      analyzeAndSendReport(newRecording);
+    } else if(onSessionEnd) {
+        onSessionEnd({
+            ...newRecording,
+            id: `rec-${now.getTime()}`,
+            url: URL.createObjectURL(blob),
+        });
+    }
+  }, [onSessionEnd, isWidgetMode, analyzeAndSendReport]);
+
+  const cleanupServices = useCallback(() => {
+    clearSilenceTimer();
+    geminiServiceRef.current?.disconnect();
+    geminiServiceRef.current = null;
+    recordingServiceRef.current?.stop();
+    recordingServiceRef.current = null;
+    mediaStreamRef.current?.getTracks().forEach(track => track.stop());
+    mediaStreamRef.current = null;
+    activeAudioSourcesRef.current.forEach(source => source.stop());
+    activeAudioSourcesRef.current.clear();
+    outputAudioContextRef.current?.close().catch(console.error);
+    outputAudioContextRef.current = null;
+    audioQueueRef.current = [];
+    isPlayingRef.current = false;
+    nextStartTimeRef.current = 0;
+  }, [clearSilenceTimer]);
+
+  const playAudioQueue = useCallback(() => {
+    // Agent is starting to speak, pause silence timer
+    clearSilenceTimer();
+    
+    if (isPlayingRef.current || audioQueueRef.current.length === 0) return;
+    
+    isPlayingRef.current = true;
+    if (widgetStateRef.current !== WidgetState.Speaking && widgetStateRef.current !== WidgetState.Error) {
+        setWidgetState(WidgetState.Speaking);
+    }
+    
+    const audioContext = outputAudioContextRef.current;
+    if (!audioContext) {
+      isPlayingRef.current = false;
+      return;
+    }
+
+    const processNextChunk = () => {
+        if(audioQueueRef.current.length === 0) {
+            isPlayingRef.current = false;
+            if (shouldEndAfterSpeakingRef.current) {
+                endVoiceSession();
+                return;
+            }
+            if(widgetStateRef.current === WidgetState.Speaking) {
+                setWidgetState(WidgetState.Listening);
+                // Agent finished speaking, resume silence timer
+                resetSilenceTimer();
+            }
+            return;
+        }
+
+        const chunk = audioQueueRef.current.shift()!;
+        const audioBuffer = decodePcmChunk(chunk, audioContext);
+
+        const source = audioContext.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(audioContext.destination);
+
+        activeAudioSourcesRef.current.add(source);
+        source.addEventListener('ended', () => {
+            activeAudioSourcesRef.current.delete(source);
+        });
+
+        // JITTER BUFFER LOGIC:
+        // If this is the start of a sequence (or we fell behind), ensure we schedule slightly in the future
+        // to build a buffer. This prevents "breaking" voice due to network jitter.
+        const currentTime = audioContext.currentTime;
+        let startTime = nextStartTimeRef.current;
+        
+        if (startTime < currentTime) {
+            // We are behind or just starting. Add a small 0.2s latency buffer.
+            startTime = currentTime + 0.15;
+        }
+
+        source.start(startTime);
+        nextStartTimeRef.current = startTime + audioBuffer.duration;
+        source.onended = processNextChunk;
+    }
+
+    processNextChunk();
+  }, [endVoiceSession, clearSilenceTimer, resetSilenceTimer]);
+
+  const handleInterruption = useCallback(() => {
+    activeAudioSourcesRef.current.forEach(source => source.stop());
+    activeAudioSourcesRef.current.clear();
+    audioQueueRef.current = [];
+    isPlayingRef.current = false;
+    nextStartTimeRef.current = 0;
+    if (widgetStateRef.current === WidgetState.Speaking) {
+        setWidgetState(WidgetState.Listening);
+        // Interruption implies user is speaking/interacting, reset timer
+        resetSilenceTimer();
+    }
+  }, [resetSilenceTimer]);
 
   // --- UI Triggers ---
   
