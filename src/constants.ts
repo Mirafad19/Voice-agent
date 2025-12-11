@@ -1,6 +1,5 @@
 
-
-import { AgentProfile, AgentVoice, AccentColor, WidgetTheme, VoiceProvider } from './types';
+import { AgentProfile, AgentVoice, AccentColor, WidgetTheme } from './types';
 
 const defaultEmailConfig = {
   formspreeEndpoint: '',
@@ -10,19 +9,6 @@ const defaultFileUploadConfig = {
   cloudinaryCloudName: '',
   cloudinaryUploadPreset: '',
 };
-
-export const AZURE_VOICES = [
-  { name: 'Nigerian - Ezinne (Female)', value: 'en-NG-EzinneNeural' },
-  { name: 'Nigerian - Abeo (Male)', value: 'en-NG-AbeoNeural' },
-  { name: 'Kenyan - Asilia (Female)', value: 'en-KE-AsiliaNeural' },
-  { name: 'Kenyan - Chilemba (Male)', value: 'en-KE-ChilembaNeural' },
-  { name: 'South African - Leah (Female)', value: 'en-ZA-LeahNeural' },
-  { name: 'South African - Luke (Male)', value: 'en-ZA-LukeNeural' },
-  { name: 'US - Ava (Female)', value: 'en-US-AvaNeural' },
-  { name: 'US - Andrew (Male)', value: 'en-US-AndrewNeural' },
-  { name: 'UK - Sonia (Female)', value: 'en-GB-SoniaNeural' },
-  { name: 'UK - Ryan (Male)', value: 'en-GB-RyanNeural' },
-];
 
 export const DEFAULT_PROFILES: AgentProfile[] = [
   {
@@ -40,7 +26,6 @@ export const DEFAULT_PROFILES: AgentProfile[] = [
     - Be enthusiastic and helpful.`,
     
     theme: WidgetTheme.Light,
-    voiceProvider: VoiceProvider.Gemini,
     voice: AgentVoice.Zephyr,
     accentColor: AccentColor.Orange,
     calloutMessage: 'Hey! Got a question about our sneakers? Click here to chat!',

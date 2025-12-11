@@ -1,47 +1,15 @@
 
-
 export enum WidgetTheme {
   Light = 'light',
   Dark = 'dark',
 }
 
-export enum VoiceProvider {
-  Gemini = 'gemini',
-  Azure = 'azure',
-}
-
 export enum AgentVoice {
-  // Standard Live Voices
   Zephyr = 'Zephyr',
   Puck = 'Puck',
   Charon = 'Charon',
   Kore = 'Kore',
   Fenrir = 'Fenrir',
-  
-  // Extended Star/Mythology Voices (TTS & Pro Preview)
-  Aoede = 'Aoede',
-  Callirrhoe = 'Callirrhoe',
-  Autonoe = 'Autonoe',
-  Enceladus = 'Enceladus',
-  Iapetus = 'Iapetus',
-  Sol = 'Sol',
-  Algieba = 'Algieba',
-  Despina = 'Despina',
-  Erinome = 'Erinome',
-  Algenib = 'Algenib',
-  Rasalgethi = 'Rasalgethi',
-  Laomedeia = 'Laomedeia',
-  Achernar = 'Achernar',
-  Alnilam = 'Alnilam',
-  Schedar = 'Schedar',
-  Gacrux = 'Gacrux',
-  Pulcherrima = 'Pulcherrima',
-  Achird = 'Achird',
-  Zubenelgenubi = 'Zubenelgenubi',
-  Vindemiatrix = 'Vindemiatrix',
-  Sadachbia = 'Sadachbia',
-  Sadaltager = 'Sadaltager',
-  Sulafat = 'Sulafat',
 }
 
 export enum AccentColor {
@@ -68,11 +36,6 @@ export interface FileUploadConfig {
   cloudinaryUploadPreset: string;
 }
 
-export interface AzureConfig {
-  region: string;
-  subscriptionKey: string;
-}
-
 export interface AgentProfile {
   id: string;
   name: string;
@@ -86,12 +49,7 @@ export interface AgentProfile {
   initialGreetingText?: string; // Chat Welcome Message
   
   theme: WidgetTheme;
-  
-  // Voice Provider Settings
-  voiceProvider: VoiceProvider; 
-  voice: string; // Changed from AgentVoice enum to string to support Azure voice names
-  azureConfig?: AzureConfig;
-
+  voice: AgentVoice;
   accentColor: AccentColor;
   calloutMessage?: string;
   emailConfig?: EmailConfig;
