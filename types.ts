@@ -4,14 +4,41 @@ export enum WidgetTheme {
 }
 
 export enum AgentVoice {
+  // Standard Live Voices
   Zephyr = 'Zephyr',
   Puck = 'Puck',
   Charon = 'Charon',
   Kore = 'Kore',
   Fenrir = 'Fenrir',
+  
+  // Extended Star/Mythology Voices (TTS & Pro Preview)
+  Aoede = 'Aoede',
+  Callirrhoe = 'Callirrhoe',
+  Autonoe = 'Autonoe',
+  Enceladus = 'Enceladus',
+  Iapetus = 'Iapetus',
+  Sol = 'Sol',
+  Algieba = 'Algieba',
+  Despina = 'Despina',
+  Erinome = 'Erinome',
+  Algenib = 'Algenib',
+  Rasalgethi = 'Rasalgethi',
+  Laomedeia = 'Laomedeia',
+  Achernar = 'Achernar',
+  Alnilam = 'Alnilam',
+  Schedar = 'Schedar',
+  Gacrux = 'Gacrux',
+  Pulcherrima = 'Pulcherrima',
+  Achird = 'Achird',
+  Zubenelgenubi = 'Zubenelgenubi',
+  Vindemiatrix = 'Vindemiatrix',
+  Sadachbia = 'Sadachbia',
+  Sadaltager = 'Sadaltager',
+  Sulafat = 'Sulafat',
 }
 
 export enum AccentColor {
+  Red = 'red',
   Orange = 'orange',
   Gold = 'gold',
   Cyan = 'cyan',
@@ -37,12 +64,19 @@ export interface FileUploadConfig {
 export interface AgentProfile {
   id: string;
   name: string;
-  knowledgeBase: string;
+  
+  // Voice Settings
+  knowledgeBase: string; // Default/Voice Instructions
+  initialGreeting?: string; // Voice Greeting
+  
+  // Chat Settings
+  chatKnowledgeBase?: string; // Specific Chat Instructions
+  initialGreetingText?: string; // Chat Welcome Message
+  
   theme: WidgetTheme;
   voice: AgentVoice;
   accentColor: AccentColor;
   calloutMessage?: string;
-  initialGreeting?: string;
   emailConfig?: EmailConfig;
   fileUploadConfig?: FileUploadConfig;
 }
@@ -55,6 +89,7 @@ export interface Recording {
   blob: Blob;
   url: string;
   mimeType: string;
+  transcript?: string; // Added transcript field
   summary?: string;
   sentiment?: 'Positive' | 'Neutral' | 'Negative' | string;
   actionItems?: string[];

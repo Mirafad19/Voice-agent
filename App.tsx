@@ -1,5 +1,3 @@
-
-
 import React, { useState, useCallback } from 'react';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useAgentProfiles } from './hooks/useAgentProfiles';
@@ -7,11 +5,12 @@ import { ApiKeyModal } from './components/ApiKeyModal';
 import { ConfigurationPanel } from './components/ConfigurationPanel';
 import { RecordingsPanel } from './components/RecordingsPanel';
 import { EmbedCodeModal } from './components/EmbedCodeModal';
+import { SettingsModal } from './components/SettingsModal';
 import { AgentWidget } from './components/AgentWidget';
 import { Recording, AgentProfile } from './types';
 import { Button } from './components/ui/Button';
 
-const Header = ({ onEmbedClick, onNewProfile, onDeleteProfile, profiles, activeProfile, onSelectProfile, onResetApiKey }) => (
+const Header = ({ onEmbedClick, onNewProfile, onDeleteProfile, profiles, activeProfile, onSelectProfile, onOpenSettings }) => (
     <header className="bg-white dark:bg-gray-800 shadow-sm p-4 flex justify-between items-center">
         <div className="flex items-center space-x-4">
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">AI Voice Agent Dashboard</h1>
@@ -20,14 +19,19 @@ const Header = ({ onEmbedClick, onNewProfile, onDeleteProfile, profiles, activeP
                 onChange={(e) => onSelectProfile(e.target.value)}
                 className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             >
-                {profiles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                {profiles.map((p: AgentProfile) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
             <Button onClick={onNewProfile} variant="secondary">New Profile</Button>
             <Button onClick={onDeleteProfile} variant="danger" disabled={profiles.length <= 1}>Delete Profile</Button>
         </div>
         <div className="flex items-center space-x-2">
           <Button onClick={onEmbedClick}>Get Embed Code</Button>
-          <Button onClick={onResetApiKey} variant="secondary">Change API Key</Button>
+          <Button onClick={onOpenSettings} variant="secondary" className="flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
+            </svg>
+            Settings
+          </Button>
         </div>
     </header>
 );
@@ -41,18 +45,16 @@ const App: React.FC = () => {
         updateProfile,
         createProfile,
         deleteProfile,
+        importProfiles
     } = useAgentProfiles();
 
     const [recordings, setRecordings] = useLocalStorage<Recording[]>('sessionRecordings', []);
     const [isEmbedModalOpen, setIsEmbedModalOpen] = useState(false);
+    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [notification, setNotification] = useState('');
 
     const handleApiKeySubmit = (key: string) => {
         setApiKey(key);
-    };
-    
-    const handleResetApiKey = () => {
-        setApiKey(null);
     };
 
     const handleSessionEnd = useCallback((recording: Recording) => {
@@ -92,6 +94,35 @@ const App: React.FC = () => {
         setTimeout(() => setNotification(''), 6000); // auto-dismiss after 6 seconds
     }, [updateProfile]);
 
+    const handleExportProfiles = () => {
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(profiles, null, 2));
+        const downloadAnchorNode = document.createElement('a');
+        downloadAnchorNode.setAttribute("href", dataStr);
+        downloadAnchorNode.setAttribute("download", "voice_agent_profiles_backup.json");
+        document.body.appendChild(downloadAnchorNode);
+        downloadAnchorNode.click();
+        downloadAnchorNode.remove();
+    };
+
+    const handleImportProfiles = async (file: File) => {
+        try {
+            const text = await file.text();
+            const data = JSON.parse(text);
+            if (Array.isArray(data) && data.length > 0 && data[0].id && data[0].name) {
+                if(window.confirm("This will overwrite your current profiles. Are you sure?")) {
+                    importProfiles(data);
+                    alert("Profiles imported successfully!");
+                    setIsSettingsOpen(false);
+                }
+            } else {
+                alert("Invalid backup file format.");
+            }
+        } catch (e) {
+            console.error("Failed to parse backup file", e);
+            alert("Failed to read backup file. Please ensure it is a valid JSON file.");
+        }
+    };
+
     if (!apiKey) {
         return <ApiKeyModal onApiKeySubmit={handleApiKeySubmit} />;
     }
@@ -109,7 +140,7 @@ const App: React.FC = () => {
                 profiles={profiles}
                 activeProfile={activeProfile}
                 onSelectProfile={selectProfile}
-                onResetApiKey={handleResetApiKey}
+                onOpenSettings={() => setIsSettingsOpen(true)}
             />
             {notification && (
               <div className="max-w-4xl mx-auto mt-4 px-8">
@@ -151,6 +182,14 @@ const App: React.FC = () => {
                 onClose={() => setIsEmbedModalOpen(false)}
                 agentProfile={activeProfile}
                 apiKey={apiKey}
+            />
+            <SettingsModal
+                isOpen={isSettingsOpen}
+                onClose={() => setIsSettingsOpen(false)}
+                apiKey={apiKey}
+                onUpdateApiKey={handleApiKeySubmit}
+                onExportProfiles={handleExportProfiles}
+                onImportProfiles={handleImportProfiles}
             />
         </div>
     );

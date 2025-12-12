@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from 'react';
 import { Modal } from './ui/Modal';
 import { Input } from './ui/Input';

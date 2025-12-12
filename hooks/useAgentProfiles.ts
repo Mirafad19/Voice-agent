@@ -62,6 +62,14 @@ export const useAgentProfiles = () => {
     }
   }, [profiles, activeProfileId, setProfiles, setActiveProfileId]);
 
+  const importProfiles = useCallback((newProfiles: AgentProfile[]) => {
+      setProfiles(newProfiles);
+      // Ensure active profile ID is valid after import
+      if (newProfiles.length > 0) {
+          setActiveProfileId(newProfiles[0].id);
+      }
+  }, [setProfiles, setActiveProfileId]);
+
   return {
     profiles,
     activeProfile,
@@ -69,5 +77,6 @@ export const useAgentProfiles = () => {
     updateProfile,
     createProfile,
     deleteProfile,
+    importProfiles,
   };
 };

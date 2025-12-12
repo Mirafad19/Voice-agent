@@ -1,4 +1,3 @@
-// A helper function to decode raw PCM audio data into an AudioBuffer
 async function decodePcmData(
   data: Uint8Array,
   ctx: AudioContext,
@@ -47,8 +46,6 @@ export class RecordingService {
     if (this.isRecording) return;
     
     try {
-      // Use an optimal sample rate for mixing 16kHz (mic) and 24kHz (agent) sources.
-      // 48000 is a multiple of both, which minimizes resampling artifacts.
       this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 48000 });
       this.agentAudioNextStartTime = this.audioContext.currentTime;
 
@@ -58,11 +55,9 @@ export class RecordingService {
       
       this.mixerNode = this.audioContext.createMediaStreamDestination();
 
-      // Connect user's microphone to the mixer
       this.userSource = this.audioContext.createMediaStreamSource(userStream);
       this.userSource.connect(this.mixerNode);
 
-      // Create a separate gain node for the agent's audio to be mixed in
       this.agentGainNode = this.audioContext.createGain();
       this.agentGainNode.connect(this.mixerNode);
 
@@ -100,14 +95,12 @@ export class RecordingService {
     if (!this.audioContext || !this.agentGainNode || !this.isRecording) return;
     
     const capturedContext = this.audioContext;
-    // The agent audio is 24000Hz, 1 channel
     decodePcmData(pcmData, capturedContext, 24000, 1).then(audioBuffer => {
       if (this.isRecording && this.agentGainNode) {
         const source = capturedContext.createBufferSource();
         source.buffer = audioBuffer;
         source.connect(this.agentGainNode);
         
-        // Schedule playback seamlessly to avoid clicks and gaps in the recording
         const currentTime = capturedContext.currentTime;
         const startTime = Math.max(currentTime, this.agentAudioNextStartTime);
         source.start(startTime);
@@ -126,7 +119,6 @@ export class RecordingService {
   }
 
   private cleanup(): void {
-    // The user stream lifecycle is managed by the AgentWidget, so we only disconnect our nodes.
     this.userSource?.disconnect();
     this.agentGainNode?.disconnect();
 

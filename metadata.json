@@ -1,6 +1,6 @@
 {
-  "name": "Copy of Audio (2)",
-  "description": "Test",
+  "name": "AI Voice Agent Dashboard",
+  "description": "A dashboard for configuring and interacting with AI voice agents using Google Gemini API.",
   "requestFramePermissions": [
     "microphone"
   ]

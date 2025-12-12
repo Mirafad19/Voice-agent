@@ -73,20 +73,24 @@ export const RecordingsPanel: React.FC<RecordingsPanelProps> = ({ recordings, on
 
     try {
         const ai = new GoogleGenAI({ apiKey });
-        const audioBase64 = await blobToBase64(recording.blob);
+        
+        let contents;
 
-        const textPart = {
-            text: `You are a highly skilled call center analyst. Your task is to analyze the following customer service call recording.
-            Please provide a concise summary of the conversation, assess the customer's sentiment, and list any explicit action items for the support agent.
-            Return the analysis in a JSON object.`,
-        };
-
-        const audioPart = {
-            inlineData: {
-                mimeType: recording.mimeType,
-                data: audioBase64,
-            },
-        };
+        // Prefer Transcript if available (Faster & More Reliable)
+        if (recording.transcript && recording.transcript.length > 50) {
+             contents = { parts: [
+                { text: `You are a highly skilled call center analyst. Analyze this transcript. Provide a concise summary, sentiment (Positive/Neutral/Negative), and action items. Return JSON.` },
+                { text: `TRANSCRIPT:\n${recording.transcript}` }
+            ] };
+        } else {
+            // Fallback to Audio
+            const audioBase64 = await blobToBase64(recording.blob);
+            const cleanMimeType = recording.mimeType.split(';')[0];
+            contents = { parts: [
+                { text: `You are a highly skilled call center analyst. Analyze this call audio. Provide a concise summary, sentiment (Positive/Neutral/Negative), and action items. Return JSON.` },
+                { inlineData: { mimeType: cleanMimeType, data: audioBase64 } },
+            ] };
+        }
 
         const responseSchema = {
             type: Type.OBJECT,
@@ -110,14 +114,14 @@ export const RecordingsPanel: React.FC<RecordingsPanelProps> = ({ recordings, on
         
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash",
-            contents: { parts: [textPart, audioPart] },
+            contents: contents,
             config: {
                 responseMimeType: "application/json",
                 responseSchema
             },
         });
         
-        const result = JSON.parse(response.text);
+        const result = JSON.parse(response.text || '{}');
         
         onUpdate({
             ...recording,

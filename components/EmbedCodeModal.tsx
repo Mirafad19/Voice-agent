@@ -1,5 +1,4 @@
-
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
 import { AgentProfile, AgentConfig } from '../types';
@@ -28,11 +27,12 @@ export const EmbedCodeModal: React.FC<EmbedCodeModalProps> = ({ isOpen, onClose,
     const finalUrl = `${baseUrl}?config=${encodedConfig}&apiKey=${apiKey}`;
     const iframeId = `ai-agent-iframe-${Date.now()}`;
 
+    // The script now checks for mobile viewport width (< 768px) and adjusts the iframe style accordingly.
     const code = `<div style="position: fixed; bottom: 20px; right: 20px; z-index: 9999;">
   <iframe
     id="${iframeId}"
     src="${finalUrl}"
-    style="border: none; outline: none; background-color: transparent; width: 300px; height: 140px; transition: width 0.3s ease-in-out, height 0.3s ease-in-out;"
+    style="border: none; outline: none; background-color: transparent; width: 300px; height: 140px; transition: width 0.3s ease-in-out, height 0.3s ease-in-out; border-radius: 12px;"
     allow="microphone"
     frameborder="0"
     title="${agentProfile.name}"
@@ -41,11 +41,34 @@ export const EmbedCodeModal: React.FC<EmbedCodeModalProps> = ({ isOpen, onClose,
 <script>
   (function() {
     var iframe = document.getElementById('${iframeId}');
+    var container = iframe.parentElement;
+    
     window.addEventListener('message', function(event) {
       if (event.source !== iframe.contentWindow) return;
       if (event.data && event.data.type === 'agent-widget-resize') {
-        iframe.style.width = event.data.width + 'px';
-        iframe.style.height = event.data.height + 'px';
+        var isMobile = window.innerWidth < 768;
+        var isOpen = event.data.isOpen;
+        
+        if (isMobile && isOpen) {
+            // Full screen on mobile
+            container.style.bottom = '0';
+            container.style.right = '0';
+            container.style.left = '0';
+            container.style.top = '0';
+            iframe.style.width = '100%';
+            iframe.style.height = '100%';
+            iframe.style.borderRadius = '0';
+        } else {
+            // Floating widget on desktop or closed state
+            container.style.bottom = '20px';
+            container.style.right = '20px';
+            container.style.left = 'auto';
+            container.style.top = 'auto';
+            iframe.style.width = event.data.width + 'px';
+            iframe.style.height = event.data.height + 'px';
+            iframe.style.borderRadius = isOpen ? '16px' : '0px'; // Remove border radius if it's just a button
+            iframe.style.boxShadow = isOpen ? '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)' : 'none';
+        }
       }
     });
   })();

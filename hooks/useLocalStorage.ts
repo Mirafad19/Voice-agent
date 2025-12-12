@@ -1,9 +1,5 @@
 import { useState, useCallback, SetStateAction } from 'react';
 
-// FIX: The type signature for the setter function returned by this hook was
-// incorrect. It didn't allow for functional updates (e.g., `setValue(prev => ...)`),
-// which the implementation supports. This caused type errors in `useAgentProfiles.ts`.
-// I've updated the signature to use `SetStateAction<T>` to correctly type this behavior.
 export const useLocalStorage = <T,>(key: string, initialValue: T): [T, (value: SetStateAction<T>) => void] => {
   const [storedValue, setStoredValue] = useState<T>(() => {
     if (typeof window === 'undefined') {
