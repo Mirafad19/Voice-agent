@@ -162,6 +162,21 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   // --- Analysis & Reporting ---
   const analyzeAndSendReport = useCallback(async (recording: Omit<Recording, 'id' | 'url'>) => {
     const { emailConfig, fileUploadConfig } = agentProfile as AgentConfig;
+
+    // --- ABANDONED CALL CHECK ---
+    // If there is no transcript or the transcript does not contain "User:",
+    // we assume the user never spoke. We skip reporting to save credits.
+    // We check for "User:" specifically because Gemini labels speaker turns.
+    const hasUserInteracted = recording.transcript && recording.transcript.includes('User:');
+
+    if (!hasUserInteracted) {
+        console.log("Call abandoned (no user speech detected). Skipping email report.");
+        // If we are in the Voice View, we can show a quick status, but often the user has already left.
+        if (view === 'voice') setVoiceReportingStatus('idle'); // Or 'sent' to just clear it
+        return; 
+    }
+    // ---------------------------
+
     if (!emailConfig?.formspreeEndpoint) {
         if (!isWidgetMode) {
              console.warn("Formspree endpoint not configured. Report skipped.");
@@ -627,6 +642,9 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
       if (view === 'chat') {
           endChatSession();
       } else if (view === 'voice') {
+          // If we are navigating back, we MUST clean up properly first.
+          // This triggers endVoiceSession -> cleanup -> recording stop -> handleVoiceSessionEnd -> analyzeAndSendReport.
+          // We do not wait for the report to finish before switching view, but the process continues in background.
           if (widgetState !== WidgetState.Idle && widgetState !== WidgetState.Ended) {
               endVoiceSession();
           }
