@@ -90,7 +90,6 @@ const ChevronLeftIcon = ({className = "h-6 w-6"}) => (
     </svg>
 );
 
-// New Live Badge Component
 const LiveBadge = () => (
     <div className="flex items-center gap-2 px-3 py-1 bg-green-100 dark:bg-green-900/50 rounded-full border border-green-200 dark:border-green-800">
         <span className="relative flex h-2.5 w-2.5">
@@ -163,19 +162,13 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const analyzeAndSendReport = useCallback(async (recording: Omit<Recording, 'id' | 'url'>) => {
     const { emailConfig, fileUploadConfig } = agentProfile as AgentConfig;
 
-    // --- ABANDONED CALL CHECK ---
-    // If there is no transcript or the transcript does not contain "User:",
-    // we assume the user never spoke. We skip reporting to save credits.
-    // We check for "User:" specifically because Gemini labels speaker turns.
     const hasUserInteracted = recording.transcript && recording.transcript.includes('User:');
 
     if (!hasUserInteracted) {
         console.log("Call abandoned (no user speech detected). Skipping email report.");
-        // If we are in the Voice View, we can show a quick status, but often the user has already left.
-        if (view === 'voice') setVoiceReportingStatus('idle'); // Or 'sent' to just clear it
+        if (view === 'voice') setVoiceReportingStatus('idle');
         return; 
     }
-    // ---------------------------
 
     if (!emailConfig?.formspreeEndpoint) {
         if (!isWidgetMode) {
@@ -188,7 +181,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
     try {
         let audioLink = 'N/A';
-        // Only upload if it's a voice recording with a valid blob
         if (recording.blob && recording.blob.size > 0 && fileUploadConfig?.cloudinaryCloudName && fileUploadConfig.cloudinaryUploadPreset) {
             try {
                 audioLink = await getCloudinaryShareableLink(fileUploadConfig.cloudinaryCloudName, fileUploadConfig.cloudinaryUploadPreset, recording);
@@ -203,7 +195,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         const ai = new GoogleGenAI({ apiKey });
         
         let contents;
-        // Prioritize Transcript for analysis
         if (recording.transcript) {
             contents = { parts: [
                 { text: `Analyze this session transcript. Provide a concise summary, sentiment ('Positive', 'Neutral', 'Negative'), and action items. Return JSON.` },
@@ -275,7 +266,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     const config = agentProfile as AgentConfig;
     const ai = new GoogleGenAI({ apiKey });
     
-    // Use Chat specific instructions if available, otherwise fallback to general
     const systemInstruction = config.chatKnowledgeBase || config.knowledgeBase;
     
     chatSessionRef.current = ai.chats.create({
@@ -325,7 +315,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   };
 
   const endChatSession = useCallback(() => {
-    if (messages.length <= 1) { // Only welcome message
+    if (messages.length <= 1) {
         setView('home');
         setMessages([]);
         return;
@@ -338,15 +328,13 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
     const newRecording: Omit<Recording, 'id' | 'url'> = {
         name: `Chat Session - ${dateString}, ${timeString}`,
-        blob: new Blob([], { type: 'text/plain' }), // Empty blob for chat
+        blob: new Blob([], { type: 'text/plain' }),
         mimeType: 'text/plain',
         transcript: transcript
     };
 
-    // Fire and forget reporting
     analyzeAndSendReport(newRecording);
     
-    // Reset and go home
     setMessages([]);
     chatSessionRef.current = null;
     setView('home');
@@ -369,9 +357,8 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
           clearTimeout(silenceTimerRef.current);
       }
       silenceTimerRef.current = window.setTimeout(() => {
-          // Sending the strict silence code to the AI
           geminiServiceRef.current?.sendText("[[SILENCE_DETECTED]]");
-      }, 8000); // 8 seconds silence detection
+      }, 8000);
   }, []);
 
   const clearSilenceTimer = useCallback(() => {
@@ -389,14 +376,10 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     setErrorMessage('');
     fullTranscriptRef.current = '';
     
-    // Show visual guide for permission
     setPermissionRequested(true);
 
     let stream: MediaStream;
     try {
-      // CRITICAL FIX: Enable Echo Cancellation, Noise Suppression, and Auto Gain
-      // This prevents the "screeching" feedback loop where the mic hears the speaker.
-      // 16kHz sample rate matches Gemini Live API recommendation to reduce resampling artifacts.
       stream = await navigator.mediaDevices.getUserMedia({ 
         audio: {
             echoCancellation: true,
@@ -416,7 +399,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         setPermissionRequested(false);
     }
     
-    // Create and RESUME AudioContext immediately after user interaction to ensure playback works on mobile
     const AudioContextClass = (window.AudioContext || (window as any).webkitAudioContext);
     outputAudioContextRef.current = new AudioContextClass();
     if (outputAudioContextRef.current.state === 'suspended') {
@@ -426,10 +408,8 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     recordingServiceRef.current = new RecordingService(handleVoiceSessionEnd);
     await recordingServiceRef.current.start(stream);
 
-    // Initial Greeting Audio - Triggered AFTER mic is ready to ensure context is active
     const greeting = (agentProfile as AgentConfig).initialGreeting;
     if (greeting) {
-        // Pre-append greeting to transcript so context is aware
         fullTranscriptRef.current = `Agent: ${greeting}\n`;
         
         try {
@@ -460,7 +440,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             }
         } catch (error) {
             console.error("Failed to generate greeting audio:", error);
-            // Non-critical error, continue to connection
         }
     }
 
@@ -483,16 +462,25 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
              fullTranscriptRef.current += `${speaker}: ${text}\n`;
          }
          
-         // If user speaks, reset silence timer
          if (type === 'input' && text.trim().length > 0) {
              resetSilenceTimer();
          }
          
         if (isFinal && type === 'output') {
           const lowerCaseText = text.toLowerCase();
-          const endKeywords = ['goodbye', 'farewell', 'take care', 'talk to you later', 'bye bye', 'bye'];
+          // Expanded goodbye keywords including Yoruba variations
+          const endKeywords = [
+            'goodbye', 'farewell', 'take care', 'talk to you later', 
+            'bye bye', 'bye', 'o dabo', 'oda bo', 'ó dábọ̀', 'e se pupo', 'ese pupo'
+          ];
           if (endKeywords.some(keyword => lowerCaseText.includes(keyword))) {
             shouldEndAfterSpeakingRef.current = true;
+            
+            // AGGRESSIVE END: If we are not currently speaking or have no more audio queued, 
+            // end the session immediately instead of waiting for playback logic.
+            if (activeAudioSourcesRef.current.size === 0 && audioQueueRef.current.length === 0) {
+                endVoiceSession();
+            }
           }
         }
       },
@@ -503,8 +491,14 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
       },
       onInterruption: handleInterruption,
       onError: (error) => {
+        // Check internet connection specifically
+        if (!navigator.onLine) {
+            setErrorMessage("Connection Lost. Please check your internet and try again.");
+            setIsOnline(false);
+        } else {
+            setErrorMessage(error);
+        }
         setWidgetState(WidgetState.Error);
-        setErrorMessage(error);
         cleanupServices();
       },
     });
@@ -557,11 +551,8 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   }, [clearSilenceTimer]);
 
   const playAudioQueue = useCallback(() => {
-    // Agent is starting to speak, pause silence timer
     clearSilenceTimer();
     
-    // We don't block on isPlayingRef anymore because we want to schedule whatever comes in immediately.
-    // However, we check if queue has items.
     if (audioQueueRef.current.length === 0) return;
     
     const audioContext = outputAudioContextRef.current;
@@ -571,14 +562,11 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         setWidgetState(WidgetState.Speaking);
     }
     
-    // Ensure we are scheduling in the future
     const currentTime = audioContext.currentTime;
     if (nextStartTimeRef.current < currentTime) {
-        // If we fell behind (buffer underrun), reset to now + small buffer
         nextStartTimeRef.current = currentTime + 0.05;
     }
 
-    // Schedule ALL available chunks
     while (audioQueueRef.current.length > 0) {
         const chunk = audioQueueRef.current.shift();
         if (!chunk) continue;
@@ -596,7 +584,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             
             source.onended = () => {
                 activeAudioSourcesRef.current.delete(source);
-                // Check if we are truly done
                 if (activeAudioSourcesRef.current.size === 0 && audioQueueRef.current.length === 0) {
                      if (shouldEndAfterSpeakingRef.current) {
                         endVoiceSession();
@@ -619,7 +606,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     nextStartTimeRef.current = 0;
     if (widgetStateRef.current === WidgetState.Speaking) {
         setWidgetState(WidgetState.Listening);
-        // Interruption implies user is speaking/interacting, reset timer
         resetSilenceTimer();
     }
   }, [resetSilenceTimer]);
@@ -642,9 +628,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
       if (view === 'chat') {
           endChatSession();
       } else if (view === 'voice') {
-          // If we are navigating back, we MUST clean up properly first.
-          // This triggers endVoiceSession -> cleanup -> recording stop -> handleVoiceSessionEnd -> analyzeAndSendReport.
-          // We do not wait for the report to finish before switching view, but the process continues in background.
           if (widgetState !== WidgetState.Idle && widgetState !== WidgetState.Ended) {
               endVoiceSession();
           }
@@ -663,15 +646,13 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   useEffect(() => {
     if (!isWidgetMode) return;
     
-    // Dynamic resizing based on open state AND callout visibility
     let width = 300;
-    let height = 140; // Default closed size with callout space
+    let height = 140;
     
     if (isOpen) {
         width = 400;
         height = 600;
     } else if (!showCallout) {
-        // If closed and NO callout, shrink to just the button size to avoid transparent blocking
         width = 80;
         height = 80;
     }
@@ -679,7 +660,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     window.parent.postMessage({ type: 'agent-widget-resize', isOpen, width, height }, '*');
   }, [isOpen, isWidgetMode, showCallout]);
   
-  // Callout logic
   useEffect(() => {
     const calloutShown = sessionStorage.getItem('ai-agent-callout-shown');
     let showTimer: number;
@@ -689,7 +669,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
       showTimer = window.setTimeout(() => {
         setShowCallout(true);
         sessionStorage.setItem('ai-agent-callout-shown', 'true');
-        // Increased callout duration to 15 seconds
         hideTimer = window.setTimeout(() => setShowCallout(false), 15000);
       }, 1500);
     }
@@ -701,10 +680,8 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
   // --- Render Views ---
 
-  // 1. Home / Selection View (Restored Premium Design)
   const renderHomeView = () => (
       <div className="flex flex-col h-full w-full bg-white dark:bg-gray-900 animate-fade-in-up">
-          {/* Hero Header */}
           <div className={`relative h-[40%] bg-gradient-to-br from-accent-${accentColorClass} to-gray-900 flex flex-col p-6 text-white`}>
               <div className="flex items-center justify-between mb-4">
                   <span className="text-xs font-bold tracking-widest uppercase opacity-80 truncate max-w-[200px]">{agentProfile.name}</span>
@@ -713,14 +690,10 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                   <h1 className="text-4xl font-bold">Hi <span className="animate-wave inline-block">👋</span></h1>
                   <p className="text-white/80 mt-2 font-medium">How can we help you today?</p>
               </div>
-              {/* Decorative Glow */}
               <div className="absolute -right-10 -bottom-20 w-64 h-64 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
           </div>
 
-          {/* Action Body (Curved Overlap) */}
           <div className="flex-1 bg-gray-50 dark:bg-gray-900 relative -mt-6 rounded-t-3xl px-6 pt-8 flex flex-col gap-4 shadow-lg z-20">
-              
-              {/* Fake Search Bar -> Chat */}
               <form onSubmit={handleHomeInputSubmit} className="relative w-full">
                   <input 
                     type="text" 
@@ -734,7 +707,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                   </button>
               </form>
 
-              {/* Voice Card */}
               <button
                   onClick={startVoiceSession}
                   className={`w-full bg-gradient-to-r from-accent-${accentColorClass} to-gray-800 rounded-xl p-1 shadow-md hover:scale-[1.02] transition-transform group text-left`}
@@ -755,7 +727,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
   const renderChatView = () => (
       <div className="flex flex-col h-full w-full bg-white dark:bg-gray-900 animate-fade-in-up">
-          {/* Header */}
           <div className={`flex items-center justify-between p-4 flex-shrink-0 z-20 border-b border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md`}>
               <div className="flex items-center gap-2">
                   <button onClick={handleBack} className="p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors" title="Back">
@@ -768,7 +739,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
               </button>
           </div>
 
-          {/* Chat Messages */}
           <div className="flex-grow overflow-y-auto p-4 space-y-4 scroll-smooth bg-gray-50 dark:bg-gray-900">
               {messages.map((msg, idx) => {
                   const isUser = msg.role === 'user';
@@ -799,7 +769,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
               <div ref={messagesEndRef} />
           </div>
 
-          {/* Chat Input */}
           <form onSubmit={handleHomeInputSubmit} className="p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
               <div className="relative">
                   <input
@@ -823,7 +792,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
   const renderVoiceView = () => (
     <div className="flex flex-col h-full w-full bg-white dark:bg-gray-900 animate-fade-in-up">
-        {/* Permission Overlay - Premium Frosted Glass */}
         {permissionRequested && (
             <div className="absolute inset-0 z-[60] flex flex-col items-center justify-center p-8 text-center animate-fade-in backdrop-blur-md bg-black/20 text-white/90">
                 <div className="mb-6 p-4 rounded-full bg-white/10 animate-bounce shadow-xl border border-white/20">
@@ -840,7 +808,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             </div>
         )}
 
-        {/* Header - Matches Chat Header */}
         <div className={`flex items-center justify-between p-4 flex-shrink-0 z-20 border-b border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md`}>
             <div className="flex items-center gap-2">
                  <button onClick={handleBack} className="p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors" title="Back">
@@ -853,13 +820,10 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             </div>
         </div>
 
-        {/* Main Content - Clean Background */}
         <div className="flex-grow flex flex-col items-center justify-center relative overflow-hidden bg-white dark:bg-gray-900">
             
-            {/* Pulsing Orb Central Visual */}
             <div className="relative w-full flex items-center justify-center mb-8 min-h-[200px]">
                 
-                {/* Active State Rings */}
                 {(widgetState === WidgetState.Speaking) && (
                     <>
                         <div className={`absolute w-64 h-64 rounded-full border-2 border-accent-${accentColorClass} opacity-20 animate-sonar-ping`}></div>
@@ -876,7 +840,18 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                                 <WaveformIcon className={`h-24 w-24 ${widgetState === WidgetState.Idle ? 'text-gray-300 dark:text-gray-600' : `text-accent-${accentColorClass}`}`} />
                             </div>
                         )}
-                        {widgetState === WidgetState.Error && <div className="text-red-500 animate-pulse"><svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>}
+                        {widgetState === WidgetState.Error && (
+                            <div className="text-red-500 animate-pulse">
+                                {!isOnline ? (
+                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 12l2 2m0 0l2 2m-2-2l-2 2m2-2l2-2" />
+                                    </svg>
+                                ) : (
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                )}
+                            </div>
+                        )}
                         {widgetState === WidgetState.Ended && (voiceReportingStatus === 'analyzing' || voiceReportingStatus === 'sending') && <Spinner className={`w-20 h-20 text-accent-${accentColorClass}`} />}
                         {widgetState === WidgetState.Ended && voiceReportingStatus === 'sent' && <div className="text-green-500"><svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>}
                         {widgetState === WidgetState.Ended && voiceReportingStatus === 'failed' && <div className="text-red-500"><svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>}
@@ -884,7 +859,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                 </div>
             </div>
 
-            <p className="text-lg font-medium text-gray-700 dark:text-gray-200 h-8 mb-2 break-words max-w-full px-2">
+            <p className={`text-lg font-medium h-8 mb-2 break-words max-w-full px-4 text-center ${!isOnline && widgetState === WidgetState.Error ? 'text-red-500' : 'text-gray-700 dark:text-gray-200'}`}>
                 {widgetState === WidgetState.Connecting && "Connecting..."}
                 {widgetState === WidgetState.Listening && "Listening..."}
                 {widgetState === WidgetState.Speaking && "Speaking..."}
@@ -897,7 +872,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                 )}
             </p>
             
-            <div className="h-10 mb-4 flex items-center justify-center">
+            <div className="h-10 mb-4 flex items-center justify-center px-6">
                 {(widgetState === WidgetState.Idle) && (
                         <p className="text-sm text-gray-500 dark:text-gray-400 transition-opacity duration-500">
                         Click the call button to start.
@@ -906,6 +881,11 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                 {(widgetState === WidgetState.Ended && (voiceReportingStatus === 'sent' || voiceReportingStatus === 'failed')) && (
                     <p className="text-sm text-gray-500 dark:text-gray-400 transition-opacity duration-500">
                     You may now close the widget.
+                    </p>
+                )}
+                {!isOnline && widgetState === WidgetState.Error && (
+                    <p className="text-xs text-red-400 animate-pulse text-center">
+                        It looks like your internet disconnected.
                     </p>
                 )}
             </div>
@@ -927,8 +907,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     </div>
   );
 
-  // --- Main Render ---
-
   if (!isOpen) {
     const fabContent = (
       <div className={`${themeClass} relative group`}>
@@ -946,10 +924,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     return isWidgetMode ? <div className="w-full h-full p-2 flex items-end justify-end bg-transparent">{fabContent}</div> : <div className="fixed bottom-5 right-5 z-[9999]">{fabContent}</div>;
   }
 
-  // CONTAINER LOGIC: 
-  // Mobile: fixed full screen (h-100dvh). 
-  // Desktop: Fixed bottom-right card.
-  // REMOVED border/shadow from this container when in widget mode to prevent "invisible border" issues
   const containerClasses = isWidgetMode 
     ? 'w-full h-full' 
     : 'fixed bottom-0 right-0 md:bottom-24 md:right-5 w-full h-[100dvh] md:w-96 md:h-[600px] md:rounded-2xl shadow-2xl z-[9999] transition-all duration-300';
@@ -957,14 +931,12 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   return (
     <div className={`${themeClass} ${containerClasses}`}>
         <div className={`flex flex-col w-full h-full bg-white dark:bg-gray-900 text-black dark:text-white md:rounded-2xl overflow-hidden border-0 ${!isWidgetMode ? 'md:border border-gray-200 dark:border-gray-700 shadow-2xl' : ''}`}>
-            {/* Header / Close Button (Only visible on Home view or handled within views) */}
             {view === 'home' && (
                 <button onClick={toggleWidget} className="absolute top-4 right-4 z-50 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
             )}
 
-            {/* View Switcher */}
             {view === 'home' && renderHomeView()}
             {view === 'chat' && renderChatView()}
             {view === 'voice' && renderVoiceView()}
