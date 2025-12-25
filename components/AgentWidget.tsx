@@ -92,12 +92,12 @@ const ChevronLeftIcon = ({className = "h-6 w-6"}) => (
 );
 
 const LiveBadge = () => (
-    <div className="flex items-center gap-2 px-3 py-1 bg-green-100 dark:bg-green-900/50 rounded-full border border-green-200 dark:border-green-800">
+    <div className="flex items-center gap-2 px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full border border-white/30 shadow-sm">
         <span className="relative flex h-2.5 w-2.5">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white"></span>
         </span>
-        <span className="text-xs font-bold text-green-700 dark:text-green-400 uppercase tracking-wider">Live</span>
+        <span className="text-xs font-bold text-white uppercase tracking-wider">Live</span>
     </div>
 );
 
@@ -728,14 +728,14 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
   const renderChatView = () => (
       <div className="flex flex-col h-full w-full bg-white dark:bg-gray-900 animate-fade-in-up">
-          <div className={`flex items-center justify-between p-4 flex-shrink-0 z-20 border-b border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md`}>
+          <div className={`flex items-center justify-between p-4 flex-shrink-0 z-20 bg-accent-${accentColorClass} text-white shadow-md transition-colors duration-300`}>
               <div className="flex items-center gap-2">
-                  <button onClick={handleBack} className="p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors" title="Back">
-                      <ChevronLeftIcon />
+                  <button onClick={handleBack} className="p-1 rounded-full hover:bg-white/20 transition-colors" title="Back">
+                      <ChevronLeftIcon className="h-6 w-6 text-white" />
                   </button>
                   <h3 className="font-bold text-lg truncate max-w-[180px]">{agentProfile.name}</h3>
               </div>
-              <button onClick={endChatSession} className="text-xs font-medium text-red-500 hover:bg-red-50 px-3 py-1 rounded-full border border-red-100 transition-colors">
+              <button onClick={endChatSession} className="text-[10px] font-bold bg-white text-red-500 hover:bg-red-50 px-3 py-1.5 rounded-full shadow-sm transition-colors uppercase tracking-widest">
                   End Chat
               </button>
           </div>
@@ -809,12 +809,12 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             </div>
         )}
 
-        <div className={`flex items-center justify-between p-4 flex-shrink-0 z-20 border-b border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md`}>
+        <div className={`flex items-center justify-between p-4 flex-shrink-0 z-20 bg-accent-${accentColorClass} text-white shadow-md transition-colors duration-300`}>
             <div className="flex items-center gap-2">
-                 <button onClick={handleBack} className="p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors" title="Back">
-                    <ChevronLeftIcon />
+                 <button onClick={handleBack} className="p-1 rounded-full hover:bg-white/20 transition-colors" title="Back">
+                    <ChevronLeftIcon className="h-6 w-6 text-white" />
                 </button>
-                <h3 className="font-bold text-lg truncate max-w-[180px] text-gray-900 dark:text-white">{agentProfile.name}</h3>
+                <h3 className="font-bold text-lg truncate max-w-[180px] text-white">{agentProfile.name}</h3>
             </div>
             <div className="flex items-center gap-2">
                 <LiveBadge />
