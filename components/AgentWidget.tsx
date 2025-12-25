@@ -85,9 +85,9 @@ const SendIcon = ({className = "h-5 w-5"}) => (
   </svg>
 );
 
-const ChevronLeftIcon = ({className = "h-6 w-6 text-white"}) => (
+const ChevronLeftIcon = ({className = "h-8 w-8 text-white"}) => (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" />
     </svg>
 );
 
@@ -102,8 +102,8 @@ const LiveBadge = () => (
 );
 
 const OfflineBanner = () => (
-    <div className="bg-red-500 text-white text-[10px] font-bold uppercase tracking-widest py-1.5 px-4 text-center animate-fade-in-up flex items-center justify-center gap-2 z-[100] w-full">
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <div className="bg-red-600 text-white text-[11px] font-black uppercase tracking-[0.2em] py-2 px-4 text-center animate-fade-in flex items-center justify-center gap-3 z-[100] w-full shadow-lg border-b border-red-400">
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.828-2.828m-4.243 4.243a5 5 0 010-7.072m0 0L5.636 5.636M4.243 18.364a9 9 0 010-12.728" />
         </svg>
         No Internet Connection
@@ -147,7 +147,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const chatSessionRef = useRef<Chat | null>(null);
   const silenceTimerRef = useRef<number | null>(null);
   
-  // Greeting Protection Window
+  // Perfection: Forced Greeting Flag (Unstoppable)
   const isGreetingProtectedRef = useRef(false);
 
   const accentColorClass = agentProfile.accentColor;
@@ -184,9 +184,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     }
 
     if (!emailConfig?.formspreeEndpoint) {
-        if (!isWidgetMode) {
-             console.warn("Formspree endpoint not configured. Report skipped.");
-        }
         return;
     }
 
@@ -271,7 +268,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         console.error("Failed to process report:", error);
         if (view === 'voice') setVoiceReportingStatus('failed');
     }
-  }, [agentProfile, apiKey, isWidgetMode, view]);
+  }, [agentProfile, apiKey, view]);
 
 
   // --- Chat Logic ---
@@ -382,9 +379,9 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   }, []);
 
   const handleInterruption = useCallback(() => {
-    // Perfection: Greeting Protection Window
+    // Perfection: Greeting Protection Window (Unstoppable)
     if (isGreetingProtectedRef.current) {
-        console.debug("Interruption ignored during greeting protection window.");
+        console.debug("Interruption blocked: Delivery of initial greeting is protected.");
         return;
     }
 
@@ -445,10 +442,8 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
     const greeting = (agentProfile as AgentConfig).initialGreeting;
     if (greeting) {
-        // PERFECTION: Enable greeting protection for 3 seconds
+        // PERFECTION: Enable greeting protection until audio finishes playing
         isGreetingProtectedRef.current = true;
-        setTimeout(() => { isGreetingProtectedRef.current = false; }, 3000);
-
         fullTranscriptRef.current = `Agent: ${greeting}\n`;
         
         try {
@@ -475,7 +470,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                 }
                 audioQueueRef.current.push(bytes);
                 recordingServiceRef.current?.addAgentAudioChunk(bytes);
-                playAudioQueue();
+                playAudioQueue(true); // Pass true to indicate this is the unstoppable greeting
             }
         } catch (error) {
             console.error("Failed to generate greeting audio:", error);
@@ -526,10 +521,9 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         playAudioQueue();
       },
       onInterruption: handleInterruption,
-      onLocalInterruption: handleInterruption, // Aggressive local shut-up
+      onLocalInterruption: handleInterruption,
       onError: (error) => {
         if (!navigator.onLine) {
-            setErrorMessage("Connection Lost. Please check your internet and try again.");
             setIsOnline(false);
         } else {
             setErrorMessage(error);
@@ -587,7 +581,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     nextStartTimeRef.current = 0;
   }, [clearSilenceTimer]);
 
-  const playAudioQueue = useCallback(() => {
+  const playAudioQueue = useCallback((isInitialGreeting: boolean = false) => {
     clearSilenceTimer();
     
     if (audioQueueRef.current.length === 0) return;
@@ -621,6 +615,13 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             
             source.onended = () => {
                 activeAudioSourcesRef.current.delete(source);
+                
+                // Perfection: Unlock greeting protection ONLY when the audio buffer actually finishes
+                if (isInitialGreeting && activeAudioSourcesRef.current.size === 0 && audioQueueRef.current.length === 0) {
+                    isGreetingProtectedRef.current = false;
+                    console.debug("Unstoppable greeting finished. Protection released.");
+                }
+
                 if (activeAudioSourcesRef.current.size === 0 && audioQueueRef.current.length === 0) {
                      if (shouldEndAfterSpeakingRef.current) {
                         endVoiceSession();
@@ -632,6 +633,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             };
         } catch (e) {
             console.error("Error decoding/scheduling chunk", e);
+            if (isInitialGreeting) isGreetingProtectedRef.current = false;
         }
     }
   }, [endVoiceSession, clearSilenceTimer, resetSilenceTimer]);
@@ -708,19 +710,19 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
   const renderHomeView = () => (
       <div className="flex flex-col h-full w-full bg-white dark:bg-gray-900 animate-fade-in-up">
-          {!isOnline && <OfflineBanner />}
           <div className={`relative h-[40%] bg-gradient-to-br from-accent-${accentColorClass} to-gray-900 flex flex-col p-6 text-white`}>
               <div className="flex items-center justify-between mb-4">
-                  <span className="text-[10px] font-black tracking-[0.2em] uppercase opacity-70 truncate max-w-[200px]">{agentProfile.name}</span>
+                  <span className="text-[10px] font-black tracking-[0.25em] uppercase opacity-75 truncate max-w-[200px]">{agentProfile.name}</span>
               </div>
               <div className="mt-auto mb-6 relative z-10">
-                  <h1 className="text-5xl font-black tracking-tight">Hi <span className="animate-wave inline-block">👋</span></h1>
-                  <p className="text-white/80 mt-2 font-semibold text-lg">How can we help you today?</p>
+                  <h1 className="text-6xl font-black tracking-tighter leading-none">Hi <span className="animate-wave inline-block">👋</span></h1>
+                  <p className="text-white/90 mt-3 font-bold text-xl leading-snug">How can we help you today?</p>
               </div>
-              <div className="absolute -right-10 -bottom-20 w-64 h-64 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
+              <div className="absolute -right-10 -bottom-20 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none"></div>
           </div>
 
-          <div className="flex-1 bg-gray-50 dark:bg-gray-900 relative -mt-6 rounded-t-3xl px-6 pt-8 flex flex-col gap-4 shadow-lg z-20">
+          <div className="flex-1 bg-gray-50 dark:bg-gray-900 relative -mt-6 rounded-t-[2rem] px-6 pt-8 flex flex-col gap-4 shadow-2xl z-20">
+              {!isOnline && <OfflineBanner />}
               <form onSubmit={handleHomeInputSubmit} className="relative w-full">
                   <input 
                     type="text" 
@@ -728,29 +730,29 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                     value={chatInput}
                     disabled={!isOnline}
                     onChange={(e) => setChatInput(e.target.value)}
-                    className="w-full pl-5 pr-12 py-4 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-accent-${accentColorClass} text-gray-900 dark:text-white transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full pl-6 pr-14 py-5 rounded-2xl shadow-sm border-2 border-transparent dark:border-gray-700 bg-white dark:bg-gray-800 focus:outline-none focus:border-accent-${accentColorClass} text-gray-900 dark:text-white transition-all text-left font-semibold disabled:opacity-50"
                   />
                   <button 
                     type="submit" 
                     disabled={!isOnline}
-                    className={`absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-400 group-hover:text-accent-${accentColorClass} hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors disabled:opacity-50`}
+                    className={`absolute right-3 top-1/2 -translate-y-1/2 p-3 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-500 hover:text-accent-${accentColorClass} transition-colors disabled:opacity-50`}
                   >
-                      <SendIcon className="h-4 w-4" />
+                      <SendIcon className="h-5 w-5" />
                   </button>
               </form>
 
               <button
                   onClick={startVoiceSession}
                   disabled={!isOnline}
-                  className={`w-full bg-gradient-to-r from-accent-${accentColorClass} to-gray-800 rounded-xl p-1 shadow-md hover:scale-[1.02] transition-transform group text-left disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed`}
+                  className={`w-full bg-gradient-to-r from-accent-${accentColorClass} to-gray-800 rounded-2xl p-1 shadow-xl hover:scale-[1.03] transition-transform group text-left disabled:opacity-50 disabled:grayscale`}
               >
-                  <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 flex items-center gap-4 h-full">
-                      <div className="p-3 bg-white/20 rounded-full animate-pulse">
+                  <div className="bg-white/10 backdrop-blur-md rounded-xl p-5 flex items-center gap-5 h-full">
+                      <div className="p-4 bg-white/20 rounded-2xl shadow-inner animate-pulse">
                           <MicrophoneIcon state={WidgetState.Idle} />
                       </div>
                       <div className="text-left text-white">
-                          <h3 className="font-black text-xl tracking-tight">Talk to AI Assistant</h3>
-                          <p className="text-xs font-medium opacity-90">Skip typing, we're listening.</p>
+                          <h3 className="font-black text-2xl tracking-tighter uppercase leading-none">Talk to Assistant</h3>
+                          <p className="text-xs font-bold opacity-80 mt-1 uppercase tracking-widest">Skip typing, we're listening.</p>
                       </div>
                   </div>
               </button>
@@ -760,31 +762,31 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
   const renderChatView = () => (
       <div className="flex flex-col h-full w-full bg-white dark:bg-gray-900 animate-fade-in-up">
-          {!isOnline && <OfflineBanner />}
-          <div className={`flex items-center justify-between p-4 flex-shrink-0 z-20 bg-accent-${accentColorClass} text-white shadow-md transition-colors duration-300`}>
-              <div className="flex items-center gap-3">
-                  <button onClick={handleBack} className="p-1.5 rounded-full hover:bg-white/20 transition-colors" title="Back">
-                      <ChevronLeftIcon className="h-6 w-6 text-white" />
+          <div className={`flex items-center justify-between p-5 flex-shrink-0 z-20 bg-accent-${accentColorClass} text-white shadow-xl transition-colors duration-300`}>
+              <div className="flex items-center gap-4">
+                  <button onClick={handleBack} className="p-1 rounded-full hover:bg-white/20 transition-all active:scale-90" title="Back">
+                      <ChevronLeftIcon />
                   </button>
-                  <h3 className="font-black text-xl tracking-tight truncate max-w-[200px]">{agentProfile.name}</h3>
+                  <h3 className="font-black text-2xl uppercase tracking-tighter leading-tight truncate max-w-[200px]">{agentProfile.name}</h3>
               </div>
-              <button onClick={endChatSession} className="text-[10px] font-black bg-white text-red-500 hover:bg-red-50 px-3 py-2 rounded-full shadow-sm transition-colors uppercase tracking-[0.15em]">
+              <button onClick={endChatSession} className="text-[10px] font-black bg-white text-red-500 hover:bg-red-50 px-4 py-2 rounded-full shadow-lg transition-all uppercase tracking-widest active:scale-95">
                   End Chat
               </button>
           </div>
 
           <div className="flex-grow overflow-y-auto p-4 space-y-4 scroll-smooth bg-gray-50 dark:bg-gray-900">
+              {!isOnline && <OfflineBanner />}
               {messages.map((msg, idx) => {
                   const isUser = msg.role === 'user';
                   return (
                     <div key={idx} className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-[85%] rounded-2xl p-3 text-sm shadow-sm relative group whitespace-pre-wrap leading-relaxed ${
+                        <div className={`max-w-[85%] rounded-2xl p-4 text-[15px] shadow-sm relative group whitespace-pre-wrap leading-relaxed ${
                             isUser
-                            ? `bg-accent-${accentColorClass} text-white rounded-br-none font-medium` 
-                            : 'bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 text-gray-800 dark:text-gray-200 rounded-bl-none font-medium'
+                            ? `bg-accent-${accentColorClass} text-white rounded-br-none font-bold` 
+                            : 'bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 text-gray-800 dark:text-gray-200 rounded-bl-none font-semibold'
                         }`}>
                             {msg.text}
-                            <span className={`text-[10px] block text-right mt-1 opacity-70 ${isUser ? 'text-white/80' : 'text-gray-400'}`}>
+                            <span className={`text-[10px] block text-right mt-1 opacity-70 font-black ${isUser ? 'text-white/80' : 'text-gray-400'}`}>
                                 {msg.timestamp ? msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                             </span>
                         </div>
@@ -793,17 +795,17 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
               })}
               {isChatTyping && (
                    <div className="flex justify-start">
-                      <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl rounded-bl-none p-4 shadow-sm flex gap-1.5 items-center">
-                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:0.2s]"></div>
-                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:0.4s]"></div>
+                      <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl rounded-bl-none p-4 shadow-sm flex gap-2 items-center">
+                          <div className="w-2.5 h-2.5 bg-gray-400 rounded-full animate-bounce"></div>
+                          <div className="w-2.5 h-2.5 bg-gray-400 rounded-full animate-bounce [animation-delay:0.2s]"></div>
+                          <div className="w-2.5 h-2.5 bg-gray-400 rounded-full animate-bounce [animation-delay:0.4s]"></div>
                       </div>
                    </div>
               )}
               <div ref={messagesEndRef} />
           </div>
 
-          <form onSubmit={handleHomeInputSubmit} className="p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+          <form onSubmit={handleHomeInputSubmit} className="p-5 border-t border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-900">
               <div className="relative">
                   <input
                     type="text"
@@ -811,14 +813,14 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                     disabled={!isOnline}
                     onChange={(e) => setChatInput(e.target.value)}
                     placeholder="Type a message..."
-                    className="w-full pl-4 pr-12 py-3.5 rounded-full border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-accent-${accentColorClass} dark:text-white transition-shadow disabled:opacity-50"
+                    className="w-full pl-5 pr-14 py-4 rounded-2xl border-2 border-transparent bg-gray-100 dark:bg-gray-800 focus:outline-none focus:border-accent-${accentColorClass} dark:text-white transition-all font-semibold disabled:opacity-50"
                   />
                   <button 
                     type="submit"
                     disabled={!chatInput.trim() || !isOnline}
-                    className={`absolute right-2 top-1/2 -translate-y-1/2 p-2.5 rounded-full text-white bg-accent-${accentColorClass} hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md`}
+                    className={`absolute right-2 top-1/2 -translate-y-1/2 p-3 rounded-xl text-white bg-accent-${accentColorClass} hover:brightness-110 disabled:opacity-50 transition-all shadow-md`}
                   >
-                      <SendIcon className="h-4 w-4" />
+                      <SendIcon className="h-5 w-5" />
                   </button>
               </div>
           </form>
@@ -827,29 +829,27 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
   const renderVoiceView = () => (
     <div className="flex flex-col h-full w-full bg-white dark:bg-gray-900 animate-fade-in-up">
-        {!isOnline && <OfflineBanner />}
         {permissionRequested && (
-            <div className="absolute inset-0 z-[60] flex flex-col items-center justify-center p-8 text-center animate-fade-in backdrop-blur-md bg-black/20 text-white/90">
-                <div className="mb-6 p-4 rounded-full bg-white/10 animate-bounce shadow-xl border border-white/20">
-                     <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-white drop-shadow-md" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" fill="none" strokeLinecap="round" strokeLinejoin="round">
-                        <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+            <div className="absolute inset-0 z-[60] flex flex-col items-center justify-center p-8 text-center animate-fade-in backdrop-blur-xl bg-black/40 text-white/90">
+                <div className="mb-6 p-6 rounded-3xl bg-white/10 animate-bounce shadow-2xl border border-white/20">
+                     <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-white drop-shadow-lg" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" fill="none" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M5 10a7 7 0 0 0 14 0" />
                         <path d="M8 21l8 0" />
                         <path d="M12 17l0 4" />
                         <path d="M9 2m0 3a3 3 0 0 1 3 -3h0a3 3 0 0 1 3 3v5a3 3 0 0 1 -3 3h0a3 3 0 0 1 -3 -3z" />
                     </svg>
                 </div>
-                <h3 className="text-2xl font-black mb-2 drop-shadow-md">Microphone Access</h3>
-                <p className="text-lg font-bold drop-shadow-sm">Tap "Allow" to start talking.</p>
+                <h3 className="text-3xl font-black mb-2 uppercase tracking-tighter">Mic Permission</h3>
+                <p className="text-xl font-bold opacity-80">Tap "Allow" to connect.</p>
             </div>
         )}
 
-        <div className={`flex items-center justify-between p-4 flex-shrink-0 z-20 bg-accent-${accentColorClass} text-white shadow-md transition-colors duration-300`}>
-            <div className="flex items-center gap-3">
-                 <button onClick={handleBack} className="p-1.5 rounded-full hover:bg-white/20 transition-colors" title="Back">
-                    <ChevronLeftIcon className="h-6 w-6 text-white" />
+        <div className={`flex items-center justify-between p-5 flex-shrink-0 z-20 bg-accent-${accentColorClass} text-white shadow-xl transition-colors duration-300`}>
+            <div className="flex items-center gap-4">
+                 <button onClick={handleBack} className="p-1 rounded-full hover:bg-white/20 transition-all active:scale-90" title="Back">
+                    <ChevronLeftIcon />
                 </button>
-                <h3 className="font-black text-xl tracking-tight truncate max-w-[200px] text-white">{agentProfile.name}</h3>
+                <h3 className="font-black text-2xl uppercase tracking-tighter leading-tight truncate max-w-[200px] text-white">{agentProfile.name}</h3>
             </div>
             <div className="flex items-center gap-2">
                 <LiveBadge />
@@ -857,45 +857,38 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         </div>
 
         <div className="flex-grow flex flex-col items-center justify-center relative overflow-hidden bg-white dark:bg-gray-900">
-            
-            <div className="relative w-full flex items-center justify-center mb-8 min-h-[200px]">
+            {!isOnline && <OfflineBanner />}
+            <div className="relative w-full flex items-center justify-center mb-10 min-h-[220px]">
                 
                 {(widgetState === WidgetState.Speaking) && (
                     <>
-                        <div className={`absolute w-64 h-64 rounded-full border-2 border-accent-${accentColorClass} opacity-20 animate-sonar-ping`}></div>
-                        <div className={`absolute w-64 h-64 rounded-full border-2 border-accent-${accentColorClass} opacity-20 animate-sonar-ping [animation-delay:1s]`}></div>
+                        <div className={`absolute w-72 h-72 rounded-full border-4 border-accent-${accentColorClass} opacity-20 animate-sonar-ping`}></div>
+                        <div className={`absolute w-72 h-72 rounded-full border-4 border-accent-${accentColorClass} opacity-20 animate-sonar-ping [animation-delay:1s]`}></div>
                     </>
                 )}
 
-                <div className={`relative w-48 h-48 rounded-full bg-gradient-to-br from-accent-${accentColorClass} to-gray-300 dark:to-gray-800 shadow-[0_20px_50px_rgba(0,0,0,0.15)] flex items-center justify-center transition-all duration-500 ${widgetState === WidgetState.Speaking ? 'scale-105' : 'scale-100'}`}>
-                    <div className="absolute top-0 left-0 w-full h-full rounded-full bg-gradient-to-b from-white/20 to-transparent pointer-events-none"></div>
-                    <div className="relative w-44 h-44 rounded-full bg-white dark:bg-gray-900 flex items-center justify-center shadow-inner z-10 overflow-hidden">
-                        {widgetState === WidgetState.Connecting && <Spinner className={`w-20 h-20 text-accent-${accentColorClass}`} />}
+                <div className={`relative w-56 h-56 rounded-full bg-gradient-to-br from-accent-${accentColorClass} to-gray-400 dark:to-gray-800 shadow-[0_30px_60px_rgba(0,0,0,0.2)] flex items-center justify-center transition-all duration-700 ${widgetState === WidgetState.Speaking ? 'scale-110' : 'scale-100'}`}>
+                    <div className="absolute top-0 left-0 w-full h-full rounded-full bg-gradient-to-b from-white/30 to-transparent pointer-events-none"></div>
+                    <div className="relative w-52 h-52 rounded-full bg-white dark:bg-gray-900 flex items-center justify-center shadow-inner z-10 overflow-hidden">
+                        {widgetState === WidgetState.Connecting && <Spinner className={`w-24 h-24 text-accent-${accentColorClass}`} />}
                         {(widgetState === WidgetState.Idle || widgetState === WidgetState.Listening || widgetState === WidgetState.Speaking) && (
-                            <div className={`transition-transform duration-300 ${widgetState === WidgetState.Speaking ? 'scale-110' : 'scale-100'}`}>
-                                <WaveformIcon className={`h-24 w-24 ${widgetState === WidgetState.Idle ? 'text-gray-300 dark:text-gray-600' : `text-accent-${accentColorClass}`}`} />
+                            <div className={`transition-transform duration-500 ${widgetState === WidgetState.Speaking ? 'scale-115' : 'scale-100'}`}>
+                                <WaveformIcon className={`h-28 w-28 ${widgetState === WidgetState.Idle ? 'text-gray-200 dark:text-gray-700' : `text-accent-${accentColorClass}`}`} />
                             </div>
                         )}
                         {widgetState === WidgetState.Error && (
                             <div className="text-red-500 animate-pulse">
-                                {!isOnline ? (
-                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 12l2 2m0 0l2 2m-2-2l-2 2m2-2l2-2m2-2l2-2" />
-                                    </svg>
-                                ) : (
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                )}
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-24 w-24" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                             </div>
                         )}
                         
-                        {/* PERFECTION: Improved Ended State Orb */}
-                        {widgetState === WidgetState.Ended && (voiceReportingStatus === 'analyzing' || voiceReportingStatus === 'sending') && <Spinner className={`w-20 h-20 text-accent-${accentColorClass}`} />}
-                        {widgetState === WidgetState.Ended && voiceReportingStatus === 'sent' && <div className="text-green-500"><svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>}
-                        {widgetState === WidgetState.Ended && voiceReportingStatus === 'failed' && <div className="text-red-500"><svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>}
+                        {/* PERFECTION: Branded Ended State Orb (No more empty void) */}
+                        {widgetState === WidgetState.Ended && (voiceReportingStatus === 'analyzing' || voiceReportingStatus === 'sending') && <Spinner className={`w-24 h-24 text-accent-${accentColorClass}`} />}
+                        {widgetState === WidgetState.Ended && voiceReportingStatus === 'sent' && <div className="text-green-500"><svg xmlns="http://www.w3.org/2000/svg" className="h-24 w-24" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg></div>}
+                        {widgetState === WidgetState.Ended && voiceReportingStatus === 'failed' && <div className="text-red-500"><svg xmlns="http://www.w3.org/2000/svg" className="h-24 w-24" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></div>}
                         {widgetState === WidgetState.Ended && voiceReportingStatus === 'idle' && (
-                            <div className={`p-4 bg-accent-${accentColorClass}/10 rounded-full`}>
-                                <svg xmlns="http://www.w3.org/2000/svg" className={`h-20 w-20 text-accent-${accentColorClass} opacity-60`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                            <div className={`p-8 bg-accent-${accentColorClass} rounded-full shadow-lg transform scale-110 animate-fade-in`}>
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                                     <path d="M18.36 6.64a9 9 0 11-12.73 0M12 2v10" strokeLinecap="round" strokeLinejoin="round" />
                                 </svg>
                             </div>
@@ -904,51 +897,46 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                 </div>
             </div>
 
-            <p className={`text-xl font-bold h-8 mb-2 break-words max-w-full px-4 text-center tracking-tight ${!isOnline && widgetState === WidgetState.Error ? 'text-red-500' : 'text-gray-900 dark:text-gray-100'}`}>
+            <p className={`text-2xl font-black h-10 mb-2 break-words max-w-full px-6 text-center uppercase tracking-tighter ${!isOnline && widgetState === WidgetState.Error ? 'text-red-600' : 'text-gray-900 dark:text-white'}`}>
                 {widgetState === WidgetState.Connecting && "Connecting..."}
                 {widgetState === WidgetState.Listening && "Listening..."}
                 {widgetState === WidgetState.Speaking && "Speaking..."}
                 {widgetState === WidgetState.Error && (errorMessage || "Connection Error")}
                 {widgetState === WidgetState.Ended && (
-                        voiceReportingStatus === 'analyzing' ? 'Analyzing Session...' :
+                        voiceReportingStatus === 'analyzing' ? 'Analyzing...' :
                         voiceReportingStatus === 'sending' ? 'Sending Report...' :
-                        voiceReportingStatus === 'sent' ? 'Session Report Sent' : 
-                        voiceReportingStatus === 'failed' ? 'Report Generation Failed' : 'Session Ended'
+                        voiceReportingStatus === 'sent' ? 'Report Sent' : 
+                        voiceReportingStatus === 'failed' ? 'Failed' : 'Session Ended'
                 )}
             </p>
             
-            <div className="h-10 mb-4 flex items-center justify-center px-6">
+            <div className="h-10 mb-6 flex items-center justify-center px-8">
                 {(widgetState === WidgetState.Idle) && (
-                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400 transition-opacity duration-500">
-                        Click the call button to start.
+                    <p className="text-sm font-bold text-gray-500 uppercase tracking-widest opacity-60">
+                        Tap call to start
                     </p>
                 )}
-                {(widgetState === WidgetState.Ended && (voiceReportingStatus === 'sent' || voiceReportingStatus === 'failed')) && (
-                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400 transition-opacity duration-500">
-                    You may now close the widget.
-                    </p>
-                )}
-                {!isOnline && widgetState === WidgetState.Error && (
-                    <p className="text-xs text-red-500 font-bold animate-pulse text-center">
-                        It looks like your internet disconnected.
+                {(widgetState === WidgetState.Ended && (voiceReportingStatus === 'sent' || voiceReportingStatus === 'failed' || voiceReportingStatus === 'idle')) && (
+                    <p className="text-sm font-black text-gray-400 uppercase tracking-widest animate-pulse">
+                        Ready to close
                     </p>
                 )}
             </div>
 
-            <div className="h-20 flex items-center justify-center">
+            <div className="h-24 flex items-center justify-center">
                 {(widgetState === WidgetState.Connecting || widgetState === WidgetState.Listening || widgetState === WidgetState.Speaking) ? (
-                    <button onClick={endVoiceSession} className="w-16 h-16 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center shadow-lg transition-transform transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-red-300 dark:focus:ring-red-900" aria-label="End Call">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 rotate-135" viewBox="0 0 20 20" fill="currentColor"><path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" /></svg>
+                    <button onClick={endVoiceSession} className="w-20 h-20 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center shadow-2xl transition-all transform hover:scale-110 active:scale-90 focus:outline-none" aria-label="End Call">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 rotate-135" viewBox="0 0 20 20" fill="currentColor"><path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" /></svg>
                     </button>
                 ) : (
                     !(widgetState === WidgetState.Ended && (voiceReportingStatus === 'analyzing' || voiceReportingStatus === 'sending' || voiceReportingStatus === 'sent')) && (
                         <button 
                             disabled={!isOnline}
                             onClick={startVoiceSession} 
-                            className={`w-16 h-16 rounded-full bg-accent-${accentColorClass} hover:brightness-110 text-white flex items-center justify-center shadow-lg transition-transform transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-offset-2 disabled:grayscale disabled:opacity-50 disabled:cursor-not-allowed`} 
-                            aria-label={widgetState === WidgetState.Error || (widgetState === WidgetState.Ended && voiceReportingStatus === 'failed') ? "Retry" : "Start Call"}
+                            className={`w-20 h-20 rounded-full bg-accent-${accentColorClass} hover:brightness-110 text-white flex items-center justify-center shadow-2xl transition-all transform hover:scale-110 active:scale-95 focus:outline-none disabled:grayscale disabled:opacity-50`} 
+                            aria-label="Start Call"
                         >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" viewBox="0 0 20 20" fill="currentColor"><path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" /></svg>
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10" viewBox="0 0 20 20" fill="currentColor"><path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" /></svg>
                         </button>
                     )
                 )}
@@ -961,29 +949,29 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     const fabContent = (
       <div className={`${themeClass} relative group`}>
         {showCallout && agentProfile.calloutMessage && (
-          <div className="absolute bottom-full right-0 mb-3 w-max max-w-[200px] px-4 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-xl shadow-xl text-left text-sm animate-fade-in-up border border-gray-100 dark:border-gray-700">
-            <p className="font-bold">{agentProfile.calloutMessage}</p>
-            <div className="absolute -bottom-2 right-6 w-4 h-4 bg-white dark:bg-gray-800 transform rotate-45 border-b border-r border-gray-100 dark:border-gray-700"></div>
+          <div className="absolute bottom-full right-0 mb-4 w-max max-w-[220px] px-5 py-3 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-2xl shadow-2xl text-left text-sm animate-fade-in-up border border-gray-100 dark:border-gray-700">
+            <p className="font-black leading-tight uppercase tracking-tight">{agentProfile.calloutMessage}</p>
+            <div className="absolute -bottom-2 right-8 w-4 h-4 bg-white dark:bg-gray-800 transform rotate-45 border-b border-r border-gray-100 dark:border-gray-700"></div>
           </div>
         )}
-        <button onClick={toggleWidget} className={`w-16 h-16 rounded-full bg-accent-${accentColorClass} shadow-lg flex items-center justify-center text-white transform hover:scale-110 transition-transform animate-pulse`}>
+        <button onClick={toggleWidget} className={`w-16 h-16 rounded-full bg-accent-${accentColorClass} shadow-2xl flex items-center justify-center text-white transform hover:scale-110 transition-all animate-pulse active:scale-95`}>
           <FabIcon />
         </button>
       </div>
     );
-    return isWidgetMode ? <div className="w-full h-full p-2 flex items-end justify-end bg-transparent">{fabContent}</div> : <div className="fixed bottom-5 right-5 z-[9999]">{fabContent}</div>;
+    return isWidgetMode ? <div className="w-full h-full p-2 flex items-end justify-end bg-transparent">{fabContent}</div> : <div className="fixed bottom-6 right-6 z-[9999]">{fabContent}</div>;
   }
 
   const containerClasses = isWidgetMode 
     ? 'w-full h-full' 
-    : 'fixed bottom-0 right-0 md:bottom-24 md:right-5 w-full h-[100dvh] md:w-96 md:h-[600px] md:rounded-2xl shadow-2xl z-[9999] transition-all duration-300';
+    : 'fixed bottom-0 right-0 md:bottom-24 md:right-6 w-full h-[100dvh] md:w-[420px] md:h-[650px] md:rounded-3xl shadow-[0_35px_60px_-15px_rgba(0,0,0,0.3)] z-[9999] transition-all duration-500 ease-out';
 
   return (
     <div className={`${themeClass} ${containerClasses}`}>
-        <div className={`flex flex-col w-full h-full bg-white dark:bg-gray-900 text-black dark:text-white md:rounded-2xl overflow-hidden border-0 ${!isWidgetMode ? 'md:border border-gray-200 dark:border-gray-700 shadow-2xl' : ''}`}>
+        <div className={`flex flex-col w-full h-full bg-white dark:bg-gray-900 text-black dark:text-white md:rounded-[2.5rem] overflow-hidden border-0 ${!isWidgetMode ? 'md:border-2 border-white/20' : ''}`}>
             {view === 'home' && (
-                <button onClick={toggleWidget} className="absolute top-4 right-4 z-50 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                <button onClick={toggleWidget} className="absolute top-5 right-5 z-50 p-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all backdrop-blur-md active:scale-90">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
             )}
 
