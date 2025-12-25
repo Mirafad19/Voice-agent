@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Modality, LiveServerMessage } from '@google/genai';
 import { AgentConfig } from '../types';
 
@@ -11,6 +12,7 @@ interface Callbacks {
   onTranscriptUpdate: (isFinal: boolean, text: string, type: 'input' | 'output') => void;
   onAudioChunk: (chunk: Uint8Array) => void;
   onInterruption: () => void;
+  onLocalInterruption?: () => void; // New callback for immediate client-side detection
   onError: (error: string) => void;
 }
 
@@ -40,6 +42,9 @@ export class GeminiLiveService {
   private currentInputTranscription = '';
   private currentOutputTranscription = '';
 
+  // Interruption Sensitivity
+  private readonly INTERRUPTION_THRESHOLD = 0.015; // RMS threshold to trigger "Aggressive Shut Up"
+
   constructor(apiKey: string, config: AgentConfig, callbacks: Callbacks) {
     this.ai = new GoogleGenAI({ apiKey });
     this.config = config;
@@ -56,7 +61,6 @@ export class GeminiLiveService {
       this.mediaStream = mediaStream;
       
       // Dynamic Greeting Instruction
-      // We tell the model exactly what was just said via TTS so it knows the conversation state.
       const greetingContext = this.config.initialGreeting 
         ? `INITIALIZATION: You have just spoken the following greeting to the user: "${this.config.initialGreeting}". The user has heard this. Do NOT repeat it. Your goal is to WAIT for the user to reply to this greeting.` 
         : `INITIALIZATION: Wait for the user to speak first.`;
@@ -70,11 +74,12 @@ export class GeminiLiveService {
           },
           systemInstruction: `
           CRITICAL OPERATIONAL RULES:
-          1. LANGUAGE ENFORCEMENT: You must speak ONLY in English. If you hear what sounds like a foreign language or unclear noise, ignore it or ask for clarification in English. NEVER switch languages.
+          1. LANGUAGE ENFORCEMENT: You must speak ONLY in English. 
           2. ${greetingContext}
-          3. LISTENING PROTOCOL: You are a patient listener. When the user is explaining a problem, complaint, or complex situation, DO NOT interrupt. Wait for a significant pause or a direct question before responding. Prioritize letting the user finish their thought.
-          4. SOURCE OF TRUTH: You have been provided with a YAML/Text Knowledge Base. When answering questions covered by this data, you must use the EXACT phrasing provided in the 'prompt' fields. Do not summarize or paraphrase unless specifically asked for a summary.
-          5. SILENCE HANDLING: If you receive the specific text code "[[SILENCE_DETECTED]]", you must IMMEDIATELY speak up and ask: "Are you still there?" or "Hello?".
+          3. PASSIVE LISTENING PROTOCOL: You are a patient, passive listener. People often pause mid-sentence to think. DO NOT interrupt while they are talking. Wait for a clear, 1-2 second silence before you start responding. If they ask multiple questions in a row, wait for them to finish the whole set before answering them all at once.
+          4. AGGRESSIVE SILENCE: If the user starts talking while you are speaking, STOP IMMEDIATELY. Prioritize the user's voice above your own.
+          5. SOURCE OF TRUTH: Use the provided knowledge base accurately.
+          6. SILENCE HANDLING: If you receive "[[SILENCE_DETECTED]]", ask "Are you still there?".
           
           KNOWLEDGE BASE:
           ${this.config.knowledgeBase}`,
@@ -97,8 +102,6 @@ export class GeminiLiveService {
   public sendText(text: string) {
       if (this.sessionPromise) {
           this.sessionPromise.then(session => {
-              // Use 'any' cast to access raw send method for clientContent, 
-              // as sendRealtimeInput only supports media chunks in the current type definition.
               (session as any).send({
                   clientContent: {
                       turns: [{
@@ -121,19 +124,28 @@ export class GeminiLiveService {
       
       this.inputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
       this.mediaStreamSource = this.inputAudioContext.createMediaStreamSource(mediaStream);
-      // Reduced buffer size from 4096 to 2048 to improve latency and reduce jitter
       this.scriptProcessor = this.inputAudioContext.createScriptProcessor(2048, 1, 1);
       
       this.scriptProcessor.onaudioprocess = (audioProcessingEvent) => {
         const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
         const l = inputData.length;
         
-        // Simple downsampling/conversion to 16kHz Int16 PCM
+        // Calculate RMS (Volume) for client-side interruption detection
+        let sum = 0;
+        for (let i = 0; i < l; i++) {
+            sum += inputData[i] * inputData[i];
+        }
+        const rms = Math.sqrt(sum / l);
+
+        // If user is speaking, trigger local interruption immediately
+        if (rms > this.INTERRUPTION_THRESHOLD) {
+            this.callbacks.onLocalInterruption?.();
+        }
+
+        // Standard PCM conversion for Gemini
         const int16 = new Int16Array(l);
         for (let i = 0; i < l; i++) {
-          // Clip to [-1, 1] to prevent distortion
           let s = Math.max(-1, Math.min(1, inputData[i]));
-          // Convert to 16-bit PCM
           s = s < 0 ? s * 0x8000 : s * 0x7FFF;
           int16[i] = s;
         }
@@ -224,8 +236,6 @@ export class GeminiLiveService {
     this.inputAudioContext = null;
     this.session = null;
     this.sessionPromise = null;
-    // The mediaStream lifecycle is managed by the parent component (AgentWidget)
-    // so we just release the reference here.
     this.mediaStream = null;
   }
 }

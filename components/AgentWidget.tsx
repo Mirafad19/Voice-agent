@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AgentProfile, AgentConfig, WidgetState, Recording, ReportingStatus } from '../types';
 import { GeminiLiveService } from '../services/geminiLiveService';
@@ -368,6 +369,21 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
       }
   }, []);
 
+  const handleInterruption = useCallback(() => {
+    // Aggressive silence: Stop all speakers immediately
+    activeAudioSourcesRef.current.forEach(source => {
+        try { source.stop(); } catch(e) {}
+    });
+    activeAudioSourcesRef.current.clear();
+    audioQueueRef.current = [];
+    nextStartTimeRef.current = 0;
+    
+    if (widgetStateRef.current === WidgetState.Speaking) {
+        setWidgetState(WidgetState.Listening);
+        resetSilenceTimer();
+    }
+  }, [resetSilenceTimer]);
+
   const startVoiceSession = useCallback(async () => {
     setView('voice');
     shouldEndAfterSpeakingRef.current = false;
@@ -468,16 +484,12 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
          
         if (isFinal && type === 'output') {
           const lowerCaseText = text.toLowerCase();
-          // Expanded goodbye keywords including Yoruba variations
           const endKeywords = [
             'goodbye', 'farewell', 'take care', 'talk to you later', 
             'bye bye', 'bye', 'o dabo', 'oda bo', 'ó dábọ̀', 'e se pupo', 'ese pupo'
           ];
           if (endKeywords.some(keyword => lowerCaseText.includes(keyword))) {
             shouldEndAfterSpeakingRef.current = true;
-            
-            // AGGRESSIVE END: If we are not currently speaking or have no more audio queued, 
-            // end the session immediately instead of waiting for playback logic.
             if (activeAudioSourcesRef.current.size === 0 && audioQueueRef.current.length === 0) {
                 endVoiceSession();
             }
@@ -490,8 +502,8 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         playAudioQueue();
       },
       onInterruption: handleInterruption,
+      onLocalInterruption: handleInterruption, // Aggressive local shut-up
       onError: (error) => {
-        // Check internet connection specifically
         if (!navigator.onLine) {
             setErrorMessage("Connection Lost. Please check your internet and try again.");
             setIsOnline(false);
@@ -503,7 +515,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
       },
     });
     geminiServiceRef.current.connect(stream);
-  }, [apiKey, agentProfile, resetSilenceTimer]);
+  }, [apiKey, agentProfile, resetSilenceTimer, handleInterruption]);
 
   const endVoiceSession = useCallback(() => {
     cleanupServices();
@@ -598,17 +610,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         }
     }
   }, [endVoiceSession, clearSilenceTimer, resetSilenceTimer]);
-
-  const handleInterruption = useCallback(() => {
-    activeAudioSourcesRef.current.forEach(source => source.stop());
-    activeAudioSourcesRef.current.clear();
-    audioQueueRef.current = [];
-    nextStartTimeRef.current = 0;
-    if (widgetStateRef.current === WidgetState.Speaking) {
-        setWidgetState(WidgetState.Listening);
-        resetSilenceTimer();
-    }
-  }, [resetSilenceTimer]);
 
   // --- UI Triggers ---
   
@@ -845,7 +846,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                                 {!isOnline ? (
                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 12l2 2m0 0l2 2m-2-2l-2 2m2-2l2-2" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 12l2 2m0 0l2 2m-2-2l-2 2m2-2l2-2m2-2l2-2" />
                                     </svg>
                                 ) : (
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
