@@ -2,7 +2,6 @@
 import { GoogleGenAI, Modality, LiveServerMessage } from '@google/genai';
 import { AgentConfig } from '../types';
 
-// Inferred the LiveSession type from the connect method's return type to fix build error.
 type LiveSession = Awaited<ReturnType<InstanceType<typeof GoogleGenAI>['live']['connect']>>;
 
 type ServiceState = 'idle' | 'connecting' | 'connected' | 'error' | 'ended';
@@ -12,11 +11,10 @@ interface Callbacks {
   onTranscriptUpdate: (isFinal: boolean, text: string, type: 'input' | 'output') => void;
   onAudioChunk: (chunk: Uint8Array) => void;
   onInterruption: () => void;
-  onLocalInterruption?: () => void; // New callback for immediate client-side detection
+  onLocalInterruption?: () => void; 
   onError: (error: string) => void;
 }
 
-// Manual base64 encode/decode to avoid external libraries
 function encode(bytes: Uint8Array): string {
     let binary = '';
     const len = bytes.byteLength;
@@ -42,8 +40,10 @@ export class GeminiLiveService {
   private currentInputTranscription = '';
   private currentOutputTranscription = '';
 
-  // Interruption Sensitivity
-  private readonly INTERRUPTION_THRESHOLD = 0.015; // RMS threshold to trigger "Aggressive Shut Up"
+  // PERFECTION: Sustained interruption logic
+  private readonly INTERRUPTION_THRESHOLD = 0.04; // Higher threshold for background noise rejection
+  private interruptionFrameCount = 0;
+  private readonly FRAMES_TO_INTERRUPT = 3; // Must be loud for ~3 frames (~120ms) to trigger shut-up
 
   constructor(apiKey: string, config: AgentConfig, callbacks: Callbacks) {
     this.ai = new GoogleGenAI({ apiKey });
@@ -60,7 +60,6 @@ export class GeminiLiveService {
     try {
       this.mediaStream = mediaStream;
       
-      // Dynamic Greeting Instruction
       const greetingContext = this.config.initialGreeting 
         ? `INITIALIZATION: You have just spoken the following greeting to the user: "${this.config.initialGreeting}". The user has heard this. Do NOT repeat it. Your goal is to WAIT for the user to reply to this greeting.` 
         : `INITIALIZATION: Wait for the user to speak first.`;
@@ -76,7 +75,7 @@ export class GeminiLiveService {
           CRITICAL OPERATIONAL RULES:
           1. LANGUAGE ENFORCEMENT: You must speak ONLY in English. 
           2. ${greetingContext}
-          3. PASSIVE LISTENING PROTOCOL: You are a patient, passive listener. People often pause mid-sentence to think. DO NOT interrupt while they are talking. Wait for a clear, 1-2 second silence before you start responding. If they ask multiple questions in a row, wait for them to finish the whole set before answering them all at once.
+          3. PASSIVE LISTENING PROTOCOL: You are a patient, passive listener. People often pause mid-sentence to think. DO NOT interrupt while they are talking. Wait for a clear, 1-2 second silence before you start responding.
           4. AGGRESSIVE SILENCE: If the user starts talking while you are speaking, STOP IMMEDIATELY. Prioritize the user's voice above your own.
           5. SOURCE OF TRUTH: Use the provided knowledge base accurately.
           6. SILENCE HANDLING: If you receive "[[SILENCE_DETECTED]]", ask "Are you still there?".
@@ -130,19 +129,23 @@ export class GeminiLiveService {
         const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
         const l = inputData.length;
         
-        // Calculate RMS (Volume) for client-side interruption detection
+        // Calculate RMS (Volume)
         let sum = 0;
         for (let i = 0; i < l; i++) {
             sum += inputData[i] * inputData[i];
         }
         const rms = Math.sqrt(sum / l);
 
-        // If user is speaking, trigger local interruption immediately
+        // PERFECTION: Sustained sound detection to avoid "chair move" interruptions
         if (rms > this.INTERRUPTION_THRESHOLD) {
-            this.callbacks.onLocalInterruption?.();
+            this.interruptionFrameCount++;
+            if (this.interruptionFrameCount >= this.FRAMES_TO_INTERRUPT) {
+                this.callbacks.onLocalInterruption?.();
+            }
+        } else {
+            this.interruptionFrameCount = 0;
         }
 
-        // Standard PCM conversion for Gemini
         const int16 = new Int16Array(l);
         for (let i = 0; i < l; i++) {
           let s = Math.max(-1, Math.min(1, inputData[i]));
