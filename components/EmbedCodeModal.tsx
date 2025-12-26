@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
@@ -27,12 +28,11 @@ export const EmbedCodeModal: React.FC<EmbedCodeModalProps> = ({ isOpen, onClose,
     const finalUrl = `${baseUrl}?config=${encodedConfig}&apiKey=${apiKey}`;
     const iframeId = `ai-agent-iframe-${Date.now()}`;
 
-    // The script now checks for mobile viewport width (< 768px) and adjusts the iframe style accordingly.
     const code = `<div style="position: fixed; bottom: 20px; right: 20px; z-index: 9999;">
   <iframe
     id="${iframeId}"
     src="${finalUrl}"
-    style="border: none; outline: none; background-color: transparent; width: 300px; height: 140px; transition: width 0.3s ease-in-out, height 0.3s ease-in-out; border-radius: 12px;"
+    style="border: none; outline: none; background-color: transparent; width: 300px; height: 140px; transition: all 0.3s ease-in-out; border-radius: 12px;"
     allow="microphone"
     frameborder="0"
     title="${agentProfile.name}"
@@ -50,7 +50,6 @@ export const EmbedCodeModal: React.FC<EmbedCodeModalProps> = ({ isOpen, onClose,
         var isOpen = event.data.isOpen;
         
         if (isMobile && isOpen) {
-            // Full screen on mobile
             container.style.bottom = '0';
             container.style.right = '0';
             container.style.left = '0';
@@ -59,14 +58,13 @@ export const EmbedCodeModal: React.FC<EmbedCodeModalProps> = ({ isOpen, onClose,
             iframe.style.height = '100%';
             iframe.style.borderRadius = '0';
         } else {
-            // Floating widget on desktop or closed state
             container.style.bottom = '20px';
             container.style.right = '20px';
             container.style.left = 'auto';
             container.style.top = 'auto';
             iframe.style.width = event.data.width + 'px';
             iframe.style.height = event.data.height + 'px';
-            iframe.style.borderRadius = isOpen ? '16px' : '0px'; // Remove border radius if it's just a button
+            iframe.style.borderRadius = isOpen ? '16px' : '0px';
             iframe.style.boxShadow = isOpen ? '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)' : 'none';
         }
       }
@@ -92,8 +90,6 @@ export const EmbedCodeModal: React.FC<EmbedCodeModalProps> = ({ isOpen, onClose,
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Get Code">
       <div className="flex flex-col gap-6">
-        
-        {/* 1. URL Input */}
         <div className="flex flex-col gap-2">
             <label className="text-xs font-bold uppercase text-gray-500 dark:text-gray-400">
                 Hosting URL (Required)
@@ -107,7 +103,6 @@ export const EmbedCodeModal: React.FC<EmbedCodeModalProps> = ({ isOpen, onClose,
             />
         </div>
 
-        {/* 2. The Code (Middle - Dark, Scrollable) */}
         <div className="flex flex-col gap-2">
             <div className="flex justify-between items-center">
                 <label className="text-xs font-bold uppercase text-gray-500 dark:text-gray-400">
@@ -124,7 +119,6 @@ export const EmbedCodeModal: React.FC<EmbedCodeModalProps> = ({ isOpen, onClose,
             </div>
         </div>
 
-        {/* 3. The Link (Bottom) */}
         <div className="flex flex-col gap-2 pt-4 border-t border-gray-200 dark:border-gray-700">
              <label className="text-xs font-bold uppercase text-gray-500 dark:text-gray-400">
                 Direct Link
@@ -140,7 +134,6 @@ export const EmbedCodeModal: React.FC<EmbedCodeModalProps> = ({ isOpen, onClose,
                  </Button>
              </div>
         </div>
-
       </div>
     </Modal>
   );

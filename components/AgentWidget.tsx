@@ -946,9 +946,9 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     const fabContent = (
       <div className={`${themeClass} relative group`}>
         {showCallout && agentProfile.calloutMessage && (
-          <div className="absolute bottom-full right-0 md:right-4 mb-4 w-max max-w-[200px] px-5 py-3 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-2xl shadow-2xl text-left text-sm animate-fade-in-up border border-gray-100 dark:border-gray-700">
+          <div className="absolute bottom-[calc(100%+16px)] right-0 mb-4 w-[200px] px-5 py-3 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.15)] text-left text-sm animate-fade-in-up border border-gray-100 dark:border-gray-700">
             <p className="font-bold leading-tight uppercase tracking-tight">{agentProfile.calloutMessage}</p>
-            <div className="absolute -bottom-2 right-8 w-4 h-4 bg-white dark:bg-gray-800 transform rotate-45 border-b border-r border-gray-100 dark:border-gray-700"></div>
+            <div className="absolute -bottom-2 right-6 w-4 h-4 bg-white dark:bg-gray-800 transform rotate-45 border-b border-r border-gray-100 dark:border-gray-700"></div>
           </div>
         )}
         <button onClick={toggleWidget} className={`w-16 h-16 rounded-full bg-accent-${accentColorClass} shadow-2xl flex items-center justify-center text-white transform hover:scale-110 transition-all animate-pulse active:scale-95`}>

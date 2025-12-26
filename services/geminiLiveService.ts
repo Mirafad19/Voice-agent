@@ -35,15 +35,18 @@ export class GeminiLiveService {
   private inputAudioContext: AudioContext | null = null;
   private scriptProcessor: ScriptProcessorNode | null = null;
   private mediaStreamSource: MediaStreamAudioSourceNode | null = null;
+  private analyser: AnalyserNode | null = null;
   private mediaStream: MediaStream | null = null;
   
   private currentInputTranscription = '';
   private currentOutputTranscription = '';
 
-  // PERFECTION: Sustained interruption logic
-  private readonly INTERRUPTION_THRESHOLD = 0.04; // Higher threshold for background noise rejection
-  private interruptionFrameCount = 0;
-  private readonly FRAMES_TO_INTERRUPT = 3; // Must be loud for ~3 frames (~120ms) to trigger shut-up
+  // PERFECTION: Frequency-Aware Interruption Logic
+  // Voice frequencies are roughly 300Hz to 3000Hz.
+  // Background noises (keys, chairs) are usually higher frequency (clicks) or lower thuds.
+  private speechDetectedFrameCount = 0;
+  private readonly SPEECH_DETECTION_THRESHOLD = 0.025; 
+  private readonly FRAMES_FOR_INTERRUPTION = 2; // ~50ms of sustained speech
 
   constructor(apiKey: string, config: AgentConfig, callbacks: Callbacks) {
     this.ai = new GoogleGenAI({ apiKey });
@@ -123,27 +126,45 @@ export class GeminiLiveService {
       
       this.inputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
       this.mediaStreamSource = this.inputAudioContext.createMediaStreamSource(mediaStream);
+      
+      // Setup Analyser for frequency detection
+      this.analyser = this.inputAudioContext.createAnalyser();
+      this.analyser.fftSize = 2048;
+      this.mediaStreamSource.connect(this.analyser);
+
       this.scriptProcessor = this.inputAudioContext.createScriptProcessor(2048, 1, 1);
       
+      const frequencyData = new Float32Array(this.analyser.frequencyBinCount);
+      const binSize = 16000 / 2048; // ~7.8Hz per bin
+      
+      // Indices for 300Hz to 3000Hz
+      const lowBin = Math.floor(300 / binSize);
+      const highBin = Math.floor(3000 / binSize);
+
       this.scriptProcessor.onaudioprocess = (audioProcessingEvent) => {
         const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
         const l = inputData.length;
         
-        // Calculate RMS (Volume)
-        let sum = 0;
-        for (let i = 0; i < l; i++) {
-            sum += inputData[i] * inputData[i];
+        // Use frequency analysis to detect human speech specifically
+        this.analyser?.getFloatFrequencyData(frequencyData);
+        
+        // Calculate energy in speech band
+        let speechEnergy = 0;
+        for (let i = lowBin; i <= highBin; i++) {
+            // Decibels to linear scale roughly
+            const linear = Math.pow(10, frequencyData[i] / 20);
+            speechEnergy += linear;
         }
-        const rms = Math.sqrt(sum / l);
+        speechEnergy = speechEnergy / (highBin - lowBin + 1);
 
-        // PERFECTION: Sustained sound detection to avoid "chair move" interruptions
-        if (rms > this.INTERRUPTION_THRESHOLD) {
-            this.interruptionFrameCount++;
-            if (this.interruptionFrameCount >= this.FRAMES_TO_INTERRUPT) {
+        // Instant interruption if human speech frequency energy is high
+        if (speechEnergy > this.SPEECH_DETECTION_THRESHOLD) {
+            this.speechDetectedFrameCount++;
+            if (this.speechDetectedFrameCount >= this.FRAMES_FOR_INTERRUPTION) {
                 this.callbacks.onLocalInterruption?.();
             }
         } else {
-            this.interruptionFrameCount = 0;
+            this.speechDetectedFrameCount = 0;
         }
 
         const int16 = new Int16Array(l);
@@ -232,10 +253,12 @@ export class GeminiLiveService {
   private cleanup() {
     this.scriptProcessor?.disconnect();
     this.mediaStreamSource?.disconnect();
+    this.analyser?.disconnect();
     this.inputAudioContext?.close().catch(console.error);
 
     this.scriptProcessor = null;
     this.mediaStreamSource = null;
+    this.analyser = null;
     this.inputAudioContext = null;
     this.session = null;
     this.sessionPromise = null;
