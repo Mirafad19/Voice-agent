@@ -296,6 +296,8 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     if (!text.trim() || !chatSessionRef.current || !isOnline) return;
 
     const userMsg: Message = { role: 'user', text, timestamp: new Date() };
+    
+    // PERFECTION: Ensure atomic state update to preserve all history
     setMessages(prev => [...prev, userMsg]);
     setChatInput('');
     setIsChatTyping(true);
@@ -304,15 +306,21 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         const result = await chatSessionRef.current.sendMessageStream({ message: text });
         
         let fullResponse = "";
-        setMessages(prev => [...prev, { role: 'model', text: "", timestamp: new Date() }]); // Placeholder
+        // First append a placeholder for the model
+        setMessages(prev => [...prev, { role: 'model', text: "", timestamp: new Date() }]);
 
         for await (const chunk of result) {
             const chunkText = chunk.text;
             fullResponse += chunkText;
+            
+            // Update the last message in the list correctly
             setMessages(prev => {
-                const newArr = [...prev];
-                newArr[newArr.length - 1] = { role: 'model', text: fullResponse, timestamp: new Date() };
-                return newArr;
+                const updatedHistory = [...prev];
+                const lastIndex = updatedHistory.length - 1;
+                if (lastIndex >= 0 && updatedHistory[lastIndex].role === 'model') {
+                    updatedHistory[lastIndex] = { ...updatedHistory[lastIndex], text: fullResponse };
+                }
+                return updatedHistory;
             });
         }
     } catch (e) {
@@ -749,7 +757,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                           <MicrophoneIcon state={WidgetState.Idle} />
                       </div>
                       <div className="text-left text-white">
-                          <h3 className="font-black text-xl tracking-tighter uppercase leading-none">Talk to Assistant</h3>
+                          <h3 className="font-black text-xl tracking-tighter uppercase leading-none">Talk to AI Assistant</h3>
                           <p className="text-xs font-bold opacity-80 mt-1 uppercase tracking-widest">Skip typing, we're listening.</p>
                       </div>
                   </div>
@@ -761,13 +769,13 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const renderChatView = () => (
       <div className="flex flex-col h-full w-full bg-white dark:bg-gray-900 animate-fade-in-up">
           <div className={`flex items-center justify-between p-5 flex-shrink-0 z-20 bg-accent-${accentColorClass} text-white shadow-xl transition-colors duration-300`}>
-              <div className="flex items-center gap-4">
-                  <button onClick={handleBack} className="p-1 rounded-full hover:bg-white/20 transition-all active:scale-90" title="Back">
+              <div className="flex items-center gap-4 min-w-0">
+                  <button onClick={handleBack} className="p-1 rounded-full hover:bg-white/20 transition-all active:scale-90 flex-shrink-0" title="Back">
                       <ChevronLeftIcon />
                   </button>
-                  <h3 className="font-black text-lg uppercase tracking-tight leading-tight truncate max-w-[200px]">{agentProfile.name}</h3>
+                  <h3 className="font-black text-lg uppercase tracking-tight leading-tight text-white whitespace-normal break-words">{agentProfile.name}</h3>
               </div>
-              <button onClick={endChatSession} className="text-[10px] font-black bg-white text-red-500 hover:bg-red-50 px-4 py-2 rounded-full shadow-lg transition-all uppercase tracking-widest active:scale-95">
+              <button onClick={endChatSession} className="text-[10px] font-black bg-white text-red-500 hover:bg-red-50 px-4 py-2 rounded-full shadow-lg transition-all uppercase tracking-widest active:scale-95 flex-shrink-0 ml-2">
                   End Chat
               </button>
           </div>
@@ -843,13 +851,13 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         )}
 
         <div className={`flex items-center justify-between p-5 flex-shrink-0 z-20 bg-accent-${accentColorClass} text-white shadow-xl transition-colors duration-300`}>
-            <div className="flex items-center gap-4">
-                 <button onClick={handleBack} className="p-1 rounded-full hover:bg-white/20 transition-all active:scale-90" title="Back">
+            <div className="flex items-center gap-4 min-w-0">
+                 <button onClick={handleBack} className="p-1 rounded-full hover:bg-white/20 transition-all active:scale-90 flex-shrink-0" title="Back">
                     <ChevronLeftIcon />
                 </button>
-                <h3 className="font-black text-lg uppercase tracking-tight leading-tight truncate max-w-[200px] text-white">{agentProfile.name}</h3>
+                <h3 className="font-black text-lg uppercase tracking-tight leading-tight text-white whitespace-normal break-words">{agentProfile.name}</h3>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-shrink-0 ml-2">
                 <LiveBadge />
             </div>
         </div>
@@ -946,9 +954,9 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     const fabContent = (
       <div className={`${themeClass} relative group`}>
         {showCallout && agentProfile.calloutMessage && (
-          <div className="absolute bottom-[calc(100%+16px)] right-0 mb-4 w-[200px] px-5 py-3 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.15)] text-left text-sm animate-fade-in-up border border-gray-100 dark:border-gray-700">
+          <div className="absolute bottom-[calc(100%+16px)] right-0 md:right-4 mb-4 w-[220px] px-5 py-3 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.15)] text-left text-sm animate-fade-in-up border border-gray-100 dark:border-gray-700 z-[10000]">
             <p className="font-bold leading-tight uppercase tracking-tight">{agentProfile.calloutMessage}</p>
-            <div className="absolute -bottom-2 right-6 w-4 h-4 bg-white dark:bg-gray-800 transform rotate-45 border-b border-r border-gray-100 dark:border-gray-700"></div>
+            <div className="absolute -bottom-2 right-8 w-4 h-4 bg-white dark:bg-gray-800 transform rotate-45 border-b border-r border-gray-100 dark:border-gray-700"></div>
           </div>
         )}
         <button onClick={toggleWidget} className={`w-16 h-16 rounded-full bg-accent-${accentColorClass} shadow-2xl flex items-center justify-center text-white transform hover:scale-110 transition-all animate-pulse active:scale-95`}>
