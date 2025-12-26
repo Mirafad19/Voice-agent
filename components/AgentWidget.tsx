@@ -45,6 +45,11 @@ async function getCloudinaryShareableLink(cloudName: string, uploadPreset: strin
     return result.secure_url;
 }
 
+// PERFECTION: Clean Citation Markers from AI text
+const cleanAiText = (text: string) => {
+    return text.replace(/:contentReference\[oaicite:\d+\]|\{index=\d+\}/g, '').trim();
+};
+
 // --- Icons ---
 
 const WaveformIcon = ({className = "h-9 w-9 text-white"}) => (
@@ -297,7 +302,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
     const userMsg: Message = { role: 'user', text, timestamp: new Date() };
     
-    // PERFECTION: Ensure atomic state update to preserve all history
+    // PERFECTION: Ensure functional update to prevent message loss
     setMessages(prev => [...prev, userMsg]);
     setChatInput('');
     setIsChatTyping(true);
@@ -306,26 +311,28 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         const result = await chatSessionRef.current.sendMessageStream({ message: text });
         
         let fullResponse = "";
-        // First append a placeholder for the model
+        // Placeholder for streaming response
         setMessages(prev => [...prev, { role: 'model', text: "", timestamp: new Date() }]);
 
         for await (const chunk of result) {
             const chunkText = chunk.text;
             fullResponse += chunkText;
             
-            // Update the last message in the list correctly
+            // Scrub citation markers in real-time
+            const cleanedResponse = cleanAiText(fullResponse);
+
             setMessages(prev => {
-                const updatedHistory = [...prev];
-                const lastIndex = updatedHistory.length - 1;
-                if (lastIndex >= 0 && updatedHistory[lastIndex].role === 'model') {
-                    updatedHistory[lastIndex] = { ...updatedHistory[lastIndex], text: fullResponse };
+                const updated = [...prev];
+                const lastIdx = updated.length - 1;
+                if (lastIdx >= 0 && updated[lastIdx].role === 'model') {
+                    updated[lastIdx] = { ...updated[lastIdx], text: cleanedResponse };
                 }
-                return updatedHistory;
+                return updated;
             });
         }
     } catch (e) {
         console.error("Chat error:", e);
-        setMessages(prev => [...prev, { role: 'model', text: "I'm having trouble connecting right now. Please try again.", timestamp: new Date() }]);
+        setMessages(prev => [...prev, { role: 'model', text: "I encountered an error. Please try again.", timestamp: new Date() }]);
     } finally {
         setIsChatTyping(false);
     }
@@ -500,7 +507,9 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
       onTranscriptUpdate: (isFinal, text, type) => {
          if (isFinal) {
              const speaker = type === 'input' ? 'User' : 'Agent';
-             fullTranscriptRef.current += `${speaker}: ${text}\n`;
+             // Clean citation markers from voice transcript too
+             const cleanedText = cleanAiText(text);
+             fullTranscriptRef.current += `${speaker}: ${cleanedText}\n`;
          }
          
          if (type === 'input' && text.trim().length > 0) {
@@ -768,12 +777,14 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
   const renderChatView = () => (
       <div className="flex flex-col h-full w-full bg-white dark:bg-gray-900 animate-fade-in-up">
-          <div className={`flex items-center justify-between p-5 flex-shrink-0 z-20 bg-accent-${accentColorClass} text-white shadow-xl transition-colors duration-300`}>
-              <div className="flex items-center gap-4 min-w-0">
+          <div className={`flex items-center justify-between p-5 flex-shrink-0 z-20 bg-accent-${accentColorClass} text-white shadow-xl transition-colors duration-300 min-h-[72px]`}>
+              <div className="flex items-center gap-4 min-w-0 flex-1">
                   <button onClick={handleBack} className="p-1 rounded-full hover:bg-white/20 transition-all active:scale-90 flex-shrink-0" title="Back">
                       <ChevronLeftIcon />
                   </button>
-                  <h3 className="font-black text-lg uppercase tracking-tight leading-tight text-white whitespace-normal break-words">{agentProfile.name}</h3>
+                  <h3 className="font-black text-lg uppercase tracking-tight leading-tight text-white whitespace-normal break-words overflow-visible flex-1">
+                      {agentProfile.name}
+                  </h3>
               </div>
               <button onClick={endChatSession} className="text-[10px] font-black bg-white text-red-500 hover:bg-red-50 px-4 py-2 rounded-full shadow-lg transition-all uppercase tracking-widest active:scale-95 flex-shrink-0 ml-2">
                   End Chat
@@ -850,12 +861,14 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             </div>
         )}
 
-        <div className={`flex items-center justify-between p-5 flex-shrink-0 z-20 bg-accent-${accentColorClass} text-white shadow-xl transition-colors duration-300`}>
-            <div className="flex items-center gap-4 min-w-0">
+        <div className={`flex items-center justify-between p-5 flex-shrink-0 z-20 bg-accent-${accentColorClass} text-white shadow-xl transition-colors duration-300 min-h-[72px]`}>
+            <div className="flex items-center gap-4 min-w-0 flex-1">
                  <button onClick={handleBack} className="p-1 rounded-full hover:bg-white/20 transition-all active:scale-90 flex-shrink-0" title="Back">
                     <ChevronLeftIcon />
                 </button>
-                <h3 className="font-black text-lg uppercase tracking-tight leading-tight text-white whitespace-normal break-words">{agentProfile.name}</h3>
+                <h3 className="font-black text-lg uppercase tracking-tight leading-tight text-white whitespace-normal break-words overflow-visible flex-1">
+                    {agentProfile.name}
+                </h3>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0 ml-2">
                 <LiveBadge />
