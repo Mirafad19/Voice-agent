@@ -45,9 +45,13 @@ async function getCloudinaryShareableLink(cloudName: string, uploadPreset: strin
     return result.secure_url;
 }
 
-// PERFECTION: Clean Citation Markers from AI text
+// PERFECTION: Clean Citation Markers and metadata from AI text
 const cleanAiText = (text: string) => {
-    return text.replace(/:contentReference\[oaicite:\d+\]|\{index=\d+\}/g, '').trim();
+    return text
+        .replace(/:contentReference\[oaicite:\d+\]/g, '')
+        .replace(/\{index=\d+\}/g, '')
+        .replace(/【\d+†source】/g, '') // Also clean standard citation markers
+        .trim();
 };
 
 // --- Icons ---
@@ -289,6 +293,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
     const welcomeText = config.initialGreetingText || config.initialGreeting || "Hello! How can I help you?";
     
+    // Clear history and start with welcome message
     setMessages([{ role: 'model', text: welcomeText, timestamp: new Date() }]);
     setView('chat');
 
@@ -302,7 +307,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
     const userMsg: Message = { role: 'user', text, timestamp: new Date() };
     
-    // PERFECTION: Ensure functional update to prevent message loss
+    // Append user message to existing history
     setMessages(prev => [...prev, userMsg]);
     setChatInput('');
     setIsChatTyping(true);
@@ -311,7 +316,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         const result = await chatSessionRef.current.sendMessageStream({ message: text });
         
         let fullResponse = "";
-        // Placeholder for streaming response
+        // Append model response placeholder to existing history
         setMessages(prev => [...prev, { role: 'model', text: "", timestamp: new Date() }]);
 
         for await (const chunk of result) {
@@ -324,6 +329,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             setMessages(prev => {
                 const updated = [...prev];
                 const lastIdx = updated.length - 1;
+                // Double check it's the model's placeholder we're updating
                 if (lastIdx >= 0 && updated[lastIdx].role === 'model') {
                     updated[lastIdx] = { ...updated[lastIdx], text: cleanedResponse };
                 }
@@ -332,7 +338,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         }
     } catch (e) {
         console.error("Chat error:", e);
-        setMessages(prev => [...prev, { role: 'model', text: "I encountered an error. Please try again.", timestamp: new Date() }]);
+        setMessages(prev => [...prev, { role: 'model', text: "I encountered an error while processing your request. Please try again.", timestamp: new Date() }]);
     } finally {
         setIsChatTyping(false);
     }
@@ -684,6 +690,14 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
           initChat(chatInput);
       }
   };
+  
+  // PERFECTION: Dedicated submit for chat view to PRESERVE history
+  const handleChatViewSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if(chatInput.trim()) {
+        handleChatMessage(chatInput);
+    }
+  };
 
   // --- Effects ---
   useEffect(() => {
@@ -822,7 +836,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
               <div ref={messagesEndRef} />
           </div>
 
-          <form onSubmit={handleHomeInputSubmit} className="p-5 border-t border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-900">
+          <form onSubmit={handleChatViewSubmit} className="p-5 border-t border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-900">
               <div className="relative">
                   <input
                     type="text"
