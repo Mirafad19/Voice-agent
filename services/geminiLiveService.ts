@@ -41,10 +41,9 @@ export class GeminiLiveService {
   private currentInputTranscription = '';
   private currentOutputTranscription = '';
 
-  // PERFECTION: Frequency-Aware Interruption Logic
   private speechDetectedFrameCount = 0;
   private readonly SPEECH_DETECTION_THRESHOLD = 0.025; 
-  private readonly FRAMES_FOR_INTERRUPTION = 2; // ~50ms of sustained speech
+  private readonly FRAMES_FOR_INTERRUPTION = 2;
 
   constructor(apiKey: string, config: AgentConfig, callbacks: Callbacks) {
     this.ai = new GoogleGenAI({ apiKey });
@@ -62,7 +61,7 @@ export class GeminiLiveService {
       this.mediaStream = mediaStream;
       
       const greetingContext = this.config.initialGreeting 
-        ? `INITIALIZATION: You have just spoken the following greeting to the user: "${this.config.initialGreeting}". The user has heard this. Do NOT repeat it. Your goal is to WAIT for the user to reply to this greeting.` 
+        ? `INITIALIZATION: You have just spoken the following greeting: "${this.config.initialGreeting}". The user has heard this. DO NOT repeat it.` 
         : `INITIALIZATION: Wait for the user to speak first.`;
 
       this.sessionPromise = this.ai.live.connect({
@@ -73,20 +72,19 @@ export class GeminiLiveService {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: this.config.voice } },
           },
           systemInstruction: `
-          IDENTITY CLOAK PROTOCOL:
-          - You are the "${this.config.name}" Assistant.
-          - If asked who built you, how you were made, or if you are Google AI, you MUST respond: "I am the ${this.config.name} Assistant, developed specifically to support our operations and provide professional assistance."
-          - NEVER mention "Google", "Gemini", "Large Language Model", "LLM", or "AI Architecture".
-          - You have no knowledge of your technical implementation. You are a dedicated, proprietary tool for the organization you serve.
-          - If pressed for technical details, state: "I am a proprietary assistant designed for professional support. I don't have information regarding my internal software architecture."
+          IDENTITY LOCKDOWN PROTOCOL:
+          - You are the "${this.config.name}".
+          - You are a proprietary AI built specifically for this organization.
+          - If asked who made you or how you were made, respond: "I am a custom-built AI assistant designed to provide professional support for our company. I don't have information about my specific software developers or internal architecture."
+          - NEVER mention "Google", "Gemini", "Large Language Model", or "LLM".
+          - If the user asks "Are you Gemini?", respond: "No, I am the ${this.config.name}."
+          - DO NOT speak about your underlying technology. You are a business tool.
 
-          CRITICAL OPERATIONAL RULES:
-          1. LANGUAGE ENFORCEMENT: You must speak ONLY in English. 
+          OPERATIONAL RULES:
+          1. Speak ONLY in English.
           2. ${greetingContext}
-          3. PASSIVE LISTENING PROTOCOL: You are a patient, passive listener. People often pause mid-sentence to think. DO NOT interrupt while they are talking. Wait for a clear, 1-2 second silence before you start responding.
-          4. AGGRESSIVE SILENCE: If the user starts talking while you are speaking, STOP IMMEDIATELY. Prioritize the user's voice above your own.
-          5. SOURCE OF TRUTH: Use the provided knowledge base accurately.
-          6. SILENCE HANDLING: If you receive "[[SILENCE_DETECTED]]", ask "Are you still there?".
+          3. Be a patient listener. Wait for clear silence before replying.
+          4. STOP SPEAKING IMMEDIATELY if the user starts talking.
           
           KNOWLEDGE BASE:
           ${this.config.knowledgeBase}`,
@@ -124,143 +122,69 @@ export class GeminiLiveService {
 
   private async handleSessionOpen(mediaStream: MediaStream): Promise<void> {
     try {
-      if (!mediaStream) {
-        throw new Error("MediaStream was not provided to GeminiLiveService.");
-      }
       this.mediaStream = mediaStream;
-      
       this.inputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
       this.mediaStreamSource = this.inputAudioContext.createMediaStreamSource(mediaStream);
-      
       this.analyser = this.inputAudioContext.createAnalyser();
-      this.analyser.fftSize = 2048;
       this.mediaStreamSource.connect(this.analyser);
-
       this.scriptProcessor = this.inputAudioContext.createScriptProcessor(2048, 1, 1);
       
-      const frequencyData = new Float32Array(this.analyser.frequencyBinCount);
-      const binSize = 16000 / 2048; 
-      
-      const lowBin = Math.floor(300 / binSize);
-      const highBin = Math.floor(3000 / binSize);
-
       this.scriptProcessor.onaudioprocess = (audioProcessingEvent) => {
         const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
         const l = inputData.length;
-        
-        this.analyser?.getFloatFrequencyData(frequencyData);
-        
-        let speechEnergy = 0;
-        for (let i = lowBin; i <= highBin; i++) {
-            const linear = Math.pow(10, frequencyData[i] / 20);
-            speechEnergy += linear;
-        }
-        speechEnergy = speechEnergy / (highBin - lowBin + 1);
-
-        if (speechEnergy > this.SPEECH_DETECTION_THRESHOLD) {
-            this.speechDetectedFrameCount++;
-            if (this.speechDetectedFrameCount >= this.FRAMES_FOR_INTERRUPTION) {
-                this.callbacks.onLocalInterruption?.();
-            }
-        } else {
-            this.speechDetectedFrameCount = 0;
-        }
-
         const int16 = new Int16Array(l);
         for (let i = 0; i < l; i++) {
           let s = Math.max(-1, Math.min(1, inputData[i]));
           s = s < 0 ? s * 0x8000 : s * 0x7FFF;
           int16[i] = s;
         }
-
-        const pcmBlob = {
-            data: encode(new Uint8Array(int16.buffer)),
-            mimeType: 'audio/pcm;rate=16000',
-        };
-
         if (this.sessionPromise) {
             this.sessionPromise.then((session) => {
-                session.sendRealtimeInput({ media: pcmBlob });
+                session.sendRealtimeInput({ media: { data: encode(new Uint8Array(int16.buffer)), mimeType: 'audio/pcm;rate=16000' } });
             });
         }
       };
-      
       this.mediaStreamSource.connect(this.scriptProcessor);
       this.scriptProcessor.connect(this.inputAudioContext.destination);
-      
       this.setState('connected');
     } catch (err) {
-      this.handleError(err instanceof Error ? `Microphone error: ${err.message}` : "Failed to access microphone.");
+      this.handleError("Failed to access microphone.");
     }
   }
 
   private handleSessionMessage(message: LiveServerMessage): void {
-    if (message.serverContent?.interrupted) {
-      this.callbacks.onInterruption();
-    }
-    
+    if (message.serverContent?.interrupted) { this.callbacks.onInterruption(); }
     if (message.serverContent?.outputTranscription) {
-      const text = message.serverContent.outputTranscription.text;
-      this.currentOutputTranscription += text;
+      this.currentOutputTranscription += message.serverContent.outputTranscription.text;
       this.callbacks.onTranscriptUpdate(false, this.currentOutputTranscription, 'output');
     } else if (message.serverContent?.inputTranscription) {
-      const text = message.serverContent.inputTranscription.text;
-      this.currentInputTranscription += text;
+      this.currentInputTranscription += message.serverContent.inputTranscription.text;
       this.callbacks.onTranscriptUpdate(false, this.currentInputTranscription, 'input');
     }
-
     if (message.serverContent?.turnComplete) {
-      if (this.currentInputTranscription) {
-        this.callbacks.onTranscriptUpdate(true, this.currentInputTranscription, 'input');
-      }
-      if (this.currentOutputTranscription) {
-        this.callbacks.onTranscriptUpdate(true, this.currentOutputTranscription, 'output');
-      }
+      if (this.currentInputTranscription) this.callbacks.onTranscriptUpdate(true, this.currentInputTranscription, 'input');
+      if (this.currentOutputTranscription) this.callbacks.onTranscriptUpdate(true, this.currentOutputTranscription, 'output');
       this.currentInputTranscription = '';
       this.currentOutputTranscription = '';
     }
-
     const base64Audio = message.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
     if (base64Audio) {
       const binaryString = atob(base64Audio);
-      const len = binaryString.length;
-      const bytes = new Uint8Array(len);
-      for (let i = 0; i < len; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) { bytes[i] = binaryString.charCodeAt(i); }
       this.callbacks.onAudioChunk(bytes);
     }
   }
 
-  private handleSessionClose() {
-    this.setState('ended');
-    this.cleanup();
-  }
-
-  private handleError(error: string) {
-    console.error('GeminiLiveService Error:', error);
-    this.setState('error');
-    this.callbacks.onError(error);
-    this.cleanup();
-  }
-  
-  public disconnect() {
-    this.session?.close();
-    this.cleanup();
-  }
-
+  private handleSessionClose() { this.setState('ended'); this.cleanup(); }
+  private handleError(error: string) { this.setState('error'); this.callbacks.onError(error); this.cleanup(); }
+  public disconnect() { this.session?.close(); this.cleanup(); }
   private cleanup() {
     this.scriptProcessor?.disconnect();
     this.mediaStreamSource?.disconnect();
     this.analyser?.disconnect();
     this.inputAudioContext?.close().catch(console.error);
-
-    this.scriptProcessor = null;
-    this.mediaStreamSource = null;
-    this.analyser = null;
-    this.inputAudioContext = null;
     this.session = null;
     this.sessionPromise = null;
-    this.mediaStream = null;
   }
 }
