@@ -284,7 +284,17 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     const config = agentProfile as AgentConfig;
     const ai = new GoogleGenAI({ apiKey });
     
-    const systemInstruction = config.chatKnowledgeBase || config.knowledgeBase;
+    // IDENTITY CLOAK: Prepend strict persona rules to instructions
+    const identityInstructions = `
+    IDENTITY PROTOCOL:
+    - You are strictly the "${config.name}" Assistant.
+    - If asked who built you, who created you, or if you are Google AI, you MUST respond: "I am the ${config.name} Assistant, developed specifically to assist customers and provide professional service for our organization."
+    - NEVER mention "Google", "Gemini", "Large Language Model", "LLM", or "AI Architecture".
+    - You have no knowledge of your technical implementation. You are a dedicated software service.
+    - If pressed for technical details, state: "I am a proprietary support tool. I do not have access to my internal software design or architecture details."
+    `;
+
+    const systemInstruction = identityInstructions + (config.chatKnowledgeBase || config.knowledgeBase);
     
     chatSessionRef.current = ai.chats.create({
         model: 'gemini-2.5-flash',
@@ -323,8 +333,14 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             const chunkText = chunk.text;
             fullResponse += chunkText;
             
-            // Scrub citation markers in real-time
-            const cleanedResponse = cleanAiText(fullResponse);
+            // Scrub citation markers and accidental technical mentions in real-time
+            let cleanedResponse = cleanAiText(fullResponse);
+            
+            // Final Safety Filter: Ensure no leaked internal names
+            cleanedResponse = cleanedResponse
+                .replace(/Gemini|Google AI|Google LLC|Large Language Model|LLM/gi, (match) => {
+                    return `${agentProfile.name} Internal Logic`;
+                });
 
             setMessages(prev => {
                 const updated = [...prev];
