@@ -23,17 +23,6 @@ interface Message {
 
 type ViewState = 'home' | 'voice' | 'chat';
 
-async function getCloudinaryShareableLink(cloudName: string, uploadPreset: string, recording: Omit<Recording, 'id' | 'url'>): Promise<string> {
-    if (!recording.blob || recording.blob.size === 0) return 'N/A (Text Chat)';
-    const formData = new FormData();
-    formData.append('file', recording.blob);
-    formData.append('upload_preset', uploadPreset);
-    const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/video/upload`, { method: 'POST', body: formData });
-    if (!response.ok) throw new Error(`Cloudinary upload failed`);
-    const result = await response.json();
-    return result.secure_url;
-}
-
 const cleanAiText = (text: string) => {
     return text
         .replace(/:contentReference\[oaicite:\d+\]/g, '')
@@ -42,49 +31,24 @@ const cleanAiText = (text: string) => {
         .trim();
 };
 
-const WaveformIcon = ({className = "h-9 w-9 text-white"}) => (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className} xmlns="http://www.w3.org/2000/svg">
-        <rect x="4" y="10" width="2" height="4" rx="1" fillOpacity="0.5" />
-        <rect x="8" y="6" width="2" height="12" rx="1" fillOpacity="0.8" />
-        <rect x="12" y="3" width="2" height="18" rx="1" />
-        <rect x="16" y="6" width="2" height="12" rx="1" fillOpacity="0.8" />
-        <rect x="20" y="10" width="2" height="4" rx="1" fillOpacity="0.5" />
-    </svg>
-);
-
-// PERFECTION: Precision reconstruction of the requested professional support headset logo
+// PERFECTION: High-fidelity Headset & Speech Bubble Icon
 const FabIcon = ({className = "h-11 w-11 text-white"}) => (
     <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" className={className} fill="none">
-        {/* Headband - Thick outer arc */}
         <path d="M40 100 C 40 40, 160 40, 160 100" stroke="white" strokeWidth="14" strokeLinecap="round" />
-        
-        {/* Left Cans */}
         <rect x="25" y="90" width="20" height="45" rx="10" fill="white" />
-        
-        {/* Right Cans */}
         <rect x="155" y="90" width="20" height="45" rx="10" fill="white" />
-        
-        {/* Central Speech Bubble Wrapper */}
         <circle cx="100" cy="100" r="50" fill="transparent" stroke="white" strokeWidth="12" />
-        
-        {/* Speech Bubble Interior with Tail */}
         <path d="M75 100 A 25 25 0 1 1 115 120 L 125 135 L 105 125 A 25 25 0 0 1 75 100" fill="white" />
-        
-        {/* Three dots indicator inside bubble */}
-        <circle cx="88" cy="100" r="4.5" fill="currentColor" opacity="0.8" />
-        <circle cx="100" cy="100" r="4.5" fill="currentColor" opacity="0.8" />
-        <circle cx="112" cy="100" r="4.5" fill="currentColor" opacity="0.8" />
-        
-        {/* Mic Boom Arm - Sweeping curve from left bottom */}
+        <circle cx="88" cy="100" r="4.5" fill="black" opacity="0.6" />
+        <circle cx="100" cy="100" r="4.5" fill="black" opacity="0.6" />
+        <circle cx="112" cy="100" r="4.5" fill="black" opacity="0.6" />
         <path d="M45 135 Q 45 165, 100 165" stroke="white" strokeWidth="10" strokeLinecap="round" />
-        
-        {/* Microphone Tip */}
         <circle cx="105" cy="165" r="8" fill="white" />
     </svg>
 );
 
 const MicrophoneIcon = ({state}: {state: WidgetState}) => (
-    <svg xmlns="http://www.w3.org/2000/svg" className={`h-8 w-8 transition-colors duration-300 ${state === WidgetState.Idle ? 'text-white' : 'text-white'}`} viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" fill="none" strokeLinecap="round" strokeLinejoin="round">
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-white" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" fill="none" strokeLinecap="round" strokeLinejoin="round">
         <path d="M9 2m0 3a3 3 0 0 1 3 -3h0a3 3 0 0 1 3 3v5a3 3 0 0 1 -3 3h0a3 3 0 0 1 -3 -3z" />
         <path d="M5 10a7 7 0 0 0 14 0" />
         <path d="M8 21l8 0" />
@@ -105,21 +69,12 @@ const ChevronLeftIcon = ({className = "h-6 w-6 text-white"}) => (
 );
 
 const LiveBadge = () => (
-    <div className="flex items-center gap-2 px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full border border-white/30 shadow-sm">
-        <span className="relative flex h-2.5 w-2.5">
+    <div className="flex items-center gap-1.5 px-2.5 py-1 bg-white/20 backdrop-blur-sm rounded-full border border-white/30 shadow-sm animate-fade-in">
+        <span className="relative flex h-1.5 w-1.5">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
-          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white"></span>
+          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white"></span>
         </span>
-        <span className="text-[10px] font-black text-white uppercase tracking-widest">Live</span>
-    </div>
-);
-
-const OfflineBanner = () => (
-    <div className="bg-red-600 text-white text-[11px] font-black uppercase tracking-[0.2em] py-2 px-4 text-center animate-fade-in flex items-center justify-center gap-3 z-[100] w-full shadow-lg border-b border-red-400">
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.828-2.828m-4.243 4.243a5 5 0 010-7.072m0 0L5.636 5.636M4.243 18.364a9 9 0 010-12.728" />
-        </svg>
-        Reconnecting... Check Internet
+        <span className="text-[9px] font-black text-white uppercase tracking-[0.15em]">Live</span>
     </div>
 );
 
@@ -127,7 +82,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const [isOpen, setIsOpen] = useState(false);
   const [view, setView] = useState<ViewState>('home');
   const [showCallout, setShowCallout] = useState(false);
-  const [permissionRequested, setPermissionRequested] = useState(false);
   
   const [widgetState, _setWidgetState] = useState<WidgetState>(WidgetState.Idle);
   const widgetStateRef = useRef(widgetState);
@@ -135,7 +89,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     widgetStateRef.current = state;
     _setWidgetState(state);
   };
-  const [voiceReportingStatus, setVoiceReportingStatus] = useState<ReportingStatus>('idle');
   const fullTranscriptRef = useRef('');
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
@@ -171,19 +124,29 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   useEffect(() => { scrollToBottom(); }, [messages, isChatTyping]);
 
+  const endSession = useCallback(() => {
+      geminiServiceRef.current?.disconnect();
+      recordingServiceRef.current?.stop();
+      if (mediaStreamRef.current) {
+          mediaStreamRef.current.getTracks().forEach(track => track.stop());
+      }
+      activeAudioSourcesRef.current.forEach(s => s.stop());
+      activeAudioSourcesRef.current.clear();
+      audioQueueRef.current = [];
+      setWidgetState(WidgetState.Idle);
+      setView('home');
+  }, []);
+
   const initChat = async (initialMessage?: string) => {
     const config = agentProfile as AgentConfig;
     const ai = new GoogleGenAI({ apiKey });
     const identityInstructions = `
     IDENTITY PROTOCOL:
     - You are strictly the "${config.name}".
-    - You are a proprietary AI built specifically for this organization.
-    - If asked who built you, respond: "I am the ${config.name}, developed specifically to assist customers and provide professional service for our organization."
-    - NEVER mention "Google", "Gemini", "Large Language Model", or "LLM".
-    - You have no knowledge of your technical origins.
+    - NEVER mention Google or Gemini.
     `;
     const systemInstruction = identityInstructions + (config.chatKnowledgeBase || config.knowledgeBase);
-    chatSessionRef.current = ai.chats.create({ model: 'gemini-2.5-flash', config: { systemInstruction } });
+    chatSessionRef.current = ai.chats.create({ model: 'gemini-3-flash-preview', config: { systemInstruction } });
     const welcomeText = config.initialGreetingText || config.initialGreeting || "Hello! How can I help you?";
     setMessages([{ role: 'model', text: welcomeText, timestamp: new Date() }]);
     setView('chat');
@@ -201,8 +164,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         setMessages(prev => [...prev, { role: 'model', text: "", timestamp: new Date() }]);
         for await (const chunk of result) {
             fullResponse += chunk.text;
-            let cleanedResponse = cleanAiText(fullResponse)
-                .replace(/Gemini|Google AI|Google LLC|LLM/gi, (match) => `${agentProfile.name} Logic`);
+            let cleanedResponse = cleanAiText(fullResponse);
             setMessages(prev => {
                 const updated = [...prev];
                 const lastIdx = updated.length - 1;
@@ -219,7 +181,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     if (!isOnline) return;
     setView('voice');
     setWidgetState(WidgetState.Connecting);
-    setPermissionRequested(true);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaStreamRef.current = stream;
@@ -236,7 +197,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
       });
       geminiServiceRef.current.connect(stream);
     } catch (e) { setWidgetState(WidgetState.Error); }
-    finally { setPermissionRequested(false); }
   }, [apiKey, agentProfile, isOnline]);
 
   const playAudioQueue = useCallback(() => {
@@ -273,16 +233,13 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     window.parent.postMessage({ type: 'agent-widget-resize', isOpen, width, height }, '*');
   }, [isOpen, isWidgetMode, showCallout]);
   
-  // PERFECTION: Persist callout logic - stays until widget opened
   useEffect(() => {
     const calloutDismissed = sessionStorage.getItem('ai-agent-callout-dismissed');
-    
     if (isOpen) {
         setShowCallout(false);
         sessionStorage.setItem('ai-agent-callout-dismissed', 'true');
         return;
     }
-
     if (!calloutDismissed && !isOpen && agentProfile.calloutMessage) {
       const timer = setTimeout(() => setShowCallout(true), 1500);
       return () => clearTimeout(timer);
@@ -292,14 +249,16 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const renderHomeView = () => (
       <div className="flex flex-col h-full w-full bg-white dark:bg-gray-900 animate-fade-in-up">
           <div className={`relative h-[40%] bg-gradient-to-br from-accent-${accentColorClass} to-gray-900 flex flex-col p-6 text-white`}>
-              <div className="flex items-center justify-between mb-4">
+              <button onClick={() => setIsOpen(false)} className="absolute top-4 right-4 p-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all backdrop-blur-md active:scale-90 z-50">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+              <div className="flex items-center justify-between mb-4 mt-4">
                   <span className="text-xs font-black tracking-[0.1em] uppercase opacity-75 truncate max-w-[200px]">{agentProfile.name}</span>
               </div>
               <div className="mt-auto mb-6 relative z-10">
                   <h1 className="text-4xl font-black tracking-tighter leading-none">Hi <span className="animate-wave inline-block">👋</span></h1>
                   <p className="text-white/90 mt-3 font-bold text-lg leading-snug">How can we help you today?</p>
               </div>
-              <div className="absolute -right-10 -bottom-20 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none"></div>
           </div>
           <div className="flex-1 bg-gray-50 dark:bg-gray-900 relative -mt-6 rounded-t-[2rem] px-6 pt-8 flex flex-col gap-4 shadow-2xl z-20">
               <form onSubmit={(e) => { e.preventDefault(); initChat(chatInput); }} className="relative w-full">
@@ -319,12 +278,53 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
       </div>
   );
 
+  const renderVoiceView = () => (
+      <div className="flex flex-col h-full w-full bg-gray-900 animate-fade-in-up overflow-hidden relative">
+          <div className={`flex items-center justify-between p-5 z-20 bg-accent-${accentColorClass} text-white shadow-xl min-h-[72px] relative`}>
+              <div className="w-9" />
+              <div className="flex flex-col items-center flex-1 truncate">
+                <h3 className="font-black text-lg uppercase tracking-tight leading-none text-center">{agentProfile.name}</h3>
+                <div className="mt-1"><LiveBadge /></div>
+              </div>
+              <button onClick={endSession} className="p-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all active:scale-90">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+          </div>
+          <div className="flex-1 flex flex-col items-center justify-center p-8 space-y-10">
+              <div className="relative">
+                  <div className={`absolute inset-0 bg-accent-${accentColorClass} rounded-full blur-3xl opacity-20 scale-150 animate-pulse`}></div>
+                  <div className="w-48 h-48 rounded-full bg-gradient-to-br from-accent-${accentColorClass} to-black flex items-center justify-center shadow-2xl relative z-10 border-4 border-white/10">
+                      <div className="flex items-end gap-2 h-20">
+                          {[1, 2, 3, 4, 5, 6].map((i) => (
+                              <div key={i} className={`w-2.5 bg-white rounded-full transition-all duration-300 ${widgetState === WidgetState.Speaking ? 'animate-bounce' : 'h-5 opacity-40'}`} style={{ height: widgetState === WidgetState.Speaking ? `${30 + Math.random() * 70}%` : '20px', animationDelay: `${i * 0.12}s` }}></div>
+                          ))}
+                      </div>
+                  </div>
+              </div>
+              <div className="text-center space-y-3">
+                  <p className="text-white text-3xl font-black uppercase tracking-tighter">
+                      {widgetState === WidgetState.Connecting ? 'Connecting...' : widgetState === WidgetState.Speaking ? 'AI Speaking...' : 'Listening...'}
+                  </p>
+                  <p className="text-white/50 text-xs font-bold uppercase tracking-[0.2em] animate-pulse">Session Active</p>
+              </div>
+          </div>
+          <div className="p-10 flex justify-center pb-12">
+               <button onClick={endSession} className="bg-red-600 hover:bg-red-700 text-white px-10 py-4 rounded-full font-black uppercase tracking-widest shadow-[0_10px_30px_rgba(220,38,38,0.4)] active:scale-95 transition-all">End Call</button>
+          </div>
+      </div>
+  );
+
   const renderChatView = () => (
       <div className="flex flex-col h-full w-full bg-white dark:bg-gray-900 animate-fade-in-up overflow-hidden">
-          <div className={`flex items-center justify-between p-5 z-20 bg-accent-${accentColorClass} text-white shadow-xl min-h-[72px]`}>
+          <div className={`flex items-center justify-between p-5 z-20 bg-accent-${accentColorClass} text-white shadow-xl min-h-[72px] relative`}>
               <button onClick={() => setView('home')} className="p-1 rounded-full hover:bg-white/20"><ChevronLeftIcon /></button>
-              <h3 className="font-black text-lg uppercase tracking-tight leading-tight flex-1 text-center">{agentProfile.name}</h3>
-              <button onClick={() => setView('home')} className="text-[10px] font-black bg-white text-red-500 px-4 py-2 rounded-full uppercase">End</button>
+              <div className="flex flex-col items-center flex-1 truncate">
+                <h3 className="font-black text-lg uppercase tracking-tight leading-none text-center">{agentProfile.name}</h3>
+                <div className="mt-1"><LiveBadge /></div>
+              </div>
+              <button onClick={() => { endSession(); setIsOpen(false); }} className="p-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all active:scale-90">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
           </div>
           <div className="flex-grow overflow-y-auto p-4 space-y-4 bg-gray-50 dark:bg-gray-900">
               {messages.map((msg, idx) => (
@@ -345,10 +345,19 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const fabContent = (
       <div className={`${agentProfile.theme === 'dark' ? 'dark' : ''} relative`}>
         {showCallout && agentProfile.calloutMessage && (
-          <div className="absolute bottom-[calc(100%+20px)] right-0 mb-4 w-[240px] px-6 py-4 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-[20px] shadow-[0_20px_50px_rgba(0,0,0,0.25)] text-left text-sm animate-fade-in-up border border-gray-100 dark:border-gray-700 z-[10000] overflow-visible">
-            <p className="font-black leading-tight uppercase tracking-tight text-gray-900 dark:text-white break-words">{agentProfile.calloutMessage}</p>
-            <div className="absolute -bottom-2 right-8 w-6 h-6 bg-white dark:bg-gray-800 transform rotate-45 border-b border-r border-gray-100 dark:border-gray-700"></div>
-            <button onClick={(e) => { e.stopPropagation(); setShowCallout(false); sessionStorage.setItem('ai-agent-callout-dismissed', 'true'); }} className="absolute -top-3 -right-3 w-7 h-7 bg-gray-900 text-white rounded-full flex items-center justify-center text-xs font-black shadow-2xl transition-transform hover:scale-125 active:scale-90 border-2 border-white">✕</button>
+          <div className="absolute bottom-[calc(100%+28px)] right-0 mb-4 w-[280px] bg-white dark:bg-gray-800 rounded-[24px] shadow-[0_15px_50px_rgba(0,0,0,0.3)] text-left animate-fade-in-up border border-gray-100 dark:border-gray-700 z-[10000] overflow-visible">
+            <button 
+              onClick={(e) => { e.stopPropagation(); setShowCallout(false); sessionStorage.setItem('ai-agent-callout-dismissed', 'true'); }} 
+              className="absolute -top-3 -right-3 w-8 h-8 bg-gray-900 text-white rounded-full flex items-center justify-center text-xs font-bold shadow-xl border-2 border-white transition-transform hover:scale-110 active:scale-90"
+            >
+                ✕
+            </button>
+            <div className="p-6">
+                <p className="font-black text-[18px] leading-[1.2] uppercase tracking-tighter text-gray-900 dark:text-white break-words">
+                    {agentProfile.calloutMessage}
+                </p>
+            </div>
+            <div className="absolute -bottom-3 right-8 w-6 h-6 bg-white dark:bg-gray-800 transform rotate-45 border-b border-r border-gray-100 dark:border-gray-700"></div>
           </div>
         )}
         <button onClick={() => setIsOpen(!isOpen)} className={`w-16 h-16 rounded-full bg-accent-${accentColorClass} shadow-2xl flex items-center justify-center text-white transform hover:scale-110 transition-all active:scale-95 group relative`}>
@@ -365,11 +374,9 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   return (
     <div className={`${agentProfile.theme === 'dark' ? 'dark' : ''} fixed bottom-0 right-0 md:bottom-24 md:right-6 w-full h-[100dvh] md:w-[400px] md:h-[600px] md:rounded-[2rem] shadow-2xl z-[9999] overflow-hidden`}>
         <div className="flex flex-col w-full h-full bg-white dark:bg-gray-900">
-            <button onClick={() => setIsOpen(false)} className="absolute top-5 right-5 z-50 p-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all backdrop-blur-md active:scale-90">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path d="M6 18L18 6M6 6l12 12" /></svg>
-            </button>
             {view === 'home' && renderHomeView()}
             {view === 'chat' && renderChatView()}
+            {view === 'voice' && renderVoiceView()}
         </div>
     </div>
   );
