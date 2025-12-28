@@ -52,17 +52,22 @@ const WaveformIcon = ({className = "h-9 w-9 text-white"}) => (
     </svg>
 );
 
-// PERFECTION: Robot Head Icon from Screenshot
+// PERFECTION: Human Support Agent Icon matching the user's reference exactly
 const FabIcon = ({className = "h-10 w-10 text-white"}) => (
-    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 2a10 10 0 0 1 10 10v1a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1a10 10 0 0 1 10-10z" />
-        <circle cx="9" cy="11" r="1" fill="currentColor" />
-        <circle cx="15" cy="11" r="1" fill="currentColor" />
-        <path d="M10 15a2 2 0 0 0 4 0" />
-        <path d="M22 13v-2" />
-        <path d="M2 13v-2" />
-        <path d="M20 13a2 2 0 0 0 2-2v-1" />
-        <path d="M2 10V9a2 2 0 0 1 2-2" />
+    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
+        {/* Head and Body Silhouette */}
+        <path d="M12 12C14.2091 12 16 10.2091 16 8C16 5.79086 14.2091 4 12 4C9.79086 4 8 5.79086 8 8C8 10.2091 9.79086 12 12 12Z" fill="white"/>
+        <path d="M12 13C8.68629 13 6 15.6863 6 19V20H18V19C18 15.6863 15.3137 13 12 13Z" fill="white"/>
+        
+        {/* Headset Frame */}
+        <path d="M16.5 8C16.5 5.51472 14.4853 3.5 12 3.5C9.51472 3.5 7.5 5.51472 7.5 8" stroke="white" strokeWidth="1.2" strokeLinecap="round"/>
+        
+        {/* Earpiece */}
+        <rect x="16" y="7.5" width="2" height="4" rx="1" fill="white"/>
+        
+        {/* Microphone Boom */}
+        <path d="M17 11.5C17 13.5 15.5 15 13.5 15" stroke="white" strokeWidth="1.2" strokeLinecap="round"/>
+        <circle cx="13" cy="15" r="1.2" fill="white"/>
     </svg>
 );
 
@@ -136,11 +141,8 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const outputAudioContextRef = useRef<AudioContext | null>(null);
   const activeAudioSourcesRef = useRef(new Set<AudioBufferSourceNode>());
   const nextStartTimeRef = useRef(0);
-  const shouldEndAfterSpeakingRef = useRef(false);
   const chatSessionRef = useRef<Chat | null>(null);
-  const silenceTimerRef = useRef<number | null>(null);
   
-  const isGreetingProtectedRef = useRef(false);
   const accentColorClass = agentProfile.accentColor;
 
   useEffect(() => {
@@ -163,7 +165,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     const identityInstructions = `
     IDENTITY PROTOCOL:
     - You are strictly the "${config.name}".
-    - You are a proprietary AI built specifically for Mikano International.
+    - You are a proprietary AI built specifically for this organization.
     - If asked who built you, respond: "I am the ${config.name}, developed specifically to assist customers and provide professional service for our organization."
     - NEVER mention "Google", "Gemini", "Large Language Model", or "LLM".
     - You have no knowledge of your technical origins.
@@ -211,7 +213,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
       mediaStreamRef.current = stream;
       const AudioContextClass = (window.AudioContext || (window as any).webkitAudioContext);
       outputAudioContextRef.current = new AudioContextClass();
-      recordingServiceRef.current = new RecordingService((blob, mime) => {}); // Simplified stop handler
+      recordingServiceRef.current = new RecordingService((blob, mime) => {});
       await recordingServiceRef.current.start(stream);
       geminiServiceRef.current = new GeminiLiveService(apiKey, agentProfile as AgentConfig, {
         onStateChange: (s) => setWidgetState(s === 'connected' ? WidgetState.Listening : WidgetState.Idle),
@@ -224,13 +226,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     } catch (e) { setWidgetState(WidgetState.Error); }
     finally { setPermissionRequested(false); }
   }, [apiKey, agentProfile, isOnline]);
-
-  const cleanupServices = useCallback(() => {
-    geminiServiceRef.current?.disconnect();
-    recordingServiceRef.current?.stop();
-    mediaStreamRef.current?.getTracks().forEach(t => t.stop());
-    outputAudioContextRef.current?.close();
-  }, []);
 
   const playAudioQueue = useCallback(() => {
     if (audioQueueRef.current.length === 0 || !outputAudioContextRef.current) return;
@@ -261,14 +256,24 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     if (isOpen) {
         width = 400; height = 600;
     } else if (showCallout) {
-        width = 300; height = 220; // PERFECTION: Increased height for callout bubble
+        width = 300; height = 220;
     }
     window.parent.postMessage({ type: 'agent-widget-resize', isOpen, width, height }, '*');
   }, [isOpen, isWidgetMode, showCallout]);
   
+  // PERFECTION: Persistent callout logic - stays indefinitely until opened or manually closed
   useEffect(() => {
-    const calloutShown = sessionStorage.getItem('ai-agent-callout-shown');
-    if (!isOpen && !calloutShown && agentProfile.calloutMessage) {
+    const calloutDismissed = sessionStorage.getItem('ai-agent-callout-dismissed');
+    
+    // If the widget is officially opened, kill the callout
+    if (isOpen) {
+        setShowCallout(false);
+        sessionStorage.setItem('ai-agent-callout-dismissed', 'true');
+        return;
+    }
+
+    // Show after initial delay, then stay there.
+    if (!calloutDismissed && !isOpen && agentProfile.calloutMessage) {
       const timer = setTimeout(() => setShowCallout(true), 1500);
       return () => clearTimeout(timer);
     }
@@ -332,12 +337,13 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         {showCallout && agentProfile.calloutMessage && (
           <div className="absolute bottom-[calc(100%+20px)] right-0 mb-4 w-[240px] px-6 py-4 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-[20px] shadow-[0_20px_50px_rgba(0,0,0,0.25)] text-left text-sm animate-fade-in-up border border-gray-100 dark:border-gray-700 z-[10000] overflow-visible">
             <p className="font-black leading-tight uppercase tracking-tight text-gray-900 dark:text-white break-words">{agentProfile.calloutMessage}</p>
-            <div className="absolute -bottom-2 right-6 w-5 h-5 bg-white dark:bg-gray-800 transform rotate-45 border-b border-r border-gray-100 dark:border-gray-700"></div>
-            <button onClick={(e) => { e.stopPropagation(); setShowCallout(false); }} className="absolute -top-2 -right-2 w-6 h-6 bg-gray-900 text-white rounded-full flex items-center justify-center text-[10px] font-bold shadow-lg">✕</button>
+            <div className="absolute -bottom-2 right-8 w-6 h-6 bg-white dark:bg-gray-800 transform rotate-45 border-b border-r border-gray-100 dark:border-gray-700"></div>
+            <button onClick={(e) => { e.stopPropagation(); setShowCallout(false); sessionStorage.setItem('ai-agent-callout-dismissed', 'true'); }} className="absolute -top-3 -right-3 w-7 h-7 bg-gray-900 text-white rounded-full flex items-center justify-center text-xs font-black shadow-2xl transition-transform hover:scale-125 active:scale-90 border-2 border-white">✕</button>
           </div>
         )}
-        <button onClick={() => setIsOpen(!isOpen)} className={`w-16 h-16 rounded-full bg-accent-${accentColorClass} shadow-2xl flex items-center justify-center text-white transform hover:scale-110 transition-all active:scale-95`}>
+        <button onClick={() => setIsOpen(!isOpen)} className={`w-16 h-16 rounded-full bg-accent-${accentColorClass} shadow-2xl flex items-center justify-center text-white transform hover:scale-110 transition-all active:scale-95 group relative`}>
           <FabIcon />
+          <div className="absolute inset-0 rounded-full bg-white opacity-0 group-hover:opacity-10 transition-opacity"></div>
         </button>
       </div>
   );
