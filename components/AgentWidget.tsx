@@ -23,6 +23,17 @@ interface Message {
 
 type ViewState = 'home' | 'voice' | 'chat';
 
+async function getCloudinaryShareableLink(cloudName: string, uploadPreset: string, recording: Omit<Recording, 'id' | 'url'>): Promise<string> {
+    if (!recording.blob || recording.blob.size === 0) return 'N/A (Text Chat)';
+    const formData = new FormData();
+    formData.append('file', recording.blob);
+    formData.append('upload_preset', uploadPreset);
+    const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/video/upload`, { method: 'POST', body: formData });
+    if (!response.ok) throw new Error(`Cloudinary upload failed`);
+    const result = await response.json();
+    return result.secure_url;
+}
+
 const cleanAiText = (text: string) => {
     return text
         .replace(/:contentReference\[oaicite:\d+\]/g, '')
@@ -31,7 +42,6 @@ const cleanAiText = (text: string) => {
         .trim();
 };
 
-// PERFECTION: High-fidelity Headset & Speech Bubble Icon
 const FabIcon = ({className = "h-11 w-11 text-white"}) => (
     <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" className={className} fill="none">
         <path d="M40 100 C 40 40, 160 40, 160 100" stroke="white" strokeWidth="14" strokeLinecap="round" />
@@ -69,12 +79,12 @@ const ChevronLeftIcon = ({className = "h-6 w-6 text-white"}) => (
 );
 
 const LiveBadge = () => (
-    <div className="flex items-center gap-1.5 px-2.5 py-1 bg-white/20 backdrop-blur-sm rounded-full border border-white/30 shadow-sm animate-fade-in">
-        <span className="relative flex h-1.5 w-1.5">
+    <div className="flex items-center gap-2 px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full border border-white/30 shadow-sm">
+        <span className="relative flex h-2.5 w-2.5">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
-          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white"></span>
+          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white"></span>
         </span>
-        <span className="text-[9px] font-black text-white uppercase tracking-[0.15em]">Live</span>
+        <span className="text-[10px] font-black text-white uppercase tracking-widest">Live</span>
     </div>
 );
 
@@ -279,24 +289,24 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   );
 
   const renderVoiceView = () => (
-      <div className="flex flex-col h-full w-full bg-gray-900 animate-fade-in-up overflow-hidden relative">
-          <div className={`flex items-center justify-between p-5 z-20 bg-accent-${accentColorClass} text-white shadow-xl min-h-[72px] relative`}>
-              <div className="w-9" />
-              <div className="flex flex-col items-center flex-1 truncate">
+      <div className="flex flex-col h-full w-full bg-gray-950 animate-fade-in-up overflow-hidden relative">
+          <div className={`flex items-center justify-between p-5 z-20 bg-accent-${accentColorClass} text-white shadow-xl min-h-[88px] relative`}>
+              <button onClick={() => setView('home')} className="p-1 rounded-full hover:bg-white/20"><ChevronLeftIcon /></button>
+              <div className="flex flex-col items-center flex-1">
                 <h3 className="font-black text-lg uppercase tracking-tight leading-none text-center">{agentProfile.name}</h3>
                 <div className="mt-1"><LiveBadge /></div>
               </div>
-              <button onClick={endSession} className="p-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all active:scale-90">
+              <button onClick={endSession} className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all active:scale-90">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
           </div>
-          <div className="flex-1 flex flex-col items-center justify-center p-8 space-y-10">
+          <div className="flex-1 flex flex-col items-center justify-center p-8 space-y-12">
               <div className="relative">
-                  <div className={`absolute inset-0 bg-accent-${accentColorClass} rounded-full blur-3xl opacity-20 scale-150 animate-pulse`}></div>
-                  <div className="w-48 h-48 rounded-full bg-gradient-to-br from-accent-${accentColorClass} to-black flex items-center justify-center shadow-2xl relative z-10 border-4 border-white/10">
+                  <div className={`absolute inset-0 bg-accent-${accentColorClass} rounded-full blur-[80px] opacity-20 scale-150 animate-pulse`}></div>
+                  <div className="w-48 h-48 rounded-full bg-gradient-to-br from-accent-${accentColorClass} to-black flex items-center justify-center shadow-[0_0_50px_rgba(0,0,0,0.5)] relative z-10 border-4 border-white/5">
                       <div className="flex items-end gap-2 h-20">
                           {[1, 2, 3, 4, 5, 6].map((i) => (
-                              <div key={i} className={`w-2.5 bg-white rounded-full transition-all duration-300 ${widgetState === WidgetState.Speaking ? 'animate-bounce' : 'h-5 opacity-40'}`} style={{ height: widgetState === WidgetState.Speaking ? `${30 + Math.random() * 70}%` : '20px', animationDelay: `${i * 0.12}s` }}></div>
+                              <div key={i} className={`w-3 bg-white rounded-full transition-all duration-300 ${widgetState === WidgetState.Speaking ? 'animate-bounce' : 'h-6 opacity-30'}`} style={{ height: widgetState === WidgetState.Speaking ? `${40 + Math.random() * 60}%` : '24px', animationDelay: `${i * 0.15}s` }}></div>
                           ))}
                       </div>
                   </div>
@@ -305,24 +315,24 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                   <p className="text-white text-3xl font-black uppercase tracking-tighter">
                       {widgetState === WidgetState.Connecting ? 'Connecting...' : widgetState === WidgetState.Speaking ? 'AI Speaking...' : 'Listening...'}
                   </p>
-                  <p className="text-white/50 text-xs font-bold uppercase tracking-[0.2em] animate-pulse">Session Active</p>
+                  <p className="text-white/40 text-[10px] font-black uppercase tracking-[0.3em] animate-pulse">Session Active</p>
               </div>
           </div>
           <div className="p-10 flex justify-center pb-12">
-               <button onClick={endSession} className="bg-red-600 hover:bg-red-700 text-white px-10 py-4 rounded-full font-black uppercase tracking-widest shadow-[0_10px_30px_rgba(220,38,38,0.4)] active:scale-95 transition-all">End Call</button>
+               <button onClick={endSession} className="bg-red-600 hover:bg-red-700 text-white px-12 py-4 rounded-full font-black uppercase tracking-[0.1em] shadow-[0_15px_35px_rgba(220,38,38,0.4)] active:scale-95 transition-all">End Call</button>
           </div>
       </div>
   );
 
   const renderChatView = () => (
       <div className="flex flex-col h-full w-full bg-white dark:bg-gray-900 animate-fade-in-up overflow-hidden">
-          <div className={`flex items-center justify-between p-5 z-20 bg-accent-${accentColorClass} text-white shadow-xl min-h-[72px] relative`}>
+          <div className={`flex items-center justify-between p-5 z-20 bg-accent-${accentColorClass} text-white shadow-xl min-h-[88px] relative`}>
               <button onClick={() => setView('home')} className="p-1 rounded-full hover:bg-white/20"><ChevronLeftIcon /></button>
-              <div className="flex flex-col items-center flex-1 truncate">
+              <div className="flex flex-col items-center flex-1">
                 <h3 className="font-black text-lg uppercase tracking-tight leading-none text-center">{agentProfile.name}</h3>
                 <div className="mt-1"><LiveBadge /></div>
               </div>
-              <button onClick={() => { endSession(); setIsOpen(false); }} className="p-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all active:scale-90">
+              <button onClick={() => { endSession(); setIsOpen(false); }} className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all active:scale-90">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
           </div>
@@ -336,8 +346,8 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
               <div ref={messagesEndRef} />
           </div>
           <form onSubmit={(e) => { e.preventDefault(); handleChatMessage(chatInput); }} className="p-5 border-t border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-900 flex gap-2">
-              <input type="text" value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder="Type..." className="flex-1 px-5 py-4 rounded-2xl bg-gray-100 dark:bg-gray-800 focus:outline-none" />
-              <button type="submit" className={`p-3 rounded-xl text-white bg-accent-${accentColorClass}`}><SendIcon /></button>
+              <input type="text" value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder="Type..." className="flex-1 px-5 py-4 rounded-2xl bg-gray-100 dark:bg-gray-800 focus:outline-none font-semibold" />
+              <button type="submit" className={`p-3 rounded-xl text-white bg-accent-${accentColorClass} shadow-md`}><SendIcon /></button>
           </form>
       </div>
   );
