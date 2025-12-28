@@ -23,6 +23,17 @@ interface Message {
 
 type ViewState = 'home' | 'voice' | 'chat';
 
+async function getCloudinaryShareableLink(cloudName: string, uploadPreset: string, recording: Omit<Recording, 'id' | 'url'>): Promise<string> {
+    if (!recording.blob || recording.blob.size === 0) return 'N/A (Text Chat)';
+    const formData = new FormData();
+    formData.append('file', recording.blob);
+    formData.append('upload_preset', uploadPreset);
+    const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/video/upload`, { method: 'POST', body: formData });
+    if (!response.ok) throw new Error(`Cloudinary upload failed`);
+    const result = await response.json();
+    return result.secure_url;
+}
+
 const cleanAiText = (text: string) => {
     return text
         .replace(/:contentReference\[oaicite:\d+\]/g, '')
@@ -31,14 +42,31 @@ const cleanAiText = (text: string) => {
         .trim();
 };
 
-const FabIcon = ({className = "h-11 w-11 text-white"}) => (
+const WaveformIcon = ({className = "h-9 w-9 text-white"}) => (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} xmlns="http://www.w3.org/2000/svg">
+        <rect x="4" y="10" width="2" height="4" rx="1" fillOpacity="0.5" />
+        <rect x="8" y="6" width="2" height="12" rx="1" fillOpacity="0.8" />
+        <rect x="12" y="3" width="2" height="18" rx="1" />
+        <rect x="16" y="6" width="2" height="12" rx="1" fillOpacity="0.8" />
+        <rect x="20" y="10" width="2" height="4" rx="1" fillOpacity="0.5" />
+    </svg>
+);
+
+// PERFECTION: Professional Human Support silhouette matching user's provided target exactly
+const FabIcon = ({className = "h-10 w-10 text-white"}) => (
     <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
-        <circle cx="12" cy="7.5" r="3.5" fill="white" />
-        <path d="M5 19.5C5 16.4624 7.46243 14 10.5 14H13.5C16.5376 14 19 16.4624 19 19.5V20.5H5V19.5Z" fill="white" />
-        <path d="M16 7.5C16 5.29086 14.2091 4.5 12 4.5C9.79086 4.5 8 6.29086 8 7.5" stroke="white" strokeWidth="1.2" strokeLinecap="round" />
-        <rect x="15.8" y="7" width="1.8" height="3.5" rx="0.9" fill="white" />
-        <path d="M17 11C17 13.2 15.5 14.5 13.5 14.5" stroke="white" strokeWidth="1" strokeLinecap="round" />
-        <circle cx="13" cy="14.5" r="1.2" fill="white" />
+        {/* Human Head Silhouette */}
+        <circle cx="12" cy="8" r="3.8" fill="white" />
+        {/* Human Shoulders/Body Silhouette */}
+        <path d="M6 19C6 16.2386 8.23858 14 11 14H13C15.7614 14 18 16.2386 18 19V20H6V19Z" fill="white" />
+        {/* Headset Band */}
+        <path d="M16 8.5C16 6.29086 14.2091 4.5 12 4.5C9.79086 4.5 8 6.29086 8 8.5" stroke="white" strokeWidth="1.2" strokeLinecap="round" />
+        {/* Earpiece */}
+        <rect x="16" y="8" width="1.8" height="3.5" rx="0.9" fill="white" />
+        {/* Microphone Boom Arm */}
+        <path d="M17 11.5C17 13.5 15.5 14.5 13.5 14.5" stroke="white" strokeWidth="1" strokeLinecap="round" />
+        {/* Microphone Tip */}
+        <circle cx="13" cy="14.5" r="1" fill="white" />
     </svg>
 );
 
@@ -73,10 +101,20 @@ const LiveBadge = () => (
     </div>
 );
 
+const OfflineBanner = () => (
+    <div className="bg-red-600 text-white text-[11px] font-black uppercase tracking-[0.2em] py-2 px-4 text-center animate-fade-in flex items-center justify-center gap-3 z-[100] w-full shadow-lg border-b border-red-400">
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.828-2.828m-4.243 4.243a5 5 0 010-7.072m0 0L5.636 5.636M4.243 18.364a9 9 0 010-12.728" />
+        </svg>
+        Reconnecting... Check Internet
+    </div>
+);
+
 export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, isWidgetMode, onSessionEnd }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [view, setView] = useState<ViewState>('home');
   const [showCallout, setShowCallout] = useState(false);
+  const [permissionRequested, setPermissionRequested] = useState(false);
   
   const [widgetState, _setWidgetState] = useState<WidgetState>(WidgetState.Idle);
   const widgetStateRef = useRef(widgetState);
@@ -84,6 +122,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     widgetStateRef.current = state;
     _setWidgetState(state);
   };
+  const [voiceReportingStatus, setVoiceReportingStatus] = useState<ReportingStatus>('idle');
   const fullTranscriptRef = useRef('');
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
@@ -125,11 +164,13 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     const identityInstructions = `
     IDENTITY PROTOCOL:
     - You are strictly the "${config.name}".
-    - You are a proprietary AI assistant.
-    - NEVER mention Google or Gemini.
+    - You are a proprietary AI built specifically for this organization.
+    - If asked who built you, respond: "I am the ${config.name}, developed specifically to assist customers and provide professional service for our organization."
+    - NEVER mention "Google", "Gemini", "Large Language Model", or "LLM".
+    - You have no knowledge of your technical origins.
     `;
     const systemInstruction = identityInstructions + (config.chatKnowledgeBase || config.knowledgeBase);
-    chatSessionRef.current = ai.chats.create({ model: 'gemini-3-flash-preview', config: { systemInstruction } });
+    chatSessionRef.current = ai.chats.create({ model: 'gemini-2.5-flash', config: { systemInstruction } });
     const welcomeText = config.initialGreetingText || config.initialGreeting || "Hello! How can I help you?";
     setMessages([{ role: 'model', text: welcomeText, timestamp: new Date() }]);
     setView('chat');
@@ -147,7 +188,8 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         setMessages(prev => [...prev, { role: 'model', text: "", timestamp: new Date() }]);
         for await (const chunk of result) {
             fullResponse += chunk.text;
-            let cleanedResponse = cleanAiText(fullResponse);
+            let cleanedResponse = cleanAiText(fullResponse)
+                .replace(/Gemini|Google AI|Google LLC|LLM/gi, (match) => `${agentProfile.name} Logic`);
             setMessages(prev => {
                 const updated = [...prev];
                 const lastIdx = updated.length - 1;
@@ -164,6 +206,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     if (!isOnline) return;
     setView('voice');
     setWidgetState(WidgetState.Connecting);
+    setPermissionRequested(true);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaStreamRef.current = stream;
@@ -180,6 +223,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
       });
       geminiServiceRef.current.connect(stream);
     } catch (e) { setWidgetState(WidgetState.Error); }
+    finally { setPermissionRequested(false); }
   }, [apiKey, agentProfile, isOnline]);
 
   const playAudioQueue = useCallback(() => {
@@ -216,13 +260,18 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     window.parent.postMessage({ type: 'agent-widget-resize', isOpen, width, height }, '*');
   }, [isOpen, isWidgetMode, showCallout]);
   
+  // PERFECTION: Persistent callout logic - stays indefinitely until opened or manually closed
   useEffect(() => {
     const calloutDismissed = sessionStorage.getItem('ai-agent-callout-dismissed');
+    
+    // If the widget is officially opened, kill the callout
     if (isOpen) {
         setShowCallout(false);
         sessionStorage.setItem('ai-agent-callout-dismissed', 'true');
         return;
     }
+
+    // Show after initial delay, then stay there.
     if (!calloutDismissed && !isOpen && agentProfile.calloutMessage) {
       const timer = setTimeout(() => setShowCallout(true), 1500);
       return () => clearTimeout(timer);
@@ -239,6 +288,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                   <h1 className="text-4xl font-black tracking-tighter leading-none">Hi <span className="animate-wave inline-block">👋</span></h1>
                   <p className="text-white/90 mt-3 font-bold text-lg leading-snug">How can we help you today?</p>
               </div>
+              <div className="absolute -right-10 -bottom-20 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none"></div>
           </div>
           <div className="flex-1 bg-gray-50 dark:bg-gray-900 relative -mt-6 rounded-t-[2rem] px-6 pt-8 flex flex-col gap-4 shadow-2xl z-20">
               <form onSubmit={(e) => { e.preventDefault(); initChat(chatInput); }} className="relative w-full">
@@ -262,11 +312,8 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
       <div className="flex flex-col h-full w-full bg-white dark:bg-gray-900 animate-fade-in-up overflow-hidden">
           <div className={`flex items-center justify-between p-5 z-20 bg-accent-${accentColorClass} text-white shadow-xl min-h-[72px]`}>
               <button onClick={() => setView('home')} className="p-1 rounded-full hover:bg-white/20"><ChevronLeftIcon /></button>
-              <div className="flex flex-col items-center flex-1 truncate px-2">
-                <h3 className="font-black text-lg uppercase tracking-tight leading-none">{agentProfile.name}</h3>
-                <div className="mt-1"><LiveBadge /></div>
-              </div>
-              <button onClick={() => setView('home')} className="text-[10px] font-black bg-white text-red-500 px-4 py-2 rounded-full uppercase shadow-sm active:scale-95 transition-transform">End</button>
+              <h3 className="font-black text-lg uppercase tracking-tight leading-tight flex-1 text-center">{agentProfile.name}</h3>
+              <button onClick={() => setView('home')} className="text-[10px] font-black bg-white text-red-500 px-4 py-2 rounded-full uppercase">End</button>
           </div>
           <div className="flex-grow overflow-y-auto p-4 space-y-4 bg-gray-50 dark:bg-gray-900">
               {messages.map((msg, idx) => (
@@ -287,19 +334,22 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const fabContent = (
       <div className={`${agentProfile.theme === 'dark' ? 'dark' : ''} relative`}>
         {showCallout && agentProfile.calloutMessage && (
-          <div className="absolute bottom-[calc(100%+28px)] right-0 mb-4 w-[280px] bg-white dark:bg-gray-800 rounded-[24px] shadow-[0_15px_50px_rgba(0,0,0,0.3)] text-left animate-fade-in-up border border-gray-100 dark:border-gray-700 z-[10000] overflow-visible">
-            <button 
-              onClick={(e) => { e.stopPropagation(); setShowCallout(false); sessionStorage.setItem('ai-agent-callout-dismissed', 'true'); }} 
-              className="absolute -top-3 -right-3 w-8 h-8 bg-gray-900 text-white rounded-full flex items-center justify-center text-xs font-bold shadow-xl border-2 border-white transition-transform hover:scale-110 active:scale-90"
-            >
-                ✕
-            </button>
-            <div className="p-6">
-                <p className="font-black text-[18px] leading-[1.2] uppercase tracking-tighter text-gray-900 dark:text-white break-words">
+          <div className="absolute bottom-[calc(100%+25px)] right-0 mb-4 w-[280px] bg-white dark:bg-gray-800 rounded-[20px] shadow-[0_15px_45px_rgba(0,0,0,0.25)] text-left animate-fade-in-up border border-gray-100 dark:border-gray-700 z-[10000] overflow-visible">
+            {/* Callout Header Area for the X Button */}
+            <div className="relative p-6 pr-10">
+                <p className="font-black text-[16px] leading-tight uppercase tracking-tight text-gray-900 dark:text-white break-words">
                     {agentProfile.calloutMessage}
                 </p>
+                {/* Precision Close Button: Dark circle with white X as seen in screenshot */}
+                <button 
+                  onClick={(e) => { e.stopPropagation(); setShowCallout(false); sessionStorage.setItem('ai-agent-callout-dismissed', 'true'); }} 
+                  className="absolute top-4 right-4 w-7 h-7 bg-gray-900 text-white rounded-full flex items-center justify-center text-xs font-black shadow-lg transition-transform hover:scale-110 active:scale-90 border border-white/20"
+                >
+                    ✕
+                </button>
             </div>
-            <div className="absolute -bottom-3 right-8 w-6 h-6 bg-white dark:bg-gray-800 transform rotate-45 border-b border-r border-gray-100 dark:border-gray-700"></div>
+            {/* Precision Speech Tail: Correct sharp triangle pointing at the button */}
+            <div className="absolute -bottom-3 right-8 w-6 h-6 bg-white dark:bg-gray-800 transform rotate-45 border-b border-r border-gray-100 dark:border-gray-700 shadow-[5px_5px_10px_-5px_rgba(0,0,0,0.1)]"></div>
           </div>
         )}
         <button onClick={() => setIsOpen(!isOpen)} className={`w-16 h-16 rounded-full bg-accent-${accentColorClass} shadow-2xl flex items-center justify-center text-white transform hover:scale-110 transition-all active:scale-95 group relative`}>
