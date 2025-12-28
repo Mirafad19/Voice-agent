@@ -23,17 +23,6 @@ interface Message {
 
 type ViewState = 'home' | 'voice' | 'chat';
 
-async function getCloudinaryShareableLink(cloudName: string, uploadPreset: string, recording: Omit<Recording, 'id' | 'url'>): Promise<string> {
-    if (!recording.blob || recording.blob.size === 0) return 'N/A (Text Chat)';
-    const formData = new FormData();
-    formData.append('file', recording.blob);
-    formData.append('upload_preset', uploadPreset);
-    const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/video/upload`, { method: 'POST', body: formData });
-    if (!response.ok) throw new Error(`Cloudinary upload failed`);
-    const result = await response.json();
-    return result.secure_url;
-}
-
 const cleanAiText = (text: string) => {
     return text
         .replace(/:contentReference\[oaicite:\d+\]/g, '')
@@ -79,12 +68,12 @@ const ChevronLeftIcon = ({className = "h-6 w-6 text-white"}) => (
 );
 
 const LiveBadge = () => (
-    <div className="flex items-center gap-2 px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full border border-white/30 shadow-sm">
-        <span className="relative flex h-2.5 w-2.5">
+    <div className="flex items-center gap-1.5 px-2.5 py-1 bg-white/20 backdrop-blur-sm rounded-full border border-white/30 shadow-sm animate-fade-in">
+        <span className="relative flex h-1.5 w-1.5">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
-          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white"></span>
+          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white"></span>
         </span>
-        <span className="text-[10px] font-black text-white uppercase tracking-widest">Live</span>
+        <span className="text-[9px] font-black text-white uppercase tracking-[0.15em]">Live</span>
     </div>
 );
 
@@ -296,7 +285,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                 <h3 className="font-black text-lg uppercase tracking-tight leading-none text-center">{agentProfile.name}</h3>
                 <div className="mt-1"><LiveBadge /></div>
               </div>
-              <button onClick={endSession} className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all active:scale-90">
+              <button onClick={endSession} className="p-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all active:scale-90">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
           </div>
@@ -332,7 +321,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                 <h3 className="font-black text-lg uppercase tracking-tight leading-none text-center">{agentProfile.name}</h3>
                 <div className="mt-1"><LiveBadge /></div>
               </div>
-              <button onClick={() => { endSession(); setIsOpen(false); }} className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all active:scale-90">
+              <button onClick={() => { endSession(); setIsOpen(false); }} className="p-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all active:scale-90">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
           </div>
