@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { AgentProfile, AgentConfig, WidgetState, Recording, ReportingStatus } from '../types';
+import { AgentProfile, AgentConfig, WidgetTheme, WidgetState, Recording, ReportingStatus } from '../types';
 import { GeminiLiveService } from '../services/geminiLiveService';
 import { RecordingService } from '../services/recordingService';
 import { Spinner } from './ui/Spinner';
@@ -23,7 +23,6 @@ interface Message {
 
 type ViewState = 'home' | 'voice' | 'chat';
 
-// Helper function to upload and get a shareable link from Cloudinary
 async function getCloudinaryShareableLink(cloudName: string, uploadPreset: string, recording: Omit<Recording, 'id' | 'url'>): Promise<string> {
     if (!recording.blob || recording.blob.size === 0) return 'N/A (Text Chat)';
     
@@ -44,8 +43,6 @@ async function getCloudinaryShareableLink(cloudName: string, uploadPreset: strin
     const result = await response.json();
     return result.secure_url;
 }
-
-// --- Icons ---
 
 const WaveformIcon = ({className = "h-9 w-9 text-white"}) => (
     <svg viewBox="0 0 24 24" fill="currentColor" className={className} xmlns="http://www.w3.org/2000/svg">
@@ -116,7 +113,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const [showCallout, setShowCallout] = useState(false);
   const [permissionRequested, setPermissionRequested] = useState(false);
   
-  // Voice State
   const [widgetState, _setWidgetState] = useState<WidgetState>(WidgetState.Idle);
   const widgetStateRef = useRef(widgetState);
   const setWidgetState = (state: WidgetState) => {
@@ -127,7 +123,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const fullTranscriptRef = useRef('');
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
-  // Chat State
   const [messages, setMessages] = useState<Message[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [isChatTyping, setIsChatTyping] = useState(false);
@@ -135,7 +130,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
   const [errorMessage, setErrorMessage] = useState('');
 
-  // Services
   const geminiServiceRef = useRef<GeminiLiveService | null>(null);
   const recordingServiceRef = useRef<RecordingService | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -147,12 +141,10 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const chatSessionRef = useRef<Chat | null>(null);
   const silenceTimerRef = useRef<number | null>(null);
   
-  // Perfection: Forced Greeting Flag (Unstoppable)
   const isGreetingProtectedRef = useRef(false);
 
   const accentColorClass = agentProfile.accentColor;
 
-  // --- Effects ---
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
@@ -171,7 +163,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     scrollToBottom();
   }, [messages, isChatTyping]);
 
-  // --- Analysis & Reporting ---
   const analyzeAndSendReport = useCallback(async (recording: Omit<Recording, 'id' | 'url'>) => {
     const { emailConfig, fileUploadConfig } = agentProfile as AgentConfig;
 
@@ -190,7 +181,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
     try {
         let audioLink = 'N/A';
-        if (recording.blob && recording.blob.size > 0 && fileUploadConfig?.cloudinaryCloudName && fileUploadConfig.cloudinaryUploadPreset) {
+        if (recording.blob && recording.blob.size === 0 && fileUploadConfig?.cloudinaryCloudName && fileUploadConfig.cloudinaryUploadPreset) {
             try {
                 audioLink = await getCloudinaryShareableLink(fileUploadConfig.cloudinaryCloudName, fileUploadConfig.cloudinaryUploadPreset, recording);
             } catch (uploadError) {
@@ -223,7 +214,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         
         try {
             const response = await ai.models.generateContent({
-                model: "gemini-2.5-flash",
+                model: "gemini-3-flash-preview",
                 contents: contents,
                 config: {
                     responseMimeType: "application/json",
@@ -270,7 +261,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   }, [agentProfile, apiKey, view]);
 
 
-  // --- Chat Logic ---
   const initChat = async (initialMessage?: string) => {
     const config = agentProfile as AgentConfig;
     const ai = new GoogleGenAI({ apiKey });
@@ -278,7 +268,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     const systemInstruction = config.chatKnowledgeBase || config.knowledgeBase;
     
     chatSessionRef.current = ai.chats.create({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3-flash-preview',
         config: { systemInstruction }
     });
 
@@ -297,7 +287,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
     const userMsg: Message = { role: 'user', text, timestamp: new Date() };
     
-    // PERFECTION: Ensure atomic state update to preserve all history
     setMessages(prev => [...prev, userMsg]);
     setChatInput('');
     setIsChatTyping(true);
@@ -306,14 +295,12 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         const result = await chatSessionRef.current.sendMessageStream({ message: text });
         
         let fullResponse = "";
-        // First append a placeholder for the model
         setMessages(prev => [...prev, { role: 'model', text: "", timestamp: new Date() }]);
 
         for await (const chunk of result) {
             const chunkText = chunk.text;
             fullResponse += chunkText;
             
-            // Update the last message in the list correctly
             setMessages(prev => {
                 const updatedHistory = [...prev];
                 const lastIndex = updatedHistory.length - 1;
@@ -367,7 +354,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     }
   }, [messages, analyzeAndSendReport, isWidgetMode, onSessionEnd]);
 
-  // --- Voice Logic ---
   
   const resetSilenceTimer = useCallback(() => {
       if (silenceTimerRef.current) {
@@ -386,7 +372,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   }, []);
 
   const handleInterruption = useCallback(() => {
-    // Perfection: Respect Forced Greeting Protection
     if (isGreetingProtectedRef.current) {
         console.debug("Interruption ignored: Agent is delivering forced greeting.");
         return;
@@ -448,7 +433,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
     const greeting = (agentProfile as AgentConfig).initialGreeting;
     if (greeting) {
-        // Perfection: Engage Force Greeting Protection
         isGreetingProtectedRef.current = true;
         fullTranscriptRef.current = `Agent: ${greeting}\n`;
         
@@ -476,7 +460,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                 }
                 audioQueueRef.current.push(bytes);
                 recordingServiceRef.current?.addAgentAudioChunk(bytes);
-                playAudioQueue(true); // Flag this as the initial greeting
+                playAudioQueue(true); 
             }
         } catch (error) {
             console.error("Failed to generate greeting audio:", error);
@@ -511,7 +495,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
           const lowerCaseText = text.toLowerCase();
           const endKeywords = [
             'goodbye', 'farewell', 'take care', 'talk to you later', 
-            'bye bye', 'bye', 'o dabo', 'oda bo', 'ó dábọ̀', 'e se pupo', 'ese pupo'
+            'bye bye', 'bye', 'o dabo', 'oda bo', 'ese pupo'
           ];
           if (endKeywords.some(keyword => lowerCaseText.includes(keyword))) {
             shouldEndAfterSpeakingRef.current = true;
@@ -622,10 +606,8 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             source.onended = () => {
                 activeAudioSourcesRef.current.delete(source);
                 
-                // Perfection: Handle end of forced greeting
                 if (isInitialGreeting && activeAudioSourcesRef.current.size === 0 && audioQueueRef.current.length === 0) {
                     isGreetingProtectedRef.current = false;
-                    console.debug("Forced greeting complete. Protection released.");
                 }
 
                 if (activeAudioSourcesRef.current.size === 0 && audioQueueRef.current.length === 0) {
@@ -644,8 +626,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     }
   }, [endVoiceSession, clearSilenceTimer, resetSilenceTimer]);
 
-  // --- UI Triggers ---
-  
   const toggleWidget = () => {
     if (isOpen) {
       if (view === 'chat' && messages.length > 1) {
@@ -654,6 +634,10 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
           endVoiceSession();
       }
       setTimeout(() => setView('home'), 300);
+    } else {
+      // Opening the widget: Permanently dismiss callout for this session
+      sessionStorage.setItem('ai-agent-callout-dismissed', 'true');
+      setShowCallout(false);
     }
     setIsOpen(!isOpen);
   };
@@ -669,50 +653,57 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
       }
   };
 
-  const handleHomeInputSubmit = (e: React.FormEvent) => {
+  const handleHomeFormSubmit = (e: React.FormEvent) => {
       e.preventDefault();
       if(chatInput.trim()) {
           initChat(chatInput);
       }
   };
 
-  // --- Effects ---
+  const handleChatFormSubmit = (e: React.FormEvent) => {
+      e.preventDefault();
+      if(chatInput.trim()) {
+          handleChatMessage(chatInput);
+      }
+  };
+
+  const handleDismissCallout = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      sessionStorage.setItem('ai-agent-callout-dismissed', 'true');
+      setShowCallout(false);
+  };
+
+  // Improved resize logic for widget mode to prevent callout clipping
   useEffect(() => {
     if (!isWidgetMode) return;
     
-    let width = 300;
-    let height = 140;
+    let width = 80;
+    let height = 80;
     
     if (isOpen) {
         width = 400;
         height = 600;
-    } else if (!showCallout) {
-        width = 80;
-        height = 80;
+    } else if (showCallout) {
+        // Broaden width and increase height to accommodate callout bubble + pointer
+        width = 250;
+        height = 220; 
     }
     
     window.parent.postMessage({ type: 'agent-widget-resize', isOpen, width, height }, '*');
   }, [isOpen, isWidgetMode, showCallout]);
   
   useEffect(() => {
-    const calloutShown = sessionStorage.getItem('ai-agent-callout-shown');
-    let showTimer: number;
-    let hideTimer: number;
+    // Check if dismissed in this session
+    const calloutDismissed = sessionStorage.getItem('ai-agent-callout-dismissed');
 
-    if (!isOpen && !calloutShown && agentProfile.calloutMessage) {
-      showTimer = window.setTimeout(() => {
+    if (!isOpen && !calloutDismissed && agentProfile.calloutMessage) {
         setShowCallout(true);
-        sessionStorage.setItem('ai-agent-callout-shown', 'true');
-        hideTimer = window.setTimeout(() => setShowCallout(false), 15000);
-      }, 1500);
+    } else {
+        setShowCallout(false);
     }
-    if (isOpen) setShowCallout(false);
-    return () => { clearTimeout(showTimer); clearTimeout(hideTimer); };
   }, [isOpen, agentProfile.calloutMessage]);
 
   const themeClass = agentProfile.theme === 'dark' ? 'dark' : '';
-
-  // --- Render Views ---
 
   const renderHomeView = () => (
       <div className="flex flex-col h-full w-full bg-white dark:bg-gray-900 animate-fade-in-up">
@@ -729,14 +720,14 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
           <div className="flex-1 bg-gray-50 dark:bg-gray-900 relative -mt-6 rounded-t-[2rem] px-6 pt-8 flex flex-col gap-4 shadow-2xl z-20">
               {!isOnline && <OfflineBanner />}
-              <form onSubmit={handleHomeInputSubmit} className="relative w-full">
+              <form onSubmit={handleHomeFormSubmit} className="relative w-full">
                   <input 
                     type="text" 
                     placeholder="Ask a question..." 
                     value={chatInput}
                     disabled={!isOnline}
                     onChange={(e) => setChatInput(e.target.value)}
-                    className="w-full pl-6 pr-14 py-4 rounded-2xl shadow-sm border-2 border-transparent dark:border-gray-700 bg-white dark:bg-gray-800 focus:outline-none focus:border-accent-${accentColorClass} text-gray-900 dark:text-white transition-all text-left font-semibold disabled:opacity-50"
+                    className={`w-full pl-6 pr-14 py-4 rounded-2xl shadow-sm border-2 border-transparent dark:border-gray-700 bg-white dark:bg-gray-800 focus:outline-none focus:border-accent-${accentColorClass} text-gray-900 dark:text-white transition-all text-left font-semibold disabled:opacity-50`}
                   />
                   <button 
                     type="submit" 
@@ -811,7 +802,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
               <div ref={messagesEndRef} />
           </div>
 
-          <form onSubmit={handleHomeInputSubmit} className="p-5 border-t border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-900">
+          <form onSubmit={handleChatFormSubmit} className="p-5 border-t border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-900">
               <div className="relative">
                   <input
                     type="text"
@@ -819,7 +810,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                     disabled={!isOnline}
                     onChange={(e) => setChatInput(e.target.value)}
                     placeholder="Type a message..."
-                    className="w-full pl-5 pr-14 py-4 rounded-2xl border-2 border-transparent bg-gray-100 dark:bg-gray-800 focus:outline-none focus:border-accent-${accentColorClass} dark:text-white transition-all font-semibold disabled:opacity-50"
+                    className={`w-full pl-5 pr-14 py-4 rounded-2xl border-2 border-transparent bg-gray-100 dark:bg-gray-800 focus:outline-none focus:border-accent-${accentColorClass} dark:text-white transition-all font-semibold disabled:opacity-50`}
                   />
                   <button 
                     type="submit"
@@ -955,7 +946,16 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
       <div className={`${themeClass} relative group`}>
         {showCallout && agentProfile.calloutMessage && (
           <div className="absolute bottom-[calc(100%+16px)] right-0 md:right-4 mb-4 w-[220px] px-5 py-3 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.15)] text-left text-sm animate-fade-in-up border border-gray-100 dark:border-gray-700 z-[10000]">
-            <p className="font-bold leading-tight uppercase tracking-tight">{agentProfile.calloutMessage}</p>
+            <button 
+              onClick={handleDismissCallout} 
+              className="absolute top-2 right-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors p-1"
+              aria-label="Dismiss callout"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            <p className="font-bold leading-tight uppercase tracking-tight pr-4">{agentProfile.calloutMessage}</p>
             <div className="absolute -bottom-2 right-8 w-4 h-4 bg-white dark:bg-gray-800 transform rotate-45 border-b border-r border-gray-100 dark:border-gray-700"></div>
           </div>
         )}
