@@ -23,17 +23,6 @@ interface Message {
 
 type ViewState = 'home' | 'voice' | 'chat';
 
-async function getCloudinaryShareableLink(cloudName: string, uploadPreset: string, recording: Omit<Recording, 'id' | 'url'>): Promise<string> {
-    if (!recording.blob || recording.blob.size === 0) return 'N/A (Text Chat)';
-    const formData = new FormData();
-    formData.append('file', recording.blob);
-    formData.append('upload_preset', uploadPreset);
-    const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/video/upload`, { method: 'POST', body: formData });
-    if (!response.ok) throw new Error(`Cloudinary upload failed`);
-    const result = await response.json();
-    return result.secure_url;
-}
-
 const cleanAiText = (text: string) => {
     return text
         .replace(/:contentReference\[oaicite:\d+\]/g, '')
@@ -42,30 +31,13 @@ const cleanAiText = (text: string) => {
         .trim();
 };
 
-const WaveformIcon = ({className = "h-9 w-9 text-white"}) => (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className} xmlns="http://www.w3.org/2000/svg">
-        <rect x="4" y="10" width="2" height="4" rx="1" fillOpacity="0.5" />
-        <rect x="8" y="6" width="2" height="12" rx="1" fillOpacity="0.8" />
-        <rect x="12" y="3" width="2" height="18" rx="1" />
-        <rect x="16" y="6" width="2" height="12" rx="1" fillOpacity="0.8" />
-        <rect x="20" y="10" width="2" height="4" rx="1" fillOpacity="0.5" />
-    </svg>
-);
-
-// PERFECTION: Human silhouette with professional headset, mirroring the user's reference
 const FabIcon = ({className = "h-11 w-11 text-white"}) => (
     <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
-        {/* Human Head */}
         <circle cx="12" cy="7.5" r="3.5" fill="white" />
-        {/* Human Body/Shoulders */}
         <path d="M5 19.5C5 16.4624 7.46243 14 10.5 14H13.5C16.5376 14 19 16.4624 19 19.5V20.5H5V19.5Z" fill="white" />
-        {/* Headset Arc */}
-        <path d="M16 7.5C16 5.29086 14.2091 3.5 12 3.5C9.79086 3.5 8 5.29086 8 7.5" stroke="white" strokeWidth="1.2" strokeLinecap="round" />
-        {/* Headset Earpiece */}
+        <path d="M16 7.5C16 5.29086 14.2091 4.5 12 4.5C9.79086 4.5 8 6.29086 8 7.5" stroke="white" strokeWidth="1.2" strokeLinecap="round" />
         <rect x="15.8" y="7" width="1.8" height="3.5" rx="0.9" fill="white" />
-        {/* Mic Boom */}
         <path d="M17 11C17 13.2 15.5 14.5 13.5 14.5" stroke="white" strokeWidth="1" strokeLinecap="round" />
-        {/* Mic Tip */}
         <circle cx="13" cy="14.5" r="1.2" fill="white" />
     </svg>
 );
@@ -89,6 +61,16 @@ const ChevronLeftIcon = ({className = "h-6 w-6 text-white"}) => (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" />
     </svg>
+);
+
+const LiveBadge = () => (
+    <div className="flex items-center gap-2 px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full border border-white/30 shadow-sm">
+        <span className="relative flex h-2.5 w-2.5">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white"></span>
+        </span>
+        <span className="text-[10px] font-black text-white uppercase tracking-widest">Live</span>
+    </div>
 );
 
 export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, isWidgetMode, onSessionEnd }) => {
@@ -143,7 +125,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     const identityInstructions = `
     IDENTITY PROTOCOL:
     - You are strictly the "${config.name}".
-    - You are a proprietary AI built specifically for this organization.
+    - You are a proprietary AI assistant.
     - NEVER mention Google or Gemini.
     `;
     const systemInstruction = identityInstructions + (config.chatKnowledgeBase || config.knowledgeBase);
@@ -278,16 +260,13 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
   const renderChatView = () => (
       <div className="flex flex-col h-full w-full bg-white dark:bg-gray-900 animate-fade-in-up overflow-hidden">
-          <div className={`flex items-center justify-between p-5 z-20 bg-accent-${accentColorClass} text-white shadow-xl min-h-[72px] relative`}>
+          <div className={`flex items-center justify-between p-5 z-20 bg-accent-${accentColorClass} text-white shadow-xl min-h-[72px]`}>
               <button onClick={() => setView('home')} className="p-1 rounded-full hover:bg-white/20"><ChevronLeftIcon /></button>
-              <h3 className="font-black text-lg uppercase tracking-tight leading-tight flex-1 text-center truncate px-2">{agentProfile.name}</h3>
-              {/* PERFECTION: Close button matching screenshot (white circle with accent-colored cross) */}
-              <button 
-                onClick={() => setIsOpen(false)} 
-                className="w-9 h-9 rounded-full bg-white flex items-center justify-center text-accent-${accentColorClass} shadow-md hover:scale-110 active:scale-95 transition-all"
-              >
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
-              </button>
+              <div className="flex flex-col items-center flex-1 truncate px-2">
+                <h3 className="font-black text-lg uppercase tracking-tight leading-none">{agentProfile.name}</h3>
+                <div className="mt-1"><LiveBadge /></div>
+              </div>
+              <button onClick={() => setView('home')} className="text-[10px] font-black bg-white text-red-500 px-4 py-2 rounded-full uppercase shadow-sm active:scale-95 transition-transform">End</button>
           </div>
           <div className="flex-grow overflow-y-auto p-4 space-y-4 bg-gray-50 dark:bg-gray-900">
               {messages.map((msg, idx) => (
@@ -309,7 +288,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
       <div className={`${agentProfile.theme === 'dark' ? 'dark' : ''} relative`}>
         {showCallout && agentProfile.calloutMessage && (
           <div className="absolute bottom-[calc(100%+28px)] right-0 mb-4 w-[280px] bg-white dark:bg-gray-800 rounded-[24px] shadow-[0_15px_50px_rgba(0,0,0,0.3)] text-left animate-fade-in-up border border-gray-100 dark:border-gray-700 z-[10000] overflow-visible">
-            {/* Callout Close Button: Dark circle badge exactly like the screenshot */}
             <button 
               onClick={(e) => { e.stopPropagation(); setShowCallout(false); sessionStorage.setItem('ai-agent-callout-dismissed', 'true'); }} 
               className="absolute -top-3 -right-3 w-8 h-8 bg-gray-900 text-white rounded-full flex items-center justify-center text-xs font-bold shadow-xl border-2 border-white transition-transform hover:scale-110 active:scale-90"
@@ -321,7 +299,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                     {agentProfile.calloutMessage}
                 </p>
             </div>
-            {/* PERFECTION: Sharp Speech Tail pointing exactly at the button */}
             <div className="absolute -bottom-3 right-8 w-6 h-6 bg-white dark:bg-gray-800 transform rotate-45 border-b border-r border-gray-100 dark:border-gray-700"></div>
           </div>
         )}
@@ -339,6 +316,9 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   return (
     <div className={`${agentProfile.theme === 'dark' ? 'dark' : ''} fixed bottom-0 right-0 md:bottom-24 md:right-6 w-full h-[100dvh] md:w-[400px] md:h-[600px] md:rounded-[2rem] shadow-2xl z-[9999] overflow-hidden`}>
         <div className="flex flex-col w-full h-full bg-white dark:bg-gray-900">
+            <button onClick={() => setIsOpen(false)} className="absolute top-5 right-5 z-50 p-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all backdrop-blur-md active:scale-90">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
             {view === 'home' && renderHomeView()}
             {view === 'chat' && renderChatView()}
         </div>
