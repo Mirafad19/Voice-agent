@@ -52,22 +52,34 @@ const WaveformIcon = ({className = "h-9 w-9 text-white"}) => (
     </svg>
 );
 
-// PERFECTION: Human Support Agent Icon matching the user's reference exactly
-const FabIcon = ({className = "h-10 w-10 text-white"}) => (
-    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
-        {/* Head and Body Silhouette */}
-        <path d="M12 12C14.2091 12 16 10.2091 16 8C16 5.79086 14.2091 4 12 4C9.79086 4 8 5.79086 8 8C8 10.2091 9.79086 12 12 12Z" fill="white"/>
-        <path d="M12 13C8.68629 13 6 15.6863 6 19V20H18V19C18 15.6863 15.3137 13 12 13Z" fill="white"/>
+// PERFECTION: Precision reconstruction of the requested professional support headset logo
+const FabIcon = ({className = "h-11 w-11 text-white"}) => (
+    <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" className={className} fill="none">
+        {/* Headband - Thick outer arc */}
+        <path d="M40 100 C 40 40, 160 40, 160 100" stroke="white" strokeWidth="14" strokeLinecap="round" />
         
-        {/* Headset Frame */}
-        <path d="M16.5 8C16.5 5.51472 14.4853 3.5 12 3.5C9.51472 3.5 7.5 5.51472 7.5 8" stroke="white" strokeWidth="1.2" strokeLinecap="round"/>
+        {/* Left Cans */}
+        <rect x="25" y="90" width="20" height="45" rx="10" fill="white" />
         
-        {/* Earpiece */}
-        <rect x="16" y="7.5" width="2" height="4" rx="1" fill="white"/>
+        {/* Right Cans */}
+        <rect x="155" y="90" width="20" height="45" rx="10" fill="white" />
         
-        {/* Microphone Boom */}
-        <path d="M17 11.5C17 13.5 15.5 15 13.5 15" stroke="white" strokeWidth="1.2" strokeLinecap="round"/>
-        <circle cx="13" cy="15" r="1.2" fill="white"/>
+        {/* Central Speech Bubble Wrapper */}
+        <circle cx="100" cy="100" r="50" fill="transparent" stroke="white" strokeWidth="12" />
+        
+        {/* Speech Bubble Interior with Tail */}
+        <path d="M75 100 A 25 25 0 1 1 115 120 L 125 135 L 105 125 A 25 25 0 0 1 75 100" fill="white" />
+        
+        {/* Three dots indicator inside bubble */}
+        <circle cx="88" cy="100" r="4.5" fill="currentColor" opacity="0.8" />
+        <circle cx="100" cy="100" r="4.5" fill="currentColor" opacity="0.8" />
+        <circle cx="112" cy="100" r="4.5" fill="currentColor" opacity="0.8" />
+        
+        {/* Mic Boom Arm - Sweeping curve from left bottom */}
+        <path d="M45 135 Q 45 165, 100 165" stroke="white" strokeWidth="10" strokeLinecap="round" />
+        
+        {/* Microphone Tip */}
+        <circle cx="105" cy="165" r="8" fill="white" />
     </svg>
 );
 
@@ -261,18 +273,16 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     window.parent.postMessage({ type: 'agent-widget-resize', isOpen, width, height }, '*');
   }, [isOpen, isWidgetMode, showCallout]);
   
-  // PERFECTION: Persistent callout logic - stays indefinitely until opened or manually closed
+  // PERFECTION: Persist callout logic - stays until widget opened
   useEffect(() => {
     const calloutDismissed = sessionStorage.getItem('ai-agent-callout-dismissed');
     
-    // If the widget is officially opened, kill the callout
     if (isOpen) {
         setShowCallout(false);
         sessionStorage.setItem('ai-agent-callout-dismissed', 'true');
         return;
     }
 
-    // Show after initial delay, then stay there.
     if (!calloutDismissed && !isOpen && agentProfile.calloutMessage) {
       const timer = setTimeout(() => setShowCallout(true), 1500);
       return () => clearTimeout(timer);
