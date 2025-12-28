@@ -52,21 +52,22 @@ const WaveformIcon = ({className = "h-9 w-9 text-white"}) => (
     </svg>
 );
 
-// PERFECTION: Professional Human Support silhouette matching user's provided target exactly
+// PERFECTION: Human Support Agent Icon matching the user's reference exactly
 const FabIcon = ({className = "h-10 w-10 text-white"}) => (
     <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
-        {/* Human Head Silhouette */}
-        <circle cx="12" cy="8" r="3.8" fill="white" />
-        {/* Human Shoulders/Body Silhouette */}
-        <path d="M6 19C6 16.2386 8.23858 14 11 14H13C15.7614 14 18 16.2386 18 19V20H6V19Z" fill="white" />
-        {/* Headset Band */}
-        <path d="M16 8.5C16 6.29086 14.2091 4.5 12 4.5C9.79086 4.5 8 6.29086 8 8.5" stroke="white" strokeWidth="1.2" strokeLinecap="round" />
+        {/* Head and Body Silhouette */}
+        <path d="M12 12C14.2091 12 16 10.2091 16 8C16 5.79086 14.2091 4 12 4C9.79086 4 8 5.79086 8 8C8 10.2091 9.79086 12 12 12Z" fill="white"/>
+        <path d="M12 13C8.68629 13 6 15.6863 6 19V20H18V19C18 15.6863 15.3137 13 12 13Z" fill="white"/>
+        
+        {/* Headset Frame */}
+        <path d="M16.5 8C16.5 5.51472 14.4853 3.5 12 3.5C9.51472 3.5 7.5 5.51472 7.5 8" stroke="white" strokeWidth="1.2" strokeLinecap="round"/>
+        
         {/* Earpiece */}
-        <rect x="16" y="8" width="1.8" height="3.5" rx="0.9" fill="white" />
-        {/* Microphone Boom Arm */}
-        <path d="M17 11.5C17 13.5 15.5 14.5 13.5 14.5" stroke="white" strokeWidth="1" strokeLinecap="round" />
-        {/* Microphone Tip */}
-        <circle cx="13" cy="14.5" r="1" fill="white" />
+        <rect x="16" y="7.5" width="2" height="4" rx="1" fill="white"/>
+        
+        {/* Microphone Boom */}
+        <path d="M17 11.5C17 13.5 15.5 15 13.5 15" stroke="white" strokeWidth="1.2" strokeLinecap="round"/>
+        <circle cx="13" cy="15" r="1.2" fill="white"/>
     </svg>
 );
 
@@ -334,22 +335,10 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const fabContent = (
       <div className={`${agentProfile.theme === 'dark' ? 'dark' : ''} relative`}>
         {showCallout && agentProfile.calloutMessage && (
-          <div className="absolute bottom-[calc(100%+25px)] right-0 mb-4 w-[280px] bg-white dark:bg-gray-800 rounded-[20px] shadow-[0_15px_45px_rgba(0,0,0,0.25)] text-left animate-fade-in-up border border-gray-100 dark:border-gray-700 z-[10000] overflow-visible">
-            {/* Callout Header Area for the X Button */}
-            <div className="relative p-6 pr-10">
-                <p className="font-black text-[16px] leading-tight uppercase tracking-tight text-gray-900 dark:text-white break-words">
-                    {agentProfile.calloutMessage}
-                </p>
-                {/* Precision Close Button: Dark circle with white X as seen in screenshot */}
-                <button 
-                  onClick={(e) => { e.stopPropagation(); setShowCallout(false); sessionStorage.setItem('ai-agent-callout-dismissed', 'true'); }} 
-                  className="absolute top-4 right-4 w-7 h-7 bg-gray-900 text-white rounded-full flex items-center justify-center text-xs font-black shadow-lg transition-transform hover:scale-110 active:scale-90 border border-white/20"
-                >
-                    ✕
-                </button>
-            </div>
-            {/* Precision Speech Tail: Correct sharp triangle pointing at the button */}
-            <div className="absolute -bottom-3 right-8 w-6 h-6 bg-white dark:bg-gray-800 transform rotate-45 border-b border-r border-gray-100 dark:border-gray-700 shadow-[5px_5px_10px_-5px_rgba(0,0,0,0.1)]"></div>
+          <div className="absolute bottom-[calc(100%+20px)] right-0 mb-4 w-[240px] px-6 py-4 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-[20px] shadow-[0_20px_50px_rgba(0,0,0,0.25)] text-left text-sm animate-fade-in-up border border-gray-100 dark:border-gray-700 z-[10000] overflow-visible">
+            <p className="font-black leading-tight uppercase tracking-tight text-gray-900 dark:text-white break-words">{agentProfile.calloutMessage}</p>
+            <div className="absolute -bottom-2 right-8 w-6 h-6 bg-white dark:bg-gray-800 transform rotate-45 border-b border-r border-gray-100 dark:border-gray-700"></div>
+            <button onClick={(e) => { e.stopPropagation(); setShowCallout(false); sessionStorage.setItem('ai-agent-callout-dismissed', 'true'); }} className="absolute -top-3 -right-3 w-7 h-7 bg-gray-900 text-white rounded-full flex items-center justify-center text-xs font-black shadow-2xl transition-transform hover:scale-125 active:scale-90 border-2 border-white">✕</button>
           </div>
         )}
         <button onClick={() => setIsOpen(!isOpen)} className={`w-16 h-16 rounded-full bg-accent-${accentColorClass} shadow-2xl flex items-center justify-center text-white transform hover:scale-110 transition-all active:scale-95 group relative`}>
