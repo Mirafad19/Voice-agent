@@ -99,12 +99,12 @@ const LiveBadge = () => (
 );
 
 const NetworkWarning = () => (
-  <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[80] animate-bounce">
-    <div className="bg-amber-500 text-white text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-full shadow-2xl flex items-center gap-2 border-2 border-amber-300/50 backdrop-blur-md">
+  <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[100] animate-bounce w-full flex justify-center px-4">
+    <div className="bg-amber-600 text-white text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-full shadow-2xl flex items-center gap-2 border-2 border-amber-400/50 backdrop-blur-md">
       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
       </svg>
-      Unstable Connection
+      Connection Unstable
     </div>
   </div>
 );
@@ -147,6 +147,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const audioQueueRef = useRef<Uint8Array[]>([]);
   const outputAudioContextRef = useRef<AudioContext | null>(null);
+  const masterGainNodeRef = useRef<GainNode | null>(null);
   const activeAudioSourcesRef = useRef(new Set<AudioBufferSourceNode>());
   const nextStartTimeRef = useRef(0);
   const shouldEndAfterSpeakingRef = useRef(false);
@@ -157,7 +158,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
   const accentColorClass = agentProfile.accentColor;
 
-  // Monitor network quality for the "unstable" indicator
+  // Network quality monitoring
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
@@ -165,27 +166,25 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     window.addEventListener('offline', handleOffline);
 
     const conn = (navigator as any).connection;
+    const checkNetwork = () => {
+      if (!conn) return;
+      // High RTT (>500ms) or slow connection types (2g/3g) trigger the warning
+      const isSlow = conn.effectiveType === '2g' || 
+                     conn.effectiveType === '3g' || 
+                     (conn.rtt && conn.rtt > 600) || 
+                     (conn.downlink && conn.downlink < 1.0);
+      setIsNetworkSlow(isSlow);
+    };
+
     if (conn) {
-      const checkNetwork = () => {
-        // threshold: 2g/3g OR high latency OR very low speed
-        const isSlow = conn.effectiveType === '2g' || 
-                       conn.effectiveType === '3g' || 
-                       conn.rtt > 800 || 
-                       conn.downlink < 1.0;
-        setIsNetworkSlow(isSlow);
-      };
       conn.addEventListener('change', checkNetwork);
       checkNetwork();
-      return () => {
-        window.removeEventListener('online', handleOnline);
-        window.removeEventListener('offline', handleOffline);
-        conn.removeEventListener('change', checkNetwork);
-      };
     }
 
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      if (conn) conn.removeEventListener('change', checkNetwork);
     };
   }, []);
 
@@ -307,24 +306,21 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
     const welcomeText = config.initialGreetingText || config.initialGreeting || "Hello! How can I help you?";
     
-    // Ensure we reset properly when starting from Home view
-    const welcomeMsg: Message = { role: 'model', text: welcomeText, timestamp: new Date() };
-    setMessages([welcomeMsg]);
+    // Clear and reset the chat state
+    setMessages([{ role: 'model', text: welcomeText, timestamp: new Date() }]);
     setView('chat');
 
     if (initialMessage) {
-        // Pass the already initialized chat state
-        await handleChatMessage(initialMessage, true);
+        await handleChatMessage(initialMessage);
     }
   };
 
-  const handleChatMessage = async (text: string, isFirstMessage: boolean = false) => {
+  const handleChatMessage = async (text: string) => {
     if (!text.trim() || !chatSessionRef.current || !isOnline) return;
 
     const userMsg: Message = { role: 'user', text, timestamp: new Date() };
     
-    // If it's the first message, we already have the welcome message in state from initChat
-    // otherwise we append to existing history
+    // Functional update ensures we append to the ACTUAL current history
     setMessages(prev => [...prev, userMsg]);
     setChatInput('');
     setIsChatTyping(true);
@@ -333,7 +329,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         const result = await chatSessionRef.current.sendMessageStream({ message: text });
         
         let fullResponse = "";
-        // Placeholder for model response
         setMessages(prev => [...prev, { role: 'model', text: "", timestamp: new Date() }]);
 
         for await (const chunk of result) {
@@ -344,7 +339,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                 const updatedHistory = [...prev];
                 const lastIndex = updatedHistory.length - 1;
                 if (lastIndex >= 0 && updatedHistory[lastIndex].role === 'model') {
-                    // Update the last placeholder message with growing text
                     updatedHistory[lastIndex] = { ...updatedHistory[lastIndex], text: fullResponse };
                 }
                 return updatedHistory;
@@ -464,6 +458,12 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     
     const AudioContextClass = (window.AudioContext || (window as any).webkitAudioContext);
     outputAudioContextRef.current = new AudioContextClass();
+    
+    // Create master gain node for volume control (especially for mobile/iPhone)
+    masterGainNodeRef.current = outputAudioContextRef.current.createGain();
+    masterGainNodeRef.current.gain.value = 1.35; // 35% boost for clearer audio on mobile
+    masterGainNodeRef.current.connect(outputAudioContextRef.current.destination);
+
     if (outputAudioContextRef.current.state === 'suspended') {
         await outputAudioContextRef.current.resume();
     }
@@ -607,6 +607,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     activeAudioSourcesRef.current.clear();
     outputAudioContextRef.current?.close().catch(console.error);
     outputAudioContextRef.current = null;
+    masterGainNodeRef.current = null;
     audioQueueRef.current = [];
     nextStartTimeRef.current = 0;
   }, [clearSilenceTimer]);
@@ -617,7 +618,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     if (audioQueueRef.current.length === 0) return;
     
     const audioContext = outputAudioContextRef.current;
-    if (!audioContext) return;
+    if (!audioContext || !masterGainNodeRef.current) return;
 
     if (widgetStateRef.current !== WidgetState.Speaking && widgetStateRef.current !== WidgetState.Error) {
         setWidgetState(WidgetState.Speaking);
@@ -636,7 +637,8 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             const audioBuffer = decodePcmChunk(chunk, audioContext);
             const source = audioContext.createBufferSource();
             source.buffer = audioBuffer;
-            source.connect(audioContext.destination);
+            // Connect to master gain node for boosted volume
+            source.connect(masterGainNodeRef.current);
 
             source.start(nextStartTimeRef.current);
             nextStartTimeRef.current += audioBuffer.duration;
@@ -964,7 +966,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             <div className="h-24 flex items-center justify-center">
                 {(widgetState === WidgetState.Connecting || widgetState === WidgetState.Listening || widgetState === WidgetState.Speaking) ? (
                     <button onClick={endVoiceSession} className="w-16 h-16 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center shadow-2xl transition-all transform hover:scale-110 active:scale-90 focus:outline-none" aria-label="End Call">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 rotate-135" viewBox="0 0 20 20" fill="currentColor"><path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 011.059.54V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" /></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 rotate-135" viewBox="0 0 20 20" fill="currentColor"><path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" /></svg>
                     </button>
                 ) : (
                     !(widgetState === WidgetState.Ended && (voiceReportingStatus === 'analyzing' || voiceReportingStatus === 'sending' || voiceReportingStatus === 'sent')) && (
