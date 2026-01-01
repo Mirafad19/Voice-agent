@@ -158,7 +158,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
   const accentColorClass = agentProfile.accentColor;
 
-  // Network quality monitoring
+  // Monitor network quality
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
@@ -168,7 +168,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     const conn = (navigator as any).connection;
     const checkNetwork = () => {
       if (!conn) return;
-      // High RTT (>500ms) or slow connection types (2g/3g) trigger the warning
+      // High RTT (>600ms) or slow connection types (2g/3g) trigger the warning
       const isSlow = conn.effectiveType === '2g' || 
                      conn.effectiveType === '3g' || 
                      (conn.rtt && conn.rtt > 600) || 
@@ -306,7 +306,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
     const welcomeText = config.initialGreetingText || config.initialGreeting || "Hello! How can I help you?";
     
-    // Clear and reset the chat state
     setMessages([{ role: 'model', text: welcomeText, timestamp: new Date() }]);
     setView('chat');
 
@@ -320,7 +319,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
     const userMsg: Message = { role: 'user', text, timestamp: new Date() };
     
-    // Functional update ensures we append to the ACTUAL current history
     setMessages(prev => [...prev, userMsg]);
     setChatInput('');
     setIsChatTyping(true);
@@ -457,11 +455,12 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     }
     
     const AudioContextClass = (window.AudioContext || (window as any).webkitAudioContext);
-    outputAudioContextRef.current = new AudioContextClass();
+    // CRITICAL: Using latencyHint: 'playback' often forces iOS to use media speakers instead of earpiece
+    outputAudioContextRef.current = new AudioContextClass({ latencyHint: 'playback' });
     
-    // Create master gain node for volume control (especially for mobile/iPhone)
+    // Create master gain node with massive boost for clear speaker output on mobile
     masterGainNodeRef.current = outputAudioContextRef.current.createGain();
-    masterGainNodeRef.current.gain.value = 1.35; // 35% boost for clearer audio on mobile
+    masterGainNodeRef.current.gain.value = 2.0; // 200% volume boost
     masterGainNodeRef.current.connect(outputAudioContextRef.current.destination);
 
     if (outputAudioContextRef.current.state === 'suspended') {
