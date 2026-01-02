@@ -99,12 +99,12 @@ const LiveBadge = () => (
 );
 
 const NetworkWarning = () => (
-  <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[100] animate-bounce w-full flex justify-center px-4">
-    <div className="bg-amber-600 text-white text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-full shadow-2xl flex items-center gap-2 border-2 border-amber-400/50 backdrop-blur-md">
-      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+  <div className="absolute inset-0 z-[100] flex items-center justify-center pointer-events-none p-4">
+    <div className="bg-amber-600 text-white text-[12px] font-black uppercase tracking-tight px-3 py-2 rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.5)] flex flex-col items-center gap-1 border-2 border-amber-400 backdrop-blur-md animate-pulse text-center leading-none">
+      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
       </svg>
-      Connection Unstable
+      <span className="whitespace-nowrap">Network Not Stable</span>
     </div>
   </div>
 );
@@ -447,7 +447,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
       mediaStreamRef.current = stream;
     } catch (e) {
       setWidgetState(WidgetState.Error);
-      setErrorMessage("Failed to get microphone access. Please ensure permission is granted.");
+      setErrorMessage("Microphone Access Denied. Please enable it in your settings.");
       cleanupServices();
       return;
     } finally {
@@ -516,7 +516,13 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             }
         }
         if (state === 'ended') {
-            setWidgetState(WidgetState.Ended);
+            // If it ends while still connecting, it's likely a network failure
+            if (widgetStateRef.current === WidgetState.Connecting) {
+                setWidgetState(WidgetState.Error);
+                setErrorMessage("NETWORK ERROR: Connection Failed.");
+            } else {
+                setWidgetState(WidgetState.Ended);
+            }
             cleanupServices();
         }
       },
@@ -555,7 +561,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         if (!navigator.onLine) {
             setIsOnline(false);
         } else {
-            setErrorMessage(error);
+            setErrorMessage("NETWORK ERROR: Check Connection.");
         }
         setWidgetState(WidgetState.Error);
         cleanupServices();
@@ -896,7 +902,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
         <div className="flex-grow flex flex-col items-center justify-center relative overflow-hidden bg-white dark:bg-gray-900">
             {!isOnline && <OfflineBanner />}
-            {isOnline && isNetworkSlow && (widgetState === WidgetState.Speaking || widgetState === WidgetState.Listening) && <NetworkWarning />}
             
             <div className="relative w-full flex items-center justify-center mb-10 min-h-[220px]">
                 
@@ -932,6 +937,9 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                                 </svg>
                             </div>
                         )}
+
+                        {/* Network Warning Overlay directly on Orb */}
+                        {isOnline && isNetworkSlow && (widgetState === WidgetState.Speaking || widgetState === WidgetState.Listening) && <NetworkWarning />}
                     </div>
                 </div>
             </div>
