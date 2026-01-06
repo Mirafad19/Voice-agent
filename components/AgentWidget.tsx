@@ -62,7 +62,7 @@ const LiveBadge = () => (
 
 const NetworkWarning = () => (
   <div className="absolute inset-0 z-[100] flex items-center justify-center pointer-events-none p-4 animate-fade-in">
-    <div className="bg-amber-600 text-white text-[11px] font-black uppercase tracking-tight px-3 py-4 rounded-2xl shadow-[0_15px_40px_rgba(0,0,0,0.7)] flex flex-col items-center gap-2 border-2 border-amber-300 backdrop-blur-xl animate-pulse text-center leading-none ring-4 ring-amber-600/30">
+    <div className="bg-amber-600 text-white text-[12px] font-black uppercase tracking-tight px-4 py-3 rounded-2xl shadow-[0_15px_40px_rgba(0,0,0,0.7)] flex flex-col items-center gap-2 border-2 border-amber-300 backdrop-blur-xl animate-pulse text-center leading-none ring-4 ring-amber-600/30">
       <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
       <span className="whitespace-nowrap tracking-[0.1em]">Network Not Stable</span>
     </div>
@@ -96,6 +96,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const audioQueueRef = useRef<Uint8Array[]>([]);
   const outputAudioContextRef = useRef<AudioContext | null>(null);
+  const masterGainNodeRef = useRef<GainNode | null>(null);
   const activeAudioSourcesRef = useRef(new Set<AudioBufferSourceNode>());
   const nextStartTimeRef = useRef(0);
   const shouldEndAfterSpeakingRef = useRef(false);
@@ -197,10 +198,14 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     } finally { setPermissionRequested(false); }
     
     outputAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ latencyHint: 'playback' });
-    const gain = outputAudioContextRef.current.createGain();
-    gain.gain.value = 2.0;
-    gain.connect(outputAudioContextRef.current.destination);
+    masterGainNodeRef.current = outputAudioContextRef.current.createGain();
+    masterGainNodeRef.current.gain.value = 2.0; 
+    masterGainNodeRef.current.connect(outputAudioContextRef.current.destination);
 
+    if (outputAudioContextRef.current.state === 'suspended') {
+        await outputAudioContextRef.current.resume();
+    }
+    
     recordingServiceRef.current = new RecordingService(handleVoiceSessionEnd);
     await recordingServiceRef.current.start(stream);
 
@@ -218,7 +223,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                 for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
                 audioQueueRef.current.push(bytes);
                 recordingServiceRef.current?.addAgentAudioChunk(bytes);
-                playAudioQueue(true, gain); 
+                playAudioQueue(true); 
             }
         } catch (e) { isGreetingProtectedRef.current = false; }
     }
@@ -243,7 +248,12 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
              }
          }
       },
-      onAudioChunk: (chunk) => { audioQueueRef.current.push(chunk); recordingServiceRef.current?.addAgentAudioChunk(chunk); playAudioQueue(false, gain); },
+      onAudioChunk: (chunk) => { 
+        setIsNetworkSlow(false); // Reset lag warning when audio arrives
+        audioQueueRef.current.push(chunk); 
+        recordingServiceRef.current?.addAgentAudioChunk(chunk); 
+        playAudioQueue(false); 
+      },
       onInterruption: handleInterruption,
       onLocalInterruption: handleInterruption,
       onLatencyWarning: (isSlow) => setIsNetworkSlow(isSlow),
@@ -260,12 +270,13 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     mediaStreamRef.current?.getTracks().forEach(t => t.stop()); mediaStreamRef.current = null;
     activeAudioSourcesRef.current.forEach(s => s.stop()); activeAudioSourcesRef.current.clear();
     outputAudioContextRef.current?.close().catch(() => {}); outputAudioContextRef.current = null;
+    masterGainNodeRef.current = null;
     audioQueueRef.current = []; nextStartTimeRef.current = 0;
   }, [clearSilenceTimer]);
 
-  const playAudioQueue = useCallback((isGreeting: boolean, gain: GainNode) => {
+  const playAudioQueue = useCallback((isGreeting: boolean) => {
     clearSilenceTimer();
-    if (audioQueueRef.current.length === 0 || !outputAudioContextRef.current) return;
+    if (audioQueueRef.current.length === 0 || !outputAudioContextRef.current || !masterGainNodeRef.current) return;
     if (widgetStateRef.current !== WidgetState.Speaking) setWidgetState(WidgetState.Speaking);
     const ctx = outputAudioContextRef.current;
     if (nextStartTimeRef.current < ctx.currentTime) nextStartTimeRef.current = ctx.currentTime + 0.05;
@@ -273,7 +284,9 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         const chunk = audioQueueRef.current.shift(); if (!chunk) continue;
         const buf = decodePcmChunk(chunk, ctx);
         const src = ctx.createBufferSource();
-        src.buffer = buf; src.connect(gain); src.start(nextStartTimeRef.current);
+        src.buffer = buf; 
+        src.connect(masterGainNodeRef.current); 
+        src.start(nextStartTimeRef.current);
         nextStartTimeRef.current += buf.duration;
         activeAudioSourcesRef.current.add(src);
         src.onended = () => {
@@ -314,9 +327,9 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const accent = agentProfile.accentColor;
 
   return (
-    <div className={`${agentProfile.theme === 'dark' ? 'dark' : ''} ${isWidgetMode ? 'w-full h-full' : 'fixed bottom-6 right-6 z-[9999]'}`}>
+    <div className={`${agentProfile.theme === 'dark' ? 'dark' : ''} ${isWidgetMode ? 'w-full h-full' : 'fixed bottom-0 right-0 md:bottom-24 md:right-6 w-full h-[100dvh] md:w-[400px] md:h-[600px] md:rounded-3xl z-[9999]'}`}>
         {!isOpen ? (
-            <div className="flex flex-col items-end gap-4 p-4">
+            <div className="flex flex-col items-end gap-4 p-4 h-full justify-end">
                 {showCallout && (
                     <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-xl animate-fade-in-up border border-gray-100 dark:border-gray-700 w-56 relative text-left">
                         <button onClick={() => { setShowCallout(false); sessionStorage.setItem('dismissed', 't'); }} className="absolute top-2 right-2 p-1 text-gray-400"><svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M6 18L18 6M6 6l12 12" /></svg></button>
@@ -327,7 +340,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                 <button onClick={toggle} className={`w-16 h-16 rounded-full bg-accent-${accent} shadow-2xl flex items-center justify-center text-white animate-pulse transform hover:scale-110 active:scale-95 transition-all`}><FabIcon /></button>
             </div>
         ) : (
-            <div className={`w-full h-full md:w-[400px] md:h-[600px] bg-white dark:bg-gray-900 md:rounded-[2rem] overflow-hidden flex flex-col shadow-2xl animate-fade-in-up`}>
+            <div className={`w-full h-full md:w-[400px] md:h-[600px] bg-white dark:bg-gray-900 md:rounded-[2rem] overflow-hidden flex flex-col shadow-2xl animate-fade-in-up relative`}>
                 {view === 'home' && (
                     <>
                         <button onClick={toggle} className="absolute top-5 right-5 z-50 p-2.5 rounded-full bg-white/10 text-white"><svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M6 18L18 6M6 6l12 12" /></svg></button>
@@ -341,7 +354,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                 )}
                 {view === 'chat' && (
                     <>
-                        <div className={`p-5 bg-accent-${accent} text-white flex justify-between items-center shadow-lg`}><div className="flex items-center gap-4"><button onClick={() => setView('home')}><ChevronLeftIcon /></button><h3 className="font-black uppercase">{agentProfile.name}</h3></div><button onClick={() => setView('home')} className="bg-white text-red-500 text-[9px] font-black px-4 py-2 rounded-full uppercase">End</button></div>
+                        <div className={`p-5 bg-accent-${accent} text-white flex justify-between items-center shadow-lg`}><div className="flex items-center gap-4"><button onClick={() => setView('home')}><ChevronLeftIcon /></button><h3 className="font-black text-lg uppercase">{agentProfile.name}</h3></div><button onClick={() => setView('home')} className="bg-white text-red-500 text-[9px] font-black px-4 py-2 rounded-full uppercase">End</button></div>
                         <div className="flex-1 overflow-y-auto p-4 bg-gray-50 dark:bg-gray-900 space-y-4">
                             {!isOnline && <OfflineBanner />}
                             {messages.map((m, i) => (<div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className={`p-4 rounded-2xl text-sm max-w-[80%] ${m.role === 'user' ? `bg-accent-${accent} text-white` : 'bg-white dark:bg-gray-800 font-bold shadow-sm'}`}>{m.text}</div></div>))}
@@ -353,7 +366,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                 )}
                 {view === 'voice' && (
                     <>
-                        <div className={`p-5 bg-accent-${accent} text-white flex justify-between items-center shadow-lg`}><div className="flex items-center gap-4"><button onClick={() => { cleanupServices(); setView('home'); }}><ChevronLeftIcon /></button><h3 className="font-black uppercase">{agentProfile.name}</h3></div><LiveBadge /></div>
+                        <div className={`p-5 bg-accent-${accent} text-white flex justify-between items-center shadow-lg`}><div className="flex items-center gap-4"><button onClick={() => { cleanupServices(); setView('home'); }}><ChevronLeftIcon /></button><h3 className="font-black text-lg uppercase">{agentProfile.name}</h3></div><LiveBadge /></div>
                         <div className="flex-1 flex flex-col items-center justify-center bg-white dark:bg-gray-900 relative">
                             {!isOnline && <OfflineBanner />}
                             <div className="relative w-64 h-64 flex items-center justify-center">
