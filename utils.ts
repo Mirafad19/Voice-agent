@@ -1,3 +1,4 @@
+
 export function safeBtoa(str: string): string {
   try {
     const base64 = btoa(
@@ -20,7 +21,7 @@ export function safeAtob(b64: string): string {
     }
     return decodeURIComponent(
       Array.prototype.map
-        .call(atob(urlSafeB64), (c) => {
+        .call(atob(urlSafeB64), (c: string) => {
           return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
         })
         .join('')

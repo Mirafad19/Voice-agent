@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback } from 'react';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useAgentProfiles } from './hooks/useAgentProfiles';
@@ -10,7 +11,15 @@ import { AgentWidget } from './components/AgentWidget';
 import { Recording, AgentProfile } from './types';
 import { Button } from './components/ui/Button';
 
-const Header = ({ onEmbedClick, onNewProfile, onDeleteProfile, profiles, activeProfile, onSelectProfile, onOpenSettings }) => (
+const Header: React.FC<{
+    onEmbedClick: () => void;
+    onNewProfile: () => void;
+    onDeleteProfile: () => void;
+    profiles: AgentProfile[];
+    activeProfile: AgentProfile | null;
+    onSelectProfile: (id: string) => void;
+    onOpenSettings: () => void;
+}> = ({ onEmbedClick, onNewProfile, onDeleteProfile, profiles, activeProfile, onSelectProfile, onOpenSettings }) => (
     <header className="bg-white dark:bg-gray-800 shadow-sm p-4 flex justify-between items-center">
         <div className="flex items-center space-x-4">
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">AI Voice Agent Dashboard</h1>
@@ -91,7 +100,7 @@ const App: React.FC = () => {
     const handleProfileUpdate = useCallback((updatedProfile: AgentProfile) => {
         updateProfile(updatedProfile);
         setNotification(`Profile "${updatedProfile.name}" saved. Remember to update any embed codes to apply these changes!`);
-        setTimeout(() => setNotification(''), 6000); // auto-dismiss after 6 seconds
+        setTimeout(() => setNotification(''), 6000); 
     }, [updateProfile]);
 
     const handleExportProfiles = () => {

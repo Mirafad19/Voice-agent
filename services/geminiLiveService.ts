@@ -41,9 +41,6 @@ export class GeminiLiveService {
   private currentInputTranscription = '';
   private currentOutputTranscription = '';
 
-  // PERFECTION: Frequency-Aware Interruption Logic
-  // Voice frequencies are roughly 300Hz to 3000Hz.
-  // Background noises (keys, chairs) are usually higher frequency (clicks) or lower thuds.
   private speechDetectedFrameCount = 0;
   private readonly SPEECH_DETECTION_THRESHOLD = 0.025; 
   private readonly FRAMES_FOR_INTERRUPTION = 2; // ~50ms of sustained speech
@@ -127,7 +124,6 @@ export class GeminiLiveService {
       this.inputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
       this.mediaStreamSource = this.inputAudioContext.createMediaStreamSource(mediaStream);
       
-      // Setup Analyser for frequency detection
       this.analyser = this.inputAudioContext.createAnalyser();
       this.analyser.fftSize = 2048;
       this.mediaStreamSource.connect(this.analyser);
@@ -135,9 +131,8 @@ export class GeminiLiveService {
       this.scriptProcessor = this.inputAudioContext.createScriptProcessor(2048, 1, 1);
       
       const frequencyData = new Float32Array(this.analyser.frequencyBinCount);
-      const binSize = 16000 / 2048; // ~7.8Hz per bin
+      const binSize = 16000 / 2048; 
       
-      // Indices for 300Hz to 3000Hz
       const lowBin = Math.floor(300 / binSize);
       const highBin = Math.floor(3000 / binSize);
 
@@ -145,19 +140,15 @@ export class GeminiLiveService {
         const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
         const l = inputData.length;
         
-        // Use frequency analysis to detect human speech specifically
         this.analyser?.getFloatFrequencyData(frequencyData);
         
-        // Calculate energy in speech band
         let speechEnergy = 0;
         for (let i = lowBin; i <= highBin; i++) {
-            // Decibels to linear scale roughly
             const linear = Math.pow(10, frequencyData[i] / 20);
             speechEnergy += linear;
         }
         speechEnergy = speechEnergy / (highBin - lowBin + 1);
 
-        // Instant interruption if human speech frequency energy is high
         if (speechEnergy > this.SPEECH_DETECTION_THRESHOLD) {
             this.speechDetectedFrameCount++;
             if (this.speechDetectedFrameCount >= this.FRAMES_FOR_INTERRUPTION) {

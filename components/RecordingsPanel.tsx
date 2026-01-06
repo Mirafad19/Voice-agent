@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { AgentProfile, Recording } from '../types';
 import { GoogleGenAI, Type } from '@google/genai';
@@ -32,18 +33,17 @@ const EmailIcon = () => (
 );
 
 const SentimentBadge: React.FC<{ sentiment: string }> = ({ sentiment }) => {
-    const sentimentColors = {
+    const sentimentColors: any = {
         'Positive': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
         'Neutral': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300',
         'Negative': 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
     };
-    const colorClass = sentimentColors[sentiment as keyof typeof sentimentColors] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
+    const colorClass = sentimentColors[sentiment] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
     return (
         <span className={`px-2 py-1 text-xs font-medium rounded-full ${colorClass}`}>{sentiment}</span>
     );
 };
 
-// Helper function to upload and get a shareable link from Cloudinary
 async function getCloudinaryShareableLink(cloudName: string, uploadPreset: string, recording: Recording): Promise<string> {
     const formData = new FormData();
     formData.append('file', recording.blob);
@@ -76,18 +76,16 @@ export const RecordingsPanel: React.FC<RecordingsPanelProps> = ({ recordings, on
         
         let contents;
 
-        // Prefer Transcript if available (Faster & More Reliable)
         if (recording.transcript && recording.transcript.length > 50) {
              contents = { parts: [
-                { text: `You are a highly skilled call center analyst. Analyze this transcript. Provide a concise summary, sentiment (Positive/Neutral/Negative), and action items. Return JSON.` },
+                { text: `Analyze this transcript. Provide summary, sentiment (Positive/Neutral/Negative), and action items. Return JSON.` },
                 { text: `TRANSCRIPT:\n${recording.transcript}` }
             ] };
         } else {
-            // Fallback to Audio
             const audioBase64 = await blobToBase64(recording.blob);
             const cleanMimeType = recording.mimeType.split(';')[0];
             contents = { parts: [
-                { text: `You are a highly skilled call center analyst. Analyze this call audio. Provide a concise summary, sentiment (Positive/Neutral/Negative), and action items. Return JSON.` },
+                { text: `Analyze this call audio. Provide summary, sentiment (Positive/Neutral/Negative), and action items. Return JSON.` },
                 { inlineData: { mimeType: cleanMimeType, data: audioBase64 } },
             ] };
         }
@@ -95,25 +93,15 @@ export const RecordingsPanel: React.FC<RecordingsPanelProps> = ({ recordings, on
         const responseSchema = {
             type: Type.OBJECT,
             properties: {
-                summary: {
-                    type: Type.STRING,
-                    description: "A brief paragraph summarizing the call."
-                },
-                sentiment: {
-                    type: Type.STRING,
-                    description: "One of the following: 'Positive', 'Neutral', 'Negative'."
-                },
-                actionItems: {
-                    type: Type.ARRAY,
-                    items: { type: Type.STRING },
-                    description: "A list of clear action items. Return an empty array if there are none."
-                }
+                summary: { type: Type.STRING },
+                sentiment: { type: Type.STRING },
+                actionItems: { type: Type.ARRAY, items: { type: Type.STRING } }
             },
             required: ["summary", "sentiment", "actionItems"]
         };
         
         const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
+            model: "gemini-3-flash-preview",
             contents: contents,
             config: {
                 responseMimeType: "application/json",
@@ -133,7 +121,7 @@ export const RecordingsPanel: React.FC<RecordingsPanelProps> = ({ recordings, on
 
     } catch (error) {
         console.error("Failed to analyze recording:", error);
-        alert("An error occurred while analyzing the recording. Please check the console for details.");
+        alert("An error occurred during analysis.");
         onUpdate({ ...recording, isAnalyzing: false });
     }
   };
@@ -141,22 +129,20 @@ export const RecordingsPanel: React.FC<RecordingsPanelProps> = ({ recordings, on
   const handleSendEmail = async (recording: Recording) => {
     const { emailConfig, fileUploadConfig } = profile;
     if (!emailConfig?.formspreeEndpoint) {
-        alert("Formspree endpoint is not configured. Please set it in the Agent Configuration section.");
+        alert("Formspree endpoint not set.");
         return;
     }
     
     setSendingEmailId(recording.id);
 
     try {
-        let downloadUrl = "Not available: Cloudinary not configured.";
+        let downloadUrl = "Not available.";
         if (fileUploadConfig?.cloudinaryCloudName && fileUploadConfig.cloudinaryUploadPreset) {
             try {
                 downloadUrl = await getCloudinaryShareableLink(fileUploadConfig.cloudinaryCloudName, fileUploadConfig.cloudinaryUploadPreset, recording);
             } catch (error) {
-                const errorText = error instanceof Error ? error.message : JSON.stringify(error);
-                console.error("Failed to get Cloudinary link:", errorText);
-                alert(`Failed to get audio link from Cloudinary: ${errorText}. The report will be generated without it.`);
-                downloadUrl = `Failed to generate link: ${errorText}`;
+                console.error("Cloudinary error:", error);
+                downloadUrl = `Upload Failed`;
             }
         }
 
@@ -164,8 +150,8 @@ export const RecordingsPanel: React.FC<RecordingsPanelProps> = ({ recordings, on
             _subject: `Session Insight Report: ${recording.name}`,
             agent: profile.name,
             sentiment: recording.sentiment || 'N/A',
-            summary: recording.summary || 'No summary available.',
-            actionItems: (recording.actionItems && recording.actionItems.length > 0) ? recording.actionItems.map(item => `- ${item}`).join('\n') : 'None',
+            summary: recording.summary || 'No summary.',
+            actionItems: (recording.actionItems?.length || 0) > 0 ? recording.actionItems!.map(item => `- ${item}`).join('\n') : 'None',
             audioLink: downloadUrl,
         };
 
@@ -175,16 +161,10 @@ export const RecordingsPanel: React.FC<RecordingsPanelProps> = ({ recordings, on
             body: JSON.stringify(reportData)
         });
 
-        if (!response.ok) {
-            throw new Error('Failed to send report via Formspree. Check endpoint URL.');
-        }
-        
-        alert("Report sent successfully!");
-
+        if (!response.ok) throw new Error('Failed to send.');
+        alert("Report sent!");
     } catch (error) {
-        const message = error instanceof Error ? error.message : "An unknown error occurred.";
-        console.error("Failed to send report:", error);
-        alert(`Failed to send report: ${message}`);
+        alert("Failed to send report.");
     } finally {
         setSendingEmailId(null);
     }
@@ -194,7 +174,7 @@ export const RecordingsPanel: React.FC<RecordingsPanelProps> = ({ recordings, on
     return (
         <div className="mt-8 bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
             <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Session Recordings</h3>
-            <p className="text-gray-500 dark:text-gray-400">No recordings yet. Your conversations with the agent will appear here.</p>
+            <p className="text-gray-500 dark:text-gray-400">No recordings yet.</p>
         </div>
     );
   }
@@ -221,8 +201,7 @@ export const RecordingsPanel: React.FC<RecordingsPanelProps> = ({ recordings, on
                              <button
                                 onClick={() => handleAnalyze(rec)}
                                 disabled={rec.isAnalyzing}
-                                className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                                title="Analyze Session"
+                                className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50"
                             >
                                 {rec.isAnalyzing ? <Spinner className="w-5 h-5 text-indigo-500" /> : <AnalyzeIcon />}
                             </button>
@@ -233,14 +212,12 @@ export const RecordingsPanel: React.FC<RecordingsPanelProps> = ({ recordings, on
                                 onClick={() => handleSendEmail(rec)}
                                 disabled={sendingEmailId === rec.id}
                                 className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50"
-                                title="Send Report via Email"
                             >
                                 {sendingEmailId === rec.id ? <Spinner className="w-5 h-5 text-indigo-500"/> : <EmailIcon />}
                             </button>
                             <button
                                 onClick={() => setRecordingToShare(rec)}
                                 className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"
-                                title="Share Insights"
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-600 dark:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12s-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
@@ -248,24 +225,11 @@ export const RecordingsPanel: React.FC<RecordingsPanelProps> = ({ recordings, on
                             </button>
                             </>
                         )}
-                        <a
-                        href={rec.url}
-                        download={downloadName}
-                        className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"
-                        title="Download"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-600 dark:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                            </svg>
+                        <a href={rec.url} download={downloadName} className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-600 dark:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                         </a>
-                        <button
-                        onClick={() => onDelete(rec.id)}
-                        className="p-2 rounded-md hover:bg-red-100 dark:hover:bg-red-900/50"
-                        title="Delete"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
+                        <button onClick={() => onDelete(rec.id)} className="p-2 rounded-md hover:bg-red-100 dark:hover:bg-red-900/50">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                         </button>
                     </div>
                 </div>
@@ -276,12 +240,10 @@ export const RecordingsPanel: React.FC<RecordingsPanelProps> = ({ recordings, on
                          <h4 className="text-base font-semibold text-gray-900 dark:text-white">Session Insights</h4>
                          {rec.sentiment && <SentimentBadge sentiment={rec.sentiment} />}
                        </div>
-                       
                        <div>
                             <h5 className="font-semibold mb-1">Summary</h5>
                             <p className="text-gray-600 dark:text-gray-400">{rec.summary}</p>
                        </div>
-                       
                        {rec.actionItems && rec.actionItems.length > 0 && (
                          <div>
                             <h5 className="font-semibold mb-1">Action Items</h5>

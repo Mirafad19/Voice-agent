@@ -1,3 +1,4 @@
+
 import { useState, useCallback, SetStateAction } from 'react';
 
 export const useLocalStorage = <T,>(key: string, initialValue: T): [T, (value: SetStateAction<T>) => void] => {

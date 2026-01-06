@@ -21,7 +21,7 @@ export const EmbedCodeModal: React.FC<EmbedCodeModalProps> = ({ isOpen, onClose,
   const { embedCode, directLink } = useMemo(() => {
     if (!agentProfile || !apiKey) return { embedCode: '', directLink: '' };
     
-    const { id, ...config }: { id: string; [key: string]: any } & AgentConfig = agentProfile;
+    const { id, ...config }: any = agentProfile;
 
     const encodedConfig = safeBtoa(JSON.stringify(config));
     const baseUrl = publicUrl || 'YOUR_HOSTED_URL';

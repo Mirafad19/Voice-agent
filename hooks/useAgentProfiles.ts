@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { useLocalStorage } from './useLocalStorage';
 import { AgentProfile } from '../types';
@@ -64,7 +65,6 @@ export const useAgentProfiles = () => {
 
   const importProfiles = useCallback((newProfiles: AgentProfile[]) => {
       setProfiles(newProfiles);
-      // Ensure active profile ID is valid after import
       if (newProfiles.length > 0) {
           setActiveProfileId(newProfiles[0].id);
       }

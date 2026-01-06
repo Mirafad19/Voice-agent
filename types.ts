@@ -1,17 +1,15 @@
+
 export enum WidgetTheme {
   Light = 'light',
   Dark = 'dark',
 }
 
 export enum AgentVoice {
-  // Standard Live Voices
   Zephyr = 'Zephyr',
   Puck = 'Puck',
   Charon = 'Charon',
   Kore = 'Kore',
   Fenrir = 'Fenrir',
-  
-  // Extended Star/Mythology Voices (TTS & Pro Preview)
   Aoede = 'Aoede',
   Callirrhoe = 'Callirrhoe',
   Autonoe = 'Autonoe',
@@ -64,15 +62,10 @@ export interface FileUploadConfig {
 export interface AgentProfile {
   id: string;
   name: string;
-  
-  // Voice Settings
-  knowledgeBase: string; // Default/Voice Instructions
-  initialGreeting?: string; // Voice Greeting
-  
-  // Chat Settings
-  chatKnowledgeBase?: string; // Specific Chat Instructions
-  initialGreetingText?: string; // Chat Welcome Message
-  
+  knowledgeBase: string; 
+  initialGreeting?: string; 
+  chatKnowledgeBase?: string; 
+  initialGreetingText?: string; 
   theme: WidgetTheme;
   voice: AgentVoice;
   accentColor: AccentColor;
@@ -89,7 +82,7 @@ export interface Recording {
   blob: Blob;
   url: string;
   mimeType: string;
-  transcript?: string; // Added transcript field
+  transcript?: string; 
   summary?: string;
   sentiment?: 'Positive' | 'Neutral' | 'Negative' | string;
   actionItems?: string[];

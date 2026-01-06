@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { AgentProfile, WidgetTheme, AgentVoice, AccentColor, EmailConfig, FileUploadConfig } from '../types';
 import { Input } from './ui/Input';
@@ -133,7 +134,6 @@ export const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({ profile,
           </div>
         </div>
         
-        {/* Voice Specific Settings */}
         <h3 className="text-xl font-semibold text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-700 pb-2 pt-4">Voice Configuration</h3>
         
         <div>
@@ -142,9 +142,9 @@ export const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({ profile,
             id="initialGreeting"
             value={editedProfile.initialGreeting || ''}
             onChange={(e) => handleChange('initialGreeting', e.target.value)}
-            placeholder="e.g., Hello, welcome to P-S-S-D-C."
+            placeholder="e.g., Hello, welcome."
           />
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Spoken by the AI when the call starts. Use phonetic spelling here (e.g., "P-S-S-D-C") for better pronunciation.</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Spoken by the AI when the call starts. Use phonetic spelling for better pronunciation.</p>
         </div>
 
         <div>
@@ -161,7 +161,6 @@ export const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({ profile,
            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Rules for the Voice Agent. Keep responses concise and spoken-word friendly.</p>
         </div>
 
-        {/* Chat Specific Settings */}
         <h3 className="text-xl font-semibold text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-700 pb-2 pt-4">Chat Configuration</h3>
 
         <div>
@@ -170,9 +169,9 @@ export const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({ profile,
             id="initialGreetingText"
             value={editedProfile.initialGreetingText || ''}
             onChange={(e) => handleChange('initialGreetingText', e.target.value)}
-            placeholder="e.g., Hello! Welcome to PSSDC."
+            placeholder="e.g., Hello! Welcome."
           />
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Displayed in the chat window. Keep this clean (e.g., "PSSDC"). If left blank, it uses the Voice Greeting.</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Displayed in the chat window. If left blank, it uses the Voice Greeting.</p>
         </div>
 
         <div>
@@ -186,7 +185,7 @@ export const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({ profile,
             value={editedProfile.chatKnowledgeBase || ''}
             onChange={(e) => handleChange('chatKnowledgeBase', e.target.value)}
           />
-           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Rules for the Chat Agent. You can encourage Markdown, bullet points, and more detailed text answers. If left blank, it uses the Voice Instructions.</p>
+           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Rules for the Chat Agent. If left blank, it uses the Voice Instructions.</p>
         </div>
 
 
@@ -194,7 +193,7 @@ export const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({ profile,
           <summary className="font-semibold cursor-pointer text-gray-900 dark:text-white">Cloud Audio Storage (via Cloudinary)</summary>
           <div className="mt-4 space-y-4 text-sm text-gray-600 dark:text-gray-400">
               <p>
-                  To include a playable audio link in email reports, the app uploads recordings to cloud storage. This method uses a free <a href="https://cloudinary.com/" target="_blank" rel="noopener noreferrer" className="text-indigo-500 hover:underline">Cloudinary</a> account, which is simpler and more reliable than other options.
+                  To include a playable audio link in email reports, provide unsigned Cloudinary credentials.
               </p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <Input
@@ -221,7 +220,7 @@ export const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({ profile,
             <summary className="font-semibold cursor-pointer text-gray-900 dark:text-white">Automated Email Reports (via Formspree)</summary>
             <div className="mt-4 space-y-4">
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                    This app uses <a href="https://formspree.io/" target="_blank" rel="noopener noreferrer" className="text-indigo-500 hover:underline">Formspree</a>, a free service, to automatically send email reports after a session.
+                    Send email reports after sessions via Formspree.
                 </p>
                 <Input
                     label="Formspree Endpoint URL"

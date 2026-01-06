@@ -1,6 +1,6 @@
 {
-  "name": "AI Voice Agent Dashboard",
-  "description": "A dashboard for configuring and interacting with AI voice agents using Google Gemini API.",
+  "name": "Copy of Audio (3)",
+  "description": "A dashboard for configuring and interacting with AI voice agents using Google Gemini API. Includes real-time voice chat, text chat, session recordings, and automated reporting.",
   "requestFramePermissions": [
     "microphone"
   ]
