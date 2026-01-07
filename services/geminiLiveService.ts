@@ -44,7 +44,7 @@ export class GeminiLiveService {
 
   private speechDetectedFrameCount = 0;
   private readonly SPEECH_DETECTION_THRESHOLD = 0.025; 
-  private readonly FRAMES_FOR_INTERRUPTION = 2;
+  private readonly FRAMES_FOR_INTERRUPTION = 2; // ~50ms of sustained speech
 
   // Active Latency Monitoring
   private lastUserTurnEndTime = 0;
@@ -73,7 +73,7 @@ export class GeminiLiveService {
         model: 'gemini-2.5-flash-native-audio-preview-12-2025',
         config: {
           responseModalities: [Modality.AUDIO],
-          // CRITICAL: Disable thinking budget to eliminate the "thinking delay"
+          // Keep thinkingBudget at 0 to ensure snappiness
           thinkingConfig: { thinkingBudget: 0 },
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: this.config.voice } },
@@ -82,7 +82,7 @@ export class GeminiLiveService {
           CRITICAL OPERATIONAL RULES:
           1. LANGUAGE: Speak ONLY in English. 
           2. ${greetingContext}
-          3. RESPONSIVENESS: Respond naturally and promptly. Be concise and conversational to minimize audio generation time.
+          3. RESPONSIVENESS: Respond naturally and promptly. Do not wait for long silences unless the user seems to be thinking.
           4. INTERRUPTION: If the user starts talking while you are speaking, STOP IMMEDIATELY.
           5. KNOWLEDGE: Use the provided knowledge base accurately.
           6. SILENCE: If you receive "[[SILENCE_DETECTED]]", ask "Are you still there?".
