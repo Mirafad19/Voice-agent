@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Modality, LiveServerMessage } from '@google/genai';
 import { AgentConfig } from '../types';
 
@@ -73,7 +72,6 @@ export class GeminiLiveService {
         model: 'gemini-2.5-flash-native-audio-preview-12-2025',
         config: {
           responseModalities: [Modality.AUDIO],
-          // Keep thinkingBudget at 0 to ensure snappiness
           thinkingConfig: { thinkingBudget: 0 },
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: this.config.voice } },
@@ -110,10 +108,7 @@ export class GeminiLiveService {
           this.sessionPromise.then(session => {
               (session as any).send({
                   clientContent: {
-                      turns: [{
-                          role: 'user',
-                          parts: [{ text }]
-                      }],
+                      turns: [{ role: 'user', parts: [{ text }] }],
                       turnComplete: true
                   }
               });
@@ -123,9 +118,7 @@ export class GeminiLiveService {
 
   private async handleSessionOpen(mediaStream: MediaStream): Promise<void> {
     try {
-      if (!mediaStream) {
-        throw new Error("MediaStream missing.");
-      }
+      if (!mediaStream) throw new Error("MediaStream missing.");
       this.mediaStream = mediaStream;
       
       this.inputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
@@ -137,13 +130,23 @@ export class GeminiLiveService {
 
       this.scriptProcessor = this.inputAudioContext.createScriptProcessor(2048, 1, 1);
       
+      const frequencyData = new Float32Array(this.analyser.frequencyBinCount);
+      const binSize = 16000 / 2048; 
+      const lowBin = Math.floor(300 / binSize);
+      const highBin = Math.floor(3000 / binSize);
+
       this.scriptProcessor.onaudioprocess = (audioProcessingEvent) => {
         const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
-        let rms = 0;
-        for (let i = 0; i < inputData.length; i++) rms += inputData[i] * inputData[i];
-        rms = Math.sqrt(rms / inputData.length);
+        this.analyser?.getFloatFrequencyData(frequencyData);
+        
+        let speechEnergy = 0;
+        for (let i = lowBin; i <= highBin; i++) {
+            const linear = Math.pow(10, frequencyData[i] / 20);
+            speechEnergy += linear;
+        }
+        speechEnergy = speechEnergy / (highBin - lowBin + 1);
 
-        if (rms > this.SPEECH_DETECTION_THRESHOLD) {
+        if (speechEnergy > this.SPEECH_DETECTION_THRESHOLD) {
             this.speechDetectedFrameCount++;
             if (this.speechDetectedFrameCount >= this.FRAMES_FOR_INTERRUPTION) {
                 this.callbacks.onLocalInterruption?.();
@@ -158,21 +161,17 @@ export class GeminiLiveService {
           int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
         }
 
-        const pcmBlob = {
-            data: encode(new Uint8Array(int16.buffer)),
-            mimeType: 'audio/pcm;rate=16000',
-        };
-
         if (this.sessionPromise) {
             this.sessionPromise.then((session) => {
-                session.sendRealtimeInput({ media: pcmBlob });
+                session.sendRealtimeInput({ 
+                    media: { data: encode(new Uint8Array(int16.buffer)), mimeType: 'audio/pcm;rate=16000' }
+                });
             });
         }
       };
       
       this.mediaStreamSource.connect(this.scriptProcessor);
       this.scriptProcessor.connect(this.inputAudioContext.destination);
-      
       this.setState('connected');
     } catch (err) {
       this.handleError(err instanceof Error ? `Microphone error: ${err.message}` : "Failed to access microphone.");
@@ -187,19 +186,16 @@ export class GeminiLiveService {
     }
     
     if (message.serverContent?.outputTranscription) {
-      const text = message.serverContent.outputTranscription.text;
-      this.currentOutputTranscription += text;
+      this.currentOutputTranscription += message.serverContent.outputTranscription.text;
       this.callbacks.onTranscriptUpdate(false, this.currentOutputTranscription, 'output');
     } else if (message.serverContent?.inputTranscription) {
-      const text = message.serverContent.inputTranscription.text;
-      this.currentInputTranscription += text;
+      this.currentInputTranscription += message.serverContent.inputTranscription.text;
       this.callbacks.onTranscriptUpdate(false, this.currentInputTranscription, 'input');
     }
 
     if (message.serverContent?.turnComplete) {
       if (this.currentInputTranscription) {
         this.callbacks.onTranscriptUpdate(true, this.currentInputTranscription, 'input');
-        // Start monitoring for response latency
         this.lastUserTurnEndTime = Date.now();
         this.isAwaitingFirstModelChunk = true;
       }
@@ -212,20 +208,14 @@ export class GeminiLiveService {
 
     const base64Audio = message.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
     if (base64Audio) {
-      // If this is the first audio chunk since the user finished, check latency
       if (this.isAwaitingFirstModelChunk) {
           const latency = Date.now() - this.lastUserTurnEndTime;
-          // Threshold set to 2.5 seconds - anything above this is likely network lag
           this.callbacks.onLatencyWarning(latency > 2500);
           this.isAwaitingFirstModelChunk = false;
       }
-
       const binaryString = atob(base64Audio);
-      const len = binaryString.length;
-      const bytes = new Uint8Array(len);
-      for (let i = 0; i < len; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
       this.callbacks.onAudioChunk(bytes);
     }
   }
@@ -236,7 +226,6 @@ export class GeminiLiveService {
   }
 
   private handleError(error: string) {
-    console.error('GeminiLiveService Error:', error);
     this.setState('error');
     this.callbacks.onError(error);
     this.cleanup();
@@ -251,8 +240,7 @@ export class GeminiLiveService {
     this.scriptProcessor?.disconnect();
     this.mediaStreamSource?.disconnect();
     this.analyser?.disconnect();
-    this.inputAudioContext?.close().catch(console.error);
-
+    this.inputAudioContext?.close().catch(() => {});
     this.scriptProcessor = null;
     this.mediaStreamSource = null;
     this.analyser = null;
