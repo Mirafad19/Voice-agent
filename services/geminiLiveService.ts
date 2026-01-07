@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Modality, LiveServerMessage } from '@google/genai';
 import { AgentConfig } from '../types';
 
@@ -44,7 +43,7 @@ export class GeminiLiveService {
 
   private speechDetectedFrameCount = 0;
   private readonly SPEECH_DETECTION_THRESHOLD = 0.025; 
-  private readonly FRAMES_FOR_INTERRUPTION = 2;
+  private readonly FRAMES_FOR_INTERRUPTION = 2; // ~50ms of sustained speech
 
   // Active Latency Monitoring
   private lastUserTurnEndTime = 0;
@@ -66,7 +65,7 @@ export class GeminiLiveService {
       this.mediaStream = mediaStream;
       
       const greetingContext = this.config.initialGreeting 
-        ? `INITIALIZATION: You already spoke: "${this.config.initialGreeting}". Do NOT repeat it. WAIT for a reply.` 
+        ? `INITIALIZATION: You have just spoken this greeting: "${this.config.initialGreeting}". Do NOT repeat it. WAIT for the user to reply.` 
         : `INITIALIZATION: Wait for the user to speak first.`;
 
       this.sessionPromise = this.ai.live.connect({
@@ -80,12 +79,11 @@ export class GeminiLiveService {
           systemInstruction: `
           CRITICAL OPERATIONAL RULES:
           1. LANGUAGE: Speak ONLY in English. 
-          2. BREVITY: Keep answers under 15 words. Be extremely concise.
-          3. ${greetingContext}
-          4. RESPONSIVENESS: Respond naturally and promptly. Rely on your built-in VAD.
-          5. INTERRUPTION: If user talks, STOP IMMEDIATELY.
-          6. KNOWLEDGE: Use provided data accurately.
-          7. SILENCE: If user is silent, ask "Are you still there?".
+          2. ${greetingContext}
+          3. RESPONSIVENESS: Respond naturally and promptly. Do not wait for long silences unless the user seems to be thinking.
+          4. INTERRUPTION: If the user starts talking while you are speaking, STOP IMMEDIATELY.
+          5. KNOWLEDGE: Use the provided knowledge base accurately.
+          6. SILENCE: If you receive "[[SILENCE_DETECTED]]", ask "Are you still there?".
           
           KNOWLEDGE BASE:
           ${this.config.knowledgeBase}`,
@@ -95,13 +93,13 @@ export class GeminiLiveService {
         callbacks: {
           onopen: () => this.handleSessionOpen(mediaStream),
           onmessage: (message: LiveServerMessage) => this.handleSessionMessage(message),
-          onerror: (e: ErrorEvent) => this.handleError(`Connection failed: ${e.message || 'Check network'}`),
+          onerror: (e: ErrorEvent) => this.handleError(`Connection error: ${e.message}`),
           onclose: () => this.handleSessionClose(),
         },
       });
       this.session = await this.sessionPromise;
     } catch (e) {
-      this.handleError(e instanceof Error ? `Failed to connect: ${e.message}` : 'Network error.');
+      this.handleError(e instanceof Error ? `Failed to connect: ${e.message}` : 'An unknown connection error occurred.');
     }
   }
 
@@ -120,21 +118,35 @@ export class GeminiLiveService {
 
   private async handleSessionOpen(mediaStream: MediaStream): Promise<void> {
     try {
+      if (!mediaStream) throw new Error("MediaStream missing.");
+      this.mediaStream = mediaStream;
+      
       this.inputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
       this.mediaStreamSource = this.inputAudioContext.createMediaStreamSource(mediaStream);
+      
       this.analyser = this.inputAudioContext.createAnalyser();
       this.analyser.fftSize = 2048;
       this.mediaStreamSource.connect(this.analyser);
 
       this.scriptProcessor = this.inputAudioContext.createScriptProcessor(2048, 1, 1);
       
+      const frequencyData = new Float32Array(this.analyser.frequencyBinCount);
+      const binSize = 16000 / 2048; 
+      const lowBin = Math.floor(300 / binSize);
+      const highBin = Math.floor(3000 / binSize);
+
       this.scriptProcessor.onaudioprocess = (audioProcessingEvent) => {
         const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
-        let rms = 0;
-        for (let i = 0; i < inputData.length; i++) rms += inputData[i] * inputData[i];
-        rms = Math.sqrt(rms / inputData.length);
+        this.analyser?.getFloatFrequencyData(frequencyData);
+        
+        let speechEnergy = 0;
+        for (let i = lowBin; i <= highBin; i++) {
+            const linear = Math.pow(10, frequencyData[i] / 20);
+            speechEnergy += linear;
+        }
+        speechEnergy = speechEnergy / (highBin - lowBin + 1);
 
-        if (rms > this.SPEECH_DETECTION_THRESHOLD) {
+        if (speechEnergy > this.SPEECH_DETECTION_THRESHOLD) {
             this.speechDetectedFrameCount++;
             if (this.speechDetectedFrameCount >= this.FRAMES_FOR_INTERRUPTION) {
                 this.callbacks.onLocalInterruption?.();
@@ -150,7 +162,7 @@ export class GeminiLiveService {
         }
 
         if (this.sessionPromise) {
-            this.sessionPromise.then(session => {
+            this.sessionPromise.then((session) => {
                 session.sendRealtimeInput({ 
                     media: { data: encode(new Uint8Array(int16.buffer)), mimeType: 'audio/pcm;rate=16000' }
                 });
@@ -162,7 +174,7 @@ export class GeminiLiveService {
       this.scriptProcessor.connect(this.inputAudioContext.destination);
       this.setState('connected');
     } catch (err) {
-      this.handleError("Mic failed.");
+      this.handleError(err instanceof Error ? `Microphone error: ${err.message}` : "Failed to access microphone.");
     }
   }
 
@@ -170,22 +182,20 @@ export class GeminiLiveService {
     if (message.serverContent?.interrupted) {
       this.callbacks.onInterruption();
       this.isAwaitingFirstModelChunk = false;
+      this.callbacks.onLatencyWarning(false);
     }
     
-    if (message.serverContent?.inputTranscription) {
-      this.currentInputTranscription += message.serverContent.inputTranscription.text;
-      this.callbacks.onTranscriptUpdate(false, this.currentInputTranscription, 'input');
-    }
-
     if (message.serverContent?.outputTranscription) {
       this.currentOutputTranscription += message.serverContent.outputTranscription.text;
       this.callbacks.onTranscriptUpdate(false, this.currentOutputTranscription, 'output');
+    } else if (message.serverContent?.inputTranscription) {
+      this.currentInputTranscription += message.serverContent.inputTranscription.text;
+      this.callbacks.onTranscriptUpdate(false, this.currentInputTranscription, 'input');
     }
 
     if (message.serverContent?.turnComplete) {
       if (this.currentInputTranscription) {
         this.callbacks.onTranscriptUpdate(true, this.currentInputTranscription, 'input');
-        // User turn ended: mark time and start monitoring latency
         this.lastUserTurnEndTime = Date.now();
         this.isAwaitingFirstModelChunk = true;
       }
@@ -199,11 +209,10 @@ export class GeminiLiveService {
     const base64Audio = message.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
     if (base64Audio) {
       if (this.isAwaitingFirstModelChunk) {
-        const latency = Date.now() - this.lastUserTurnEndTime;
-        this.callbacks.onLatencyWarning(latency > 2500); // 2.5s threshold
-        this.isAwaitingFirstModelChunk = false;
+          const latency = Date.now() - this.lastUserTurnEndTime;
+          this.callbacks.onLatencyWarning(latency > 2500);
+          this.isAwaitingFirstModelChunk = false;
       }
-
       const binaryString = atob(base64Audio);
       const bytes = new Uint8Array(binaryString.length);
       for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
