@@ -65,9 +65,11 @@ export class GeminiLiveService {
         : `INITIALIZATION: Wait for the user to speak first.`;
 
       this.sessionPromise = this.ai.live.connect({
-        model: 'gemini-2.5-flash-native-audio-preview-09-2025',
+        model: 'gemini-2.5-flash-native-audio-preview-12-2025',
         config: {
           responseModalities: [Modality.AUDIO],
+          // CRITICAL: Disable thinking budget for snappy response
+          thinkingConfig: { thinkingBudget: 0 },
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: this.config.voice } },
           },
@@ -75,7 +77,7 @@ export class GeminiLiveService {
           CRITICAL OPERATIONAL RULES:
           1. LANGUAGE ENFORCEMENT: You must speak ONLY in English. 
           2. ${greetingContext}
-          3. PASSIVE LISTENING PROTOCOL: You are a patient, passive listener. People often pause mid-sentence to think. DO NOT interrupt while they are talking. Wait for a clear, 1-2 second silence before you start responding.
+          3. RESPONSIVE PROTOCOL: You are an active, helpful listener. Respond naturally and promptly as soon as the user finishes their thought.
           4. AGGRESSIVE SILENCE: If the user starts talking while you are speaking, STOP IMMEDIATELY. Prioritize the user's voice above your own.
           5. SOURCE OF TRUTH: Use the provided knowledge base accurately.
           6. SILENCE HANDLING: If you receive "[[SILENCE_DETECTED]]", ask "Are you still there?".
