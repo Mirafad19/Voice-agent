@@ -61,26 +61,26 @@ export class GeminiLiveService {
       this.mediaStream = mediaStream;
       
       const greetingContext = this.config.initialGreeting 
-        ? `INITIALIZATION: You have just spoken the following greeting to the user: "${this.config.initialGreeting}". The user has heard this. Do NOT repeat it. Your goal is to WAIT for the user to reply to this greeting.` 
+        ? `INITIALIZATION: You have just finished speaking this greeting: "${this.config.initialGreeting}". DO NOT REPEAT IT. The conversation has already started. Wait for the user to respond to what you just said.` 
         : `INITIALIZATION: Wait for the user to speak first.`;
 
       this.sessionPromise = this.ai.live.connect({
         model: 'gemini-2.5-flash-native-audio-preview-12-2025',
         config: {
           responseModalities: [Modality.AUDIO],
-          // CRITICAL: Disable thinking budget for snappy response
+          // SPEED UP: thinkingBudget 0 makes it snappy
           thinkingConfig: { thinkingBudget: 0 },
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: this.config.voice } },
           },
           systemInstruction: `
           CRITICAL OPERATIONAL RULES:
-          1. LANGUAGE ENFORCEMENT: You must speak ONLY in English. 
+          1. LANGUAGE: Speak ONLY in English. 
           2. ${greetingContext}
-          3. RESPONSIVE PROTOCOL: You are an active, helpful listener. Respond naturally and promptly as soon as the user finishes their thought.
-          4. AGGRESSIVE SILENCE: If the user starts talking while you are speaking, STOP IMMEDIATELY. Prioritize the user's voice above your own.
-          5. SOURCE OF TRUTH: Use the provided knowledge base accurately.
-          6. SILENCE HANDLING: If you receive "[[SILENCE_DETECTED]]", ask "Are you still there?".
+          3. RESPONSIVENESS: Respond naturally and promptly. Do not wait for long silences unless the user seems to be thinking.
+          4. INTERRUPTION: If the user starts talking while you are speaking, STOP IMMEDIATELY. This is vital for a natural flow.
+          5. KNOWLEDGE: Use the provided knowledge base accurately.
+          6. SILENCE: If you receive "[[SILENCE_DETECTED]]", ask "Are you still there?".
           
           KNOWLEDGE BASE:
           ${this.config.knowledgeBase}`,
@@ -119,7 +119,7 @@ export class GeminiLiveService {
   private async handleSessionOpen(mediaStream: MediaStream): Promise<void> {
     try {
       if (!mediaStream) {
-        throw new Error("MediaStream was not provided to GeminiLiveService.");
+        throw new Error("MediaStream missing.");
       }
       this.mediaStream = mediaStream;
       
