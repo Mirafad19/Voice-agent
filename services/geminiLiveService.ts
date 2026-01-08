@@ -2,7 +2,6 @@ import { GoogleGenAI, Modality, LiveServerMessage } from '@google/genai';
 import { AgentConfig } from '../types';
 
 type LiveSession = Awaited<ReturnType<InstanceType<typeof GoogleGenAI>['live']['connect']>>;
-
 type ServiceState = 'idle' | 'connecting' | 'connected' | 'error' | 'ended';
 
 interface Callbacks {
@@ -10,38 +9,34 @@ interface Callbacks {
   onTranscriptUpdate: (isFinal: boolean, text: string, type: 'input' | 'output') => void;
   onAudioChunk: (chunk: Uint8Array) => void;
   onInterruption: () => void;
-  onLocalInterruption?: () => void; 
+  onLocalInterruption?: () => void;
   onError: (error: string) => void;
 }
 
 function encode(bytes: Uint8Array): string {
-    let binary = '';
-    const len = bytes.byteLength;
-    for (let i = 0; i < len; i++) {
-        binary += String.fromCharCode(bytes[i]);
-    }
-    return btoa(binary);
+  let binary = '';
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
 }
 
 export class GeminiLiveService {
   private ai: GoogleGenAI;
   private config: AgentConfig;
   private callbacks: Callbacks;
-  
   private session: LiveSession | null = null;
   private sessionPromise: Promise<LiveSession> | null = null;
-  
   private inputAudioContext: AudioContext | null = null;
   private scriptProcessor: ScriptProcessorNode | null = null;
   private mediaStreamSource: MediaStreamAudioSourceNode | null = null;
   private analyser: AnalyserNode | null = null;
   private mediaStream: MediaStream | null = null;
-  
   private currentInputTranscription = '';
   private currentOutputTranscription = '';
-
   private speechDetectedFrameCount = 0;
-  private readonly SPEECH_DETECTION_THRESHOLD = 0.025; 
+  private readonly SPEECH_DETECTION_THRESHOLD = 0.025;
   private readonly FRAMES_FOR_INTERRUPTION = 2; // ~50ms of sustained speech
 
   constructor(apiKey: string, config: AgentConfig, callbacks: Callbacks) {
@@ -49,7 +44,7 @@ export class GeminiLiveService {
     this.config = config;
     this.callbacks = callbacks;
   }
-  
+
   private setState(state: ServiceState) {
     this.callbacks.onStateChange(state);
   }
@@ -58,36 +53,29 @@ export class GeminiLiveService {
     this.setState('connecting');
     try {
       this.mediaStream = mediaStream;
-      
-      const greeting = this.config.initialGreeting || "Hello! How can I help you today?";
+
+      const greetingContext = this.config.initialGreeting
+        ? `INITIALIZATION: You have just spoken this greeting: "${this.config.initialGreeting}". Do NOT repeat it. WAIT for the user to reply.`
+        : `INITIALIZATION: Wait for the user to speak first.`;
 
       this.sessionPromise = this.ai.live.connect({
         model: 'gemini-2.5-flash-native-audio-preview-12-2025',
         config: {
           responseModalities: [Modality.AUDIO],
-          thinkingConfig: { thinkingBudget: 0 },
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: this.config.voice } },
           },
           systemInstruction: `
-          # CORE MISSION
-          You are a professional and proactive AI voice assistant. You are currently on a LIVE voice call.
-          
-          # GREETING PROTOCOL
-          - You MUST start the conversation. 
-          - When you see the message "CONVERSATION_STARTED", immediately speak your greeting: "${greeting}".
-          - Do not wait for the user to say anything first. 
-          
-          # OPERATIONAL GUIDELINES
-          1. PROACTIVITY: If the user is quiet, re-engage them. 
-          2. SNAPPY: Respond instantly the moment the user finishes a sentence.
-          3. INTERRUPTION: If the user speaks while you are talking, STOP immediately to listen.
-          4. KNOWLEDGE BASE: 
-          ${this.config.knowledgeBase}
-          
-          # SPECIAL COMMANDS
-          - [[SILENCE_DETECTED]]: If this appears, the user has been quiet. Ask if they are still there or need help.
-          `,
+CRITICAL OPERATIONAL RULES:
+1. LANGUAGE: Speak ONLY in English.
+2. ${greetingContext}
+3. RESPONSIVENESS: Respond naturally and promptly. Do not wait for long silences unless the user seems to be thinking.
+4. INTERRUPTION: If the user starts talking while you are speaking, STOP IMMEDIATELY.
+5. KNOWLEDGE: Use the provided knowledge base accurately.
+6. SILENCE: If you receive "[[SILENCE_DETECTED]]", ask "Are you still there?".
+
+KNOWLEDGE BASE:
+${this.config.knowledgeBase}`,
           inputAudioTranscription: {},
           outputAudioTranscription: {},
         },
@@ -105,19 +93,19 @@ export class GeminiLiveService {
   }
 
   public sendText(text: string) {
-      if (this.sessionPromise) {
-          this.sessionPromise.then(session => {
-              (session as any).send({
-                  clientContent: {
-                      turns: [{
-                          role: 'user',
-                          parts: [{ text }]
-                      }],
-                      turnComplete: true
-                  }
-              });
-          });
-      }
+    if (this.sessionPromise) {
+      this.sessionPromise.then(session => {
+        (session as any).send({
+          clientContent: {
+            turns: [{
+              role: 'user',
+              parts: [{ text }]
+            }],
+            turnComplete: true
+          }
+        });
+      });
+    }
   }
 
   private async handleSessionOpen(mediaStream: MediaStream): Promise<void> {
@@ -126,42 +114,42 @@ export class GeminiLiveService {
         throw new Error("MediaStream missing.");
       }
       this.mediaStream = mediaStream;
-      
+
       this.inputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
       this.mediaStreamSource = this.inputAudioContext.createMediaStreamSource(mediaStream);
-      
+
       this.analyser = this.inputAudioContext.createAnalyser();
       this.analyser.fftSize = 2048;
       this.mediaStreamSource.connect(this.analyser);
 
       this.scriptProcessor = this.inputAudioContext.createScriptProcessor(2048, 1, 1);
-      
+
       const frequencyData = new Float32Array(this.analyser.frequencyBinCount);
-      const binSize = 16000 / 2048; 
-      
+      const binSize = 16000 / 2048;
+
       const lowBin = Math.floor(300 / binSize);
       const highBin = Math.floor(3000 / binSize);
 
       this.scriptProcessor.onaudioprocess = (audioProcessingEvent) => {
         const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
         const l = inputData.length;
-        
+
         this.analyser?.getFloatFrequencyData(frequencyData);
-        
+
         let speechEnergy = 0;
         for (let i = lowBin; i <= highBin; i++) {
-            const linear = Math.pow(10, frequencyData[i] / 20);
-            speechEnergy += linear;
+          const linear = Math.pow(10, frequencyData[i] / 20);
+          speechEnergy += linear;
         }
         speechEnergy = speechEnergy / (highBin - lowBin + 1);
 
         if (speechEnergy > this.SPEECH_DETECTION_THRESHOLD) {
-            this.speechDetectedFrameCount++;
-            if (this.speechDetectedFrameCount >= this.FRAMES_FOR_INTERRUPTION) {
-                this.callbacks.onLocalInterruption?.();
-            }
+          this.speechDetectedFrameCount++;
+          if (this.speechDetectedFrameCount >= this.FRAMES_FOR_INTERRUPTION) {
+            this.callbacks.onLocalInterruption?.();
+          }
         } else {
-            this.speechDetectedFrameCount = 0;
+          this.speechDetectedFrameCount = 0;
         }
 
         const int16 = new Int16Array(l);
@@ -172,25 +160,21 @@ export class GeminiLiveService {
         }
 
         const pcmBlob = {
-            data: encode(new Uint8Array(int16.buffer)),
-            mimeType: 'audio/pcm;rate=16000',
+          data: encode(new Uint8Array(int16.buffer)),
+          mimeType: 'audio/pcm;rate=16000',
         };
 
         if (this.sessionPromise) {
-            this.sessionPromise.then((session) => {
-                session.sendRealtimeInput({ media: pcmBlob });
-            });
+          this.sessionPromise.then((session) => {
+            session.sendRealtimeInput({ media: pcmBlob });
+          });
         }
       };
-      
+
       this.mediaStreamSource.connect(this.scriptProcessor);
       this.scriptProcessor.connect(this.inputAudioContext.destination);
-      
+
       this.setState('connected');
-
-      // MANDATORY: Trigger the greeting immediately upon connection
-      this.sendText("CONVERSATION_STARTED");
-
     } catch (err) {
       this.handleError(err instanceof Error ? `Microphone error: ${err.message}` : "Failed to access microphone.");
     }
@@ -200,7 +184,7 @@ export class GeminiLiveService {
     if (message.serverContent?.interrupted) {
       this.callbacks.onInterruption();
     }
-    
+
     if (message.serverContent?.outputTranscription) {
       const text = message.serverContent.outputTranscription.text;
       this.currentOutputTranscription += text;
@@ -245,7 +229,7 @@ export class GeminiLiveService {
     this.callbacks.onError(error);
     this.cleanup();
   }
-  
+
   public disconnect() {
     this.session?.close();
     this.cleanup();
