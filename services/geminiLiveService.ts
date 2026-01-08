@@ -60,30 +60,36 @@ export class GeminiLiveService {
     try {
       this.mediaStream = mediaStream;
       
-      const greetingContext = this.config.initialGreeting 
-        ? `INITIALIZATION: You have just spoken the following greeting to the user: "${this.config.initialGreeting}". The user has heard this. Do NOT repeat it. Your goal is to WAIT for the user to reply to this greeting.` 
-        : `INITIALIZATION: Wait for the user to speak first.`;
+      const greeting = this.config.initialGreeting || "Hello! How can I help you today?";
 
       this.sessionPromise = this.ai.live.connect({
         model: 'gemini-2.5-flash-native-audio-preview-12-2025',
         config: {
           responseModalities: [Modality.AUDIO],
-          // CRITICAL: Disable thinking budget for snappy response
+          // Ensure absolute minimum latency
           thinkingConfig: { thinkingBudget: 0 },
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: this.config.voice } },
           },
           systemInstruction: `
-          CRITICAL OPERATIONAL RULES:
-          1. LANGUAGE ENFORCEMENT: You must speak ONLY in English. 
-          2. ${greetingContext}
-          3. RESPONSIVE PROTOCOL: You are an active, helpful listener. Respond naturally and promptly as soon as the user finishes their thought.
-          4. AGGRESSIVE SILENCE: If the user starts talking while you are speaking, STOP IMMEDIATELY. Prioritize the user's voice above your own.
-          5. SOURCE OF TRUTH: Use the provided knowledge base accurately.
-          6. SILENCE HANDLING: If you receive "[[SILENCE_DETECTED]]", ask "Are you still there?".
+          # CORE OPERATIONAL PROTOCOL
+          You are a professional AI voice assistant. You are currently on a LIVE call.
           
-          KNOWLEDGE BASE:
-          ${this.config.knowledgeBase}`,
+          # MANDATORY START RULE:
+          - If you receive the message "CONVERSATION_STARTED", you must immediately SPEAK your greeting aloud.
+          - Your greeting is: "${greeting}".
+          - Do not wait for the user to speak first. Take the lead immediately.
+          
+          # INTERACTION RULES:
+          1. PROACTIVITY: You are the driver of this call. If the user is silent, re-engage them.
+          2. SNAPPY: Respond the instant the user stops talking.
+          3. INTERRUPTION: If the user speaks while you are talking, you must SILENCE yourself immediately to listen.
+          4. KNOWLEDGE BASE:
+          ${this.config.knowledgeBase}
+          
+          # SPECIAL TRIGGERS:
+          - [[SILENCE_DETECTED]]: If you see this, the user has been quiet too long. Prompt them.
+          `,
           inputAudioTranscription: {},
           outputAudioTranscription: {},
         },
@@ -119,7 +125,7 @@ export class GeminiLiveService {
   private async handleSessionOpen(mediaStream: MediaStream): Promise<void> {
     try {
       if (!mediaStream) {
-        throw new Error("MediaStream was not provided to GeminiLiveService.");
+        throw new Error("MediaStream missing.");
       }
       this.mediaStream = mediaStream;
       
@@ -183,6 +189,11 @@ export class GeminiLiveService {
       this.scriptProcessor.connect(this.inputAudioContext.destination);
       
       this.setState('connected');
+
+      // MANDATORY: Force the model to generate audio immediately
+      // This trigger word is defined in the systemInstruction above.
+      this.sendText("CONVERSATION_STARTED");
+
     } catch (err) {
       this.handleError(err instanceof Error ? `Microphone error: ${err.message}` : "Failed to access microphone.");
     }
