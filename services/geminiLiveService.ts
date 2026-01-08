@@ -12,7 +12,6 @@ interface Callbacks {
   onAudioChunk: (chunk: Uint8Array) => void;
   onInterruption: () => void;
   onLocalInterruption?: () => void; 
-  onLatencyWarning: (isSlow: boolean) => void;
   onError: (error: string) => void;
 }
 
@@ -44,11 +43,7 @@ export class GeminiLiveService {
 
   private speechDetectedFrameCount = 0;
   private readonly SPEECH_DETECTION_THRESHOLD = 0.025; 
-  private readonly FRAMES_FOR_INTERRUPTION = 2;
-
-  // Active Latency Monitoring
-  private lastUserTurnEndTime = 0;
-  private isAwaitingFirstModelChunk = false;
+  private readonly FRAMES_FOR_INTERRUPTION = 2; // ~50ms of sustained speech
 
   constructor(apiKey: string, config: AgentConfig, callbacks: Callbacks) {
     this.ai = new GoogleGenAI({ apiKey });
@@ -66,14 +61,14 @@ export class GeminiLiveService {
       this.mediaStream = mediaStream;
       
       const greetingContext = this.config.initialGreeting 
-        ? `INITIALIZATION: You have just spoken this greeting: "${this.config.initialGreeting}". Do NOT repeat it. WAIT for the user to reply.` 
+        ? `INITIALIZATION: You have just finished speaking this greeting: "${this.config.initialGreeting}". DO NOT REPEAT IT. The conversation has already started. Wait for the user to respond to what you just said.` 
         : `INITIALIZATION: Wait for the user to speak first.`;
 
       this.sessionPromise = this.ai.live.connect({
         model: 'gemini-2.5-flash-native-audio-preview-12-2025',
         config: {
           responseModalities: [Modality.AUDIO],
-          // CRITICAL: Disable thinking budget to eliminate the "thinking delay"
+          // SPEED UP: thinkingBudget 0 makes it snappy
           thinkingConfig: { thinkingBudget: 0 },
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: this.config.voice } },
@@ -82,8 +77,8 @@ export class GeminiLiveService {
           CRITICAL OPERATIONAL RULES:
           1. LANGUAGE: Speak ONLY in English. 
           2. ${greetingContext}
-          3. RESPONSIVENESS: Respond naturally and promptly. Be concise and conversational to minimize audio generation time.
-          4. INTERRUPTION: If the user starts talking while you are speaking, STOP IMMEDIATELY.
+          3. RESPONSIVENESS: Respond naturally and promptly. Do not wait for long silences unless the user seems to be thinking.
+          4. INTERRUPTION: If the user starts talking while you are speaking, STOP IMMEDIATELY. This is vital for a natural flow.
           5. KNOWLEDGE: Use the provided knowledge base accurately.
           6. SILENCE: If you receive "[[SILENCE_DETECTED]]", ask "Are you still there?".
           
@@ -137,13 +132,26 @@ export class GeminiLiveService {
 
       this.scriptProcessor = this.inputAudioContext.createScriptProcessor(2048, 1, 1);
       
+      const frequencyData = new Float32Array(this.analyser.frequencyBinCount);
+      const binSize = 16000 / 2048; 
+      
+      const lowBin = Math.floor(300 / binSize);
+      const highBin = Math.floor(3000 / binSize);
+
       this.scriptProcessor.onaudioprocess = (audioProcessingEvent) => {
         const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
-        let rms = 0;
-        for (let i = 0; i < inputData.length; i++) rms += inputData[i] * inputData[i];
-        rms = Math.sqrt(rms / inputData.length);
+        const l = inputData.length;
+        
+        this.analyser?.getFloatFrequencyData(frequencyData);
+        
+        let speechEnergy = 0;
+        for (let i = lowBin; i <= highBin; i++) {
+            const linear = Math.pow(10, frequencyData[i] / 20);
+            speechEnergy += linear;
+        }
+        speechEnergy = speechEnergy / (highBin - lowBin + 1);
 
-        if (rms > this.SPEECH_DETECTION_THRESHOLD) {
+        if (speechEnergy > this.SPEECH_DETECTION_THRESHOLD) {
             this.speechDetectedFrameCount++;
             if (this.speechDetectedFrameCount >= this.FRAMES_FOR_INTERRUPTION) {
                 this.callbacks.onLocalInterruption?.();
@@ -152,10 +160,11 @@ export class GeminiLiveService {
             this.speechDetectedFrameCount = 0;
         }
 
-        const int16 = new Int16Array(inputData.length);
-        for (let i = 0; i < inputData.length; i++) {
+        const int16 = new Int16Array(l);
+        for (let i = 0; i < l; i++) {
           let s = Math.max(-1, Math.min(1, inputData[i]));
-          int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+          s = s < 0 ? s * 0x8000 : s * 0x7FFF;
+          int16[i] = s;
         }
 
         const pcmBlob = {
@@ -182,8 +191,6 @@ export class GeminiLiveService {
   private handleSessionMessage(message: LiveServerMessage): void {
     if (message.serverContent?.interrupted) {
       this.callbacks.onInterruption();
-      this.isAwaitingFirstModelChunk = false;
-      this.callbacks.onLatencyWarning(false);
     }
     
     if (message.serverContent?.outputTranscription) {
@@ -199,9 +206,6 @@ export class GeminiLiveService {
     if (message.serverContent?.turnComplete) {
       if (this.currentInputTranscription) {
         this.callbacks.onTranscriptUpdate(true, this.currentInputTranscription, 'input');
-        // Start monitoring for response latency
-        this.lastUserTurnEndTime = Date.now();
-        this.isAwaitingFirstModelChunk = true;
       }
       if (this.currentOutputTranscription) {
         this.callbacks.onTranscriptUpdate(true, this.currentOutputTranscription, 'output');
@@ -212,14 +216,6 @@ export class GeminiLiveService {
 
     const base64Audio = message.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
     if (base64Audio) {
-      // If this is the first audio chunk since the user finished, check latency
-      if (this.isAwaitingFirstModelChunk) {
-          const latency = Date.now() - this.lastUserTurnEndTime;
-          // Threshold set to 2.5 seconds - anything above this is likely network lag
-          this.callbacks.onLatencyWarning(latency > 2500);
-          this.isAwaitingFirstModelChunk = false;
-      }
-
       const binaryString = atob(base64Audio);
       const len = binaryString.length;
       const bytes = new Uint8Array(len);
