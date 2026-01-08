@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Modality, LiveServerMessage } from '@google/genai';
 import { AgentConfig } from '../types';
 
@@ -60,30 +59,35 @@ export class GeminiLiveService {
     try {
       this.mediaStream = mediaStream;
       
-      const greetingContext = this.config.initialGreeting 
-        ? `INITIALIZATION: You have just finished speaking this greeting: "${this.config.initialGreeting}". DO NOT REPEAT IT. The conversation has already started. Wait for the user to respond to what you just said.` 
-        : `INITIALIZATION: Wait for the user to speak first.`;
+      const greeting = this.config.initialGreeting || "Hello! How can I help you today?";
 
       this.sessionPromise = this.ai.live.connect({
         model: 'gemini-2.5-flash-native-audio-preview-12-2025',
         config: {
           responseModalities: [Modality.AUDIO],
-          // SPEED UP: thinkingBudget 0 makes it snappy
           thinkingConfig: { thinkingBudget: 0 },
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: this.config.voice } },
           },
           systemInstruction: `
-          CRITICAL OPERATIONAL RULES:
-          1. LANGUAGE: Speak ONLY in English. 
-          2. ${greetingContext}
-          3. RESPONSIVENESS: Respond naturally and promptly. Do not wait for long silences unless the user seems to be thinking.
-          4. INTERRUPTION: If the user starts talking while you are speaking, STOP IMMEDIATELY. This is vital for a natural flow.
-          5. KNOWLEDGE: Use the provided knowledge base accurately.
-          6. SILENCE: If you receive "[[SILENCE_DETECTED]]", ask "Are you still there?".
+          # CORE MISSION
+          You are a professional and proactive AI voice assistant. You are currently on a LIVE voice call.
           
-          KNOWLEDGE BASE:
-          ${this.config.knowledgeBase}`,
+          # GREETING PROTOCOL
+          - You MUST start the conversation. 
+          - When you see the message "CONVERSATION_STARTED", immediately speak your greeting: "${greeting}".
+          - Do not wait for the user to say anything first. 
+          
+          # OPERATIONAL GUIDELINES
+          1. PROACTIVITY: If the user is quiet, re-engage them. 
+          2. SNAPPY: Respond instantly the moment the user finishes a sentence.
+          3. INTERRUPTION: If the user speaks while you are talking, STOP immediately to listen.
+          4. KNOWLEDGE BASE: 
+          ${this.config.knowledgeBase}
+          
+          # SPECIAL COMMANDS
+          - [[SILENCE_DETECTED]]: If this appears, the user has been quiet. Ask if they are still there or need help.
+          `,
           inputAudioTranscription: {},
           outputAudioTranscription: {},
         },
@@ -183,6 +187,10 @@ export class GeminiLiveService {
       this.scriptProcessor.connect(this.inputAudioContext.destination);
       
       this.setState('connected');
+
+      // MANDATORY: Trigger the greeting immediately upon connection
+      this.sendText("CONVERSATION_STARTED");
+
     } catch (err) {
       this.handleError(err instanceof Error ? `Microphone error: ${err.message}` : "Failed to access microphone.");
     }

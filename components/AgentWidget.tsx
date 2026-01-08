@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AgentProfile, AgentConfig, WidgetTheme, WidgetState, Recording, ReportingStatus } from '../types';
 import { GeminiLiveService } from '../services/geminiLiveService';
@@ -154,8 +153,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const chatSessionRef = useRef<Chat | null>(null);
   const silenceTimerRef = useRef<number | null>(null);
   
-  const isGreetingProtectedRef = useRef(false);
-
   const accentColorClass = agentProfile.accentColor;
 
   useEffect(() => {
@@ -299,7 +296,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const clearSilenceTimer = useCallback(() => { if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null; } }, []);
 
   const handleInterruption = useCallback(() => {
-    if (isGreetingProtectedRef.current) return;
     activeAudioSourcesRef.current.forEach(source => { try { source.stop(); } catch(e) {} });
     activeAudioSourcesRef.current.clear();
     audioQueueRef.current = [];
@@ -335,32 +331,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     
     recordingServiceRef.current = new RecordingService(handleVoiceSessionEnd);
     await recordingServiceRef.current.start(stream);
-
-    const greeting = (agentProfile as AgentConfig).initialGreeting;
-    if (greeting) {
-        isGreetingProtectedRef.current = true;
-        fullTranscriptRef.current = `Agent: ${greeting}\n`;
-        try {
-            const ai = new GoogleGenAI({ apiKey });
-            const response = await ai.models.generateContent({
-                model: "gemini-2.5-flash-preview-tts",
-                contents: [{ parts: [{ text: greeting }] }],
-                config: {
-                    responseModalities: [Modality.AUDIO],
-                    speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: (agentProfile as AgentConfig).voice } } },
-                },
-            });
-            const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-            if (base64Audio) {
-                const bin = atob(base64Audio);
-                const bytes = new Uint8Array(bin.length);
-                for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-                audioQueueRef.current.push(bytes);
-                recordingServiceRef.current?.addAgentAudioChunk(bytes);
-                playAudioQueue(true); 
-            } else { isGreetingProtectedRef.current = false; }
-        } catch (error) { isGreetingProtectedRef.current = false; }
-    }
 
     geminiServiceRef.current = new GeminiLiveService(apiKey, agentProfile as AgentConfig, {
       onStateChange: (state) => {
@@ -405,7 +375,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   }, [onSessionEnd, isWidgetMode, analyzeAndSendReport]);
 
   const cleanupServices = useCallback(() => {
-    isGreetingProtectedRef.current = false;
     clearSilenceTimer();
     geminiServiceRef.current?.disconnect(); geminiServiceRef.current = null;
     recordingServiceRef.current?.stop(); recordingServiceRef.current = null;
@@ -415,7 +384,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     masterGainNodeRef.current = null; audioQueueRef.current = []; nextStartTimeRef.current = 0;
   }, [clearSilenceTimer]);
 
-  const playAudioQueue = useCallback((isInitialGreeting: boolean = false) => {
+  const playAudioQueue = useCallback(() => {
     clearSilenceTimer();
     if (audioQueueRef.current.length === 0 || !outputAudioContextRef.current || !masterGainNodeRef.current) return;
     if (widgetStateRef.current !== WidgetState.Speaking && widgetStateRef.current !== WidgetState.Error) setWidgetState(WidgetState.Speaking);
@@ -432,7 +401,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         activeAudioSourcesRef.current.add(source);
         source.onended = () => {
             activeAudioSourcesRef.current.delete(source);
-            if (isInitialGreeting && activeAudioSourcesRef.current.size === 0 && audioQueueRef.current.length === 0) isGreetingProtectedRef.current = false;
             if (activeAudioSourcesRef.current.size === 0 && audioQueueRef.current.length === 0) {
                  if (shouldEndAfterSpeakingRef.current) endVoiceSession();
                  else if (widgetStateRef.current === WidgetState.Speaking) { setWidgetState(WidgetState.Listening); resetSilenceTimer(); }
