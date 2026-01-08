@@ -60,30 +60,35 @@ export class GeminiLiveService {
     try {
       this.mediaStream = mediaStream;
       
-      const greetingContext = this.config.initialGreeting 
-        ? `INITIALIZATION: You have just finished speaking this greeting: "${this.config.initialGreeting}". DO NOT REPEAT IT. The conversation has already started. Wait for the user to respond to what you just said.` 
-        : `INITIALIZATION: Wait for the user to speak first.`;
+      const greeting = this.config.initialGreeting || "Hello!";
+      const context = `
+      CONVERSATION CONTEXT:
+      - The call has just been connected.
+      - A system greeting has just been delivered: "${greeting}".
+      - DO NOT repeat that exact greeting. 
+      - Instead, you are now LIVE. Be ready to react to the user's very first word.
+      - If the user is silent after the greeting, gently ask again how you can help or introduce yourself naturally.
+      - Stay snappy, keep responses conversational and human.
+      `;
 
       this.sessionPromise = this.ai.live.connect({
         model: 'gemini-2.5-flash-native-audio-preview-12-2025',
         config: {
           responseModalities: [Modality.AUDIO],
-          // SPEED UP: thinkingBudget 0 makes it snappy
+          // ZERO LATENCY MODE
           thinkingConfig: { thinkingBudget: 0 },
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: this.config.voice } },
           },
           systemInstruction: `
-          CRITICAL OPERATIONAL RULES:
-          1. LANGUAGE: Speak ONLY in English. 
-          2. ${greetingContext}
-          3. RESPONSIVENESS: Respond naturally and promptly. Do not wait for long silences unless the user seems to be thinking.
-          4. INTERRUPTION: If the user starts talking while you are speaking, STOP IMMEDIATELY. This is vital for a natural flow.
-          5. KNOWLEDGE: Use the provided knowledge base accurately.
-          6. SILENCE: If you receive "[[SILENCE_DETECTED]]", ask "Are you still there?".
-          
-          KNOWLEDGE BASE:
-          ${this.config.knowledgeBase}`,
+          PERSONA & OPERATIONAL RULES:
+          1. IDENTITY: You are the AI Assistant described in the knowledge base. Speak naturally, like a human on a phone call.
+          2. SNAPPY RESPONSES: Respond the millisecond the user stops talking. Do not hesitate.
+          3. INTERRUPTION: If the user speaks even a single word while you are talking, STOP IMMEDIATELY. Listen to them.
+          4. ${context}
+          5. KNOWLEDGE BASE: Use this information for all your answers:
+          ${this.config.knowledgeBase}
+          6. SILENCE: If you receive "[[SILENCE_DETECTED]]", say "Are you still there?" or "I'm still here if you need help."`,
           inputAudioTranscription: {},
           outputAudioTranscription: {},
         },
