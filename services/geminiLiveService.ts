@@ -61,34 +61,38 @@ export class GeminiLiveService {
       this.mediaStream = mediaStream;
       
       const greeting = this.config.initialGreeting || "Hello!";
-      const context = `
-      CONVERSATION CONTEXT:
-      - The call has just been connected.
-      - A system greeting has just been delivered: "${greeting}".
-      - DO NOT repeat that exact greeting. 
-      - Instead, you are now LIVE. Be ready to react to the user's very first word.
-      - If the user is silent after the greeting, gently ask again how you can help or introduce yourself naturally.
-      - Stay snappy, keep responses conversational and human.
+      
+      // Instruction to ensure the agent is proactive but doesn't overlap
+      const handoffInstruction = `
+      FIRST TURN PROTOCOL:
+      1. A pre-recorded greeting has just been played: "${greeting}".
+      2. DO NOT REPEAT THIS GREETING.
+      3. You are now the ACTIVE lead. If the user doesn't respond to that greeting within 1 second, you must PROACTIVELY engage them. 
+      4. Say something natural like "Are you still there?" or "Is there anything specific I can help you with today?".
+      5. NEVER let the conversation go cold. If the user is shy, you take the lead.
       `;
 
       this.sessionPromise = this.ai.live.connect({
         model: 'gemini-2.5-flash-native-audio-preview-12-2025',
         config: {
           responseModalities: [Modality.AUDIO],
-          // ZERO LATENCY MODE
+          // SPEED: 0 budget = snappy starts
           thinkingConfig: { thinkingBudget: 0 },
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: this.config.voice } },
           },
           systemInstruction: `
-          PERSONA & OPERATIONAL RULES:
-          1. IDENTITY: You are the AI Assistant described in the knowledge base. Speak naturally, like a human on a phone call.
-          2. SNAPPY RESPONSES: Respond the millisecond the user stops talking. Do not hesitate.
-          3. INTERRUPTION: If the user speaks even a single word while you are talking, STOP IMMEDIATELY. Listen to them.
-          4. ${context}
-          5. KNOWLEDGE BASE: Use this information for all your answers:
+          CORE PERSONA:
+          You are a world-class AI voice assistant. You are warm, professional, and extremely responsive.
+          
+          RULES:
+          1. PROACTIVE ENGAGEMENT: You are the primary driver of the call. If the user is silent, you prompt them.
+          2. ${handoffInstruction}
+          3. INTERRUPTION: If the user starts speaking, STOP instantly.
+          4. KNOWLEDGE: Use the following knowledge base:
           ${this.config.knowledgeBase}
-          6. SILENCE: If you receive "[[SILENCE_DETECTED]]", say "Are you still there?" or "I'm still here if you need help."`,
+          5. SILENCE: If you receive "[[SILENCE_DETECTED]]", speak immediately to re-engage the user.
+          `,
           inputAudioTranscription: {},
           outputAudioTranscription: {},
         },
