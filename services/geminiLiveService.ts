@@ -60,38 +60,35 @@ export class GeminiLiveService {
     try {
       this.mediaStream = mediaStream;
       
-      const greeting = this.config.initialGreeting || "Hello!";
-      
-      // Instruction to ensure the agent is proactive but doesn't overlap
-      const handoffInstruction = `
-      FIRST TURN PROTOCOL:
-      1. A pre-recorded greeting has just been played: "${greeting}".
-      2. DO NOT REPEAT THIS GREETING.
-      3. You are now the ACTIVE lead. If the user doesn't respond to that greeting within 1 second, you must PROACTIVELY engage them. 
-      4. Say something natural like "Are you still there?" or "Is there anything specific I can help you with today?".
-      5. NEVER let the conversation go cold. If the user is shy, you take the lead.
-      `;
+      const greeting = this.config.initialGreeting || "Hello! How can I help you today?";
 
       this.sessionPromise = this.ai.live.connect({
         model: 'gemini-2.5-flash-native-audio-preview-12-2025',
         config: {
           responseModalities: [Modality.AUDIO],
-          // SPEED: 0 budget = snappy starts
+          // Ensure absolute minimum latency
           thinkingConfig: { thinkingBudget: 0 },
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: this.config.voice } },
           },
           systemInstruction: `
-          CORE PERSONA:
-          You are a world-class AI voice assistant. You are warm, professional, and extremely responsive.
+          # CORE OPERATIONAL PROTOCOL
+          You are a professional AI voice assistant. You are currently on a LIVE call.
           
-          RULES:
-          1. PROACTIVE ENGAGEMENT: You are the primary driver of the call. If the user is silent, you prompt them.
-          2. ${handoffInstruction}
-          3. INTERRUPTION: If the user starts speaking, STOP instantly.
-          4. KNOWLEDGE: Use the following knowledge base:
+          # MANDATORY START RULE:
+          - If you receive the message "CONVERSATION_STARTED", you must immediately SPEAK your greeting aloud.
+          - Your greeting is: "${greeting}".
+          - Do not wait for the user to speak first. Take the lead immediately.
+          
+          # INTERACTION RULES:
+          1. PROACTIVITY: You are the driver of this call. If the user is silent, re-engage them.
+          2. SNAPPY: Respond the instant the user stops talking.
+          3. INTERRUPTION: If the user speaks while you are talking, you must SILENCE yourself immediately to listen.
+          4. KNOWLEDGE BASE:
           ${this.config.knowledgeBase}
-          5. SILENCE: If you receive "[[SILENCE_DETECTED]]", speak immediately to re-engage the user.
+          
+          # SPECIAL TRIGGERS:
+          - [[SILENCE_DETECTED]]: If you see this, the user has been quiet too long. Prompt them.
           `,
           inputAudioTranscription: {},
           outputAudioTranscription: {},
@@ -192,6 +189,11 @@ export class GeminiLiveService {
       this.scriptProcessor.connect(this.inputAudioContext.destination);
       
       this.setState('connected');
+
+      // MANDATORY: Force the model to generate audio immediately
+      // This trigger word is defined in the systemInstruction above.
+      this.sendText("CONVERSATION_STARTED");
+
     } catch (err) {
       this.handleError(err instanceof Error ? `Microphone error: ${err.message}` : "Failed to access microphone.");
     }
