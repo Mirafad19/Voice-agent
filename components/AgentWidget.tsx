@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AgentProfile, AgentConfig, WidgetTheme, WidgetState, Recording, ReportingStatus } from '../types';
 import { GeminiLiveService } from '../services/geminiLiveService';
@@ -369,19 +370,14 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                         <div className="flex-1 flex flex-col items-center justify-center bg-white dark:bg-gray-900 relative">
                             {!isOnline && <OfflineBanner />}
                             <div className="relative w-64 h-64 flex items-center justify-center">
-                                {widgetState === WidgetState.Speaking && (
-                                  <>
-                                    <div className={`absolute inset-0 rounded-full border-4 border-accent-${accent} opacity-20 animate-sonar-ping`}></div>
-                                    <div className={`absolute inset-0 rounded-full border-4 border-accent-${accent} opacity-20 animate-sonar-ping [animation-delay:1s]`}></div>
-                                  </>
-                                )}
+                                {widgetState === WidgetState.Speaking && <div className={`absolute inset-0 rounded-full border-4 border-accent-${accent} opacity-20 animate-sonar-ping`}></div>}
                                 <div className={`relative w-52 h-52 rounded-full bg-gradient-to-br from-accent-${accent} to-gray-800 flex items-center justify-center shadow-2xl transition-transform duration-500 ${widgetState === WidgetState.Speaking ? 'scale-110' : ''}`}>
                                     <div className={`w-48 h-48 rounded-full bg-white dark:bg-gray-900 flex items-center justify-center shadow-inner relative overflow-hidden ${widgetState === WidgetState.Ended ? `!bg-accent-${accent}` : ''}`}>
                                         {widgetState === WidgetState.Connecting && <Spinner className={`w-16 h-16 text-accent-${accent}`} />}
                                         {(widgetState === WidgetState.Listening || widgetState === WidgetState.Speaking || widgetState === WidgetState.Idle) && <div className={widgetState === WidgetState.Speaking ? 'scale-125' : ''}><WaveformIcon className={`h-24 w-24 ${widgetState === WidgetState.Idle ? 'text-gray-200' : `text-accent-${accent}`}`} /></div>}
                                         {widgetState === WidgetState.Error && <div className="text-red-500 scale-150 animate-pulse">⚠️</div>}
                                         {widgetState === WidgetState.Ended && <div className="text-white scale-150">✔️</div>}
-                                        {isOnline && isNetworkSlow && (widgetState === WidgetState.Listening || widgetState === WidgetState.Speaking) && <NetworkWarning />}
+                                        {isNetworkSlow && (widgetState === WidgetState.Listening || widgetState === WidgetState.Speaking) && <NetworkWarning />}
                                     </div>
                                 </div>
                             </div>
