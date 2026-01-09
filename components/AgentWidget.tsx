@@ -204,7 +204,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         audioLink = 'Text Chat Session';
       }
 
-      const ai = new GoogleGenAI({ apiKey });
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       let contents;
       if (recording.transcript) {
         contents = {
@@ -273,7 +273,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
   const initChat = async (initialMessage?: string) => {
     const config = agentProfile as AgentConfig;
-    const ai = new GoogleGenAI({ apiKey });
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const systemInstruction = config.chatKnowledgeBase || config.knowledgeBase;
     chatSessionRef.current = ai.chats.create({
       model: 'gemini-3-flash-preview',
@@ -410,7 +410,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
       isGreetingProtectedRef.current = true;
       fullTranscriptRef.current = `Agent: ${greeting}\n`;
       try {
-        const ai = new GoogleGenAI({ apiKey });
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         const response = await ai.models.generateContent({
           model: "gemini-2.5-flash-preview-tts",
           contents: [{ parts: [{ text: greeting }] }],
@@ -493,7 +493,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     if (blob.size === 0) return;
     const now = new Date();
     const newRecording: Omit<Recording, 'id' | 'url'> = {
-      name: `Voice Call - ${now.toLocaleDateString()}, ${now.toLocaleTimeString()}`,
+      name: `Voice Call - ${now.toLocaleDateString()}, ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
       blob, mimeType, transcript: fullTranscriptRef.current
     };
     if (isWidgetMode) analyzeAndSendReport(newRecording);
