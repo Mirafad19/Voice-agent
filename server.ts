@@ -11,40 +11,20 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  console.log('GEMINI_API_KEY is set:', !!process.env.GEMINI_API_KEY);
-
-  app.get('/api/check-key', (req, res) => {
-    res.json({ hasKey: !!process.env.GEMINI_API_KEY });
-  });
-
-  app.get('/api/test-rewrite', (req, res) => {
-    const path = '/v1alpha/models/gemini-2.5-flash:generateContent';
-    const apiKey = process.env.GEMINI_API_KEY;
-    const separator = path.includes('?') ? '&' : '?';
-    res.json({ rewritten: `${path}${separator}key=${apiKey}` });
-  });
+  const apiKey = process.env.GEMINI_API_KEY;
 
   // Proxy Gemini API requests
   const geminiProxy = createProxyMiddleware({
     target: 'https://generativelanguage.googleapis.com',
     changeOrigin: true,
     ws: true,
+    pathFilter: ['/v1alpha', '/v1beta', '/ws'],
     pathRewrite: (path, req) => {
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey) {
-        console.error('GEMINI_API_KEY is not set');
-        return path;
-      }
-      
-      // If the path was stripped by app.use, req.originalUrl contains the full path
-      let fullPath = req.originalUrl || path;
-      
-      // Append the API key to the query string
-      const separator = fullPath.includes('?') ? '&' : '?';
-      return `${fullPath}${separator}key=${apiKey}`;
+      if (!apiKey) return path;
+      const separator = path.includes('?') ? '&' : '?';
+      return `${path}${separator}key=${apiKey}`;
     },
     router: (req) => {
-      // Route WebSocket requests to the wss:// endpoint
       if (req.headers.upgrade && req.headers.upgrade.toLowerCase() === 'websocket') {
         return 'wss://generativelanguage.googleapis.com';
       }
@@ -52,11 +32,9 @@ async function startServer() {
     },
     on: {
       proxyReq: (proxyReq, req, res) => {
-        // Remove the dummy API key header sent by the client SDK
         proxyReq.removeHeader('x-goog-api-key');
       },
       proxyReqWs: (proxyReq, req, socket, options, head) => {
-        // Remove the dummy API key header sent by the client SDK
         proxyReq.removeHeader('x-goog-api-key');
       },
       error: (err, req, res) => {
@@ -65,10 +43,7 @@ async function startServer() {
     }
   });
 
-  // Proxy REST and WebSocket requests to Gemini
-  app.use('/v1alpha', geminiProxy);
-  app.use('/v1beta', geminiProxy);
-  app.use('/ws', geminiProxy);
+  app.use(geminiProxy);
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== 'production') {
