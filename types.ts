@@ -72,6 +72,7 @@ export interface AgentProfile {
   calloutMessage?: string;
   emailConfig?: EmailConfig;
   fileUploadConfig?: FileUploadConfig;
+  ownerId?: string;
 }
 
 export type AgentConfig = Omit<AgentProfile, 'id'>;

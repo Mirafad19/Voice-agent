@@ -14,9 +14,8 @@ const root = ReactDOM.createRoot(rootElement);
 
 const urlParams = new URLSearchParams(window.location.search);
 const configParam = urlParams.get('config');
-const apiKeyParam = urlParams.get('apiKey');
 
-if (configParam && apiKeyParam) {
+if (configParam) {
   try {
     const decodedConfig = safeAtob(configParam);
     const agentConfig: AgentConfig = JSON.parse(decodedConfig);
@@ -29,7 +28,6 @@ if (configParam && apiKeyParam) {
       <React.StrictMode>
         <AgentWidget
           agentProfile={agentConfig}
-          apiKey={apiKeyParam}
           isWidgetMode={true}
         />
       </React.StrictMode>

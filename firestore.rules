@@ -1,0 +1,69 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.ownerId;
+    }
+
+    function uidUnchanged() {
+      return !('ownerId' in request.resource.data) ||
+        request.resource.data.ownerId == request.auth.uid;
+    }
+
+    function uidNotModified() {
+      return !('ownerId' in request.resource.data) ||
+        request.resource.data.ownerId == resource.data.ownerId;
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function isValidString(field, minLen, maxLen) {
+      return !('field' in request.resource.data) ||
+             (request.resource.data[field] is string &&
+              request.resource.data[field].size() >= minLen &&
+              request.resource.data[field].size() <= maxLen);
+    }
+
+    function isValidAgentProfile(data) {
+      return hasRequiredFields(['id', 'name', 'ownerId']) &&
+             data.id is string && data.id.size() > 0 && data.id.size() < 100 &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.ownerId is string && data.ownerId.size() > 0 && data.ownerId.size() < 100 &&
+             (!('voice' in data) || (data.voice is string && data.voice.size() < 100)) &&
+             (!('knowledgeBase' in data) || (data.knowledgeBase is string && data.knowledgeBase.size() < 50000)) &&
+             (!('chatKnowledgeBase' in data) || (data.chatKnowledgeBase is string && data.chatKnowledgeBase.size() < 50000)) &&
+             (!('initialGreeting' in data) || (data.initialGreeting is string && data.initialGreeting.size() < 1000)) &&
+             (!('initialGreetingText' in data) || (data.initialGreetingText is string && data.initialGreetingText.size() < 1000)) &&
+             (!('theme' in data) || (data.theme is string && data.theme.size() < 50)) &&
+             (!('accentColor' in data) || (data.accentColor is string && data.accentColor.size() < 50)) &&
+             (!('calloutMessage' in data) || (data.calloutMessage is string && data.calloutMessage.size() < 1000));
+    }
+
+    match /agents/{agentId} {
+      // Allow public read for the widget
+      allow read: if true;
+      
+      // Only the owner can create, update, or delete their agent profiles
+      allow create: if isAuthenticated() && 
+                    isValidAgentProfile(request.resource.data) && 
+                    uidUnchanged();
+                    
+      allow update: if isDocOwner() && 
+                    isValidAgentProfile(request.resource.data) && 
+                    uidNotModified();
+                    
+      allow delete: if isDocOwner();
+    }
+  }
+}

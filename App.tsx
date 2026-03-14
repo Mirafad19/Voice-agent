@@ -2,14 +2,14 @@
 import React, { useState, useCallback } from 'react';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useAgentProfiles } from './hooks/useAgentProfiles';
-import { ApiKeyModal } from './components/ApiKeyModal';
 import { ConfigurationPanel } from './components/ConfigurationPanel';
-import { RecordingsPanel } from './components/RecordingsPanel';
+import { RecordingService } from './components/RecordingsPanel';
 import { EmbedCodeModal } from './components/EmbedCodeModal';
 import { SettingsModal } from './components/SettingsModal';
 import { AgentWidget } from './components/AgentWidget';
 import { Recording, AgentProfile } from './types';
 import { Button } from './components/ui/Button';
+import { AuthProvider, useAuth } from './components/AuthProvider';
 
 const Header: React.FC<{
     onEmbedClick: () => void;
@@ -19,7 +19,8 @@ const Header: React.FC<{
     activeProfile: AgentProfile | null;
     onSelectProfile: (id: string) => void;
     onOpenSettings: () => void;
-}> = ({ onEmbedClick, onNewProfile, onDeleteProfile, profiles, activeProfile, onSelectProfile, onOpenSettings }) => (
+    onLogout: () => void;
+}> = ({ onEmbedClick, onNewProfile, onDeleteProfile, profiles, activeProfile, onSelectProfile, onOpenSettings, onLogout }) => (
     <header className="bg-white dark:bg-gray-800 shadow-sm p-4 flex justify-between items-center">
         <div className="flex items-center space-x-4">
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">AI Voice Agent Dashboard</h1>
@@ -41,12 +42,13 @@ const Header: React.FC<{
             </svg>
             Settings
           </Button>
+          <Button onClick={onLogout} variant="secondary">Logout</Button>
         </div>
     </header>
 );
 
-const App: React.FC = () => {
-    const [apiKey, setApiKey] = useLocalStorage<string | null>('geminiApiKey', null);
+const DashboardContent: React.FC = () => {
+    const { user, loading, login, logout } = useAuth();
     const {
         profiles,
         activeProfile,
@@ -54,17 +56,14 @@ const App: React.FC = () => {
         updateProfile,
         createProfile,
         deleteProfile,
-        importProfiles
+        importProfiles,
+        loading: profilesLoading
     } = useAgentProfiles();
 
     const [recordings, setRecordings] = useLocalStorage<Recording[]>('sessionRecordings', []);
     const [isEmbedModalOpen, setIsEmbedModalOpen] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [notification, setNotification] = useState('');
-
-    const handleApiKeySubmit = (key: string) => {
-        setApiKey(key);
-    };
 
     const handleSessionEnd = useCallback((recording: Recording) => {
         setRecordings(prev => [...prev, recording]);
@@ -132,11 +131,23 @@ const App: React.FC = () => {
         }
     };
 
-    if (!apiKey) {
-        return <ApiKeyModal onApiKeySubmit={handleApiKeySubmit} />;
+    if (loading) {
+        return <div className="bg-gray-100 dark:bg-gray-900 min-h-screen flex items-center justify-center text-white">Loading...</div>;
     }
 
-    if (!activeProfile) {
+    if (!user) {
+        return (
+            <div className="bg-gray-100 dark:bg-gray-900 min-h-screen flex items-center justify-center">
+                <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-xl max-w-md w-full text-center">
+                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">AI Voice Agent Dashboard</h1>
+                    <p className="text-gray-600 dark:text-gray-400 mb-8">Please sign in to manage your agents securely.</p>
+                    <Button onClick={login} className="w-full py-3 text-lg">Sign in with Google</Button>
+                </div>
+            </div>
+        );
+    }
+
+    if (profilesLoading || !activeProfile) {
         return <div className="bg-gray-100 dark:bg-gray-900 min-h-screen flex items-center justify-center text-white">Loading profiles...</div>;
     }
 
@@ -150,6 +161,7 @@ const App: React.FC = () => {
                 activeProfile={activeProfile}
                 onSelectProfile={selectProfile}
                 onOpenSettings={() => setIsSettingsOpen(true)}
+                onLogout={logout}
             />
             {notification && (
               <div className="max-w-4xl mx-auto mt-4 px-8">
@@ -172,17 +184,10 @@ const App: React.FC = () => {
                     profile={activeProfile}
                     onProfileChange={handleProfileUpdate}
                 />
-                <RecordingsPanel 
-                    recordings={recordings} 
-                    onDelete={handleDeleteRecording}
-                    onUpdate={handleUpdateRecording}
-                    apiKey={apiKey}
-                    profile={activeProfile}
-                />
             </main>
             <AgentWidget
                 agentProfile={activeProfile}
-                apiKey={apiKey}
+                apiKey="dummy"
                 isWidgetMode={false}
                 onSessionEnd={handleSessionEnd}
             />
@@ -190,17 +195,22 @@ const App: React.FC = () => {
                 isOpen={isEmbedModalOpen}
                 onClose={() => setIsEmbedModalOpen(false)}
                 agentProfile={activeProfile}
-                apiKey={apiKey}
             />
             <SettingsModal
                 isOpen={isSettingsOpen}
                 onClose={() => setIsSettingsOpen(false)}
-                apiKey={apiKey}
-                onUpdateApiKey={handleApiKeySubmit}
                 onExportProfiles={handleExportProfiles}
                 onImportProfiles={handleImportProfiles}
             />
         </div>
+    );
+};
+
+const App: React.FC = () => {
+    return (
+        <AuthProvider>
+            <DashboardContent />
+        </AuthProvider>
     );
 };
 

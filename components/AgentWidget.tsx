@@ -224,7 +224,10 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             audioLink = 'Text Chat Session';
         }
 
-        const ai = new GoogleGenAI({ apiKey });
+        const ai = new GoogleGenAI({ 
+            apiKey: apiKey || 'dummy', 
+            httpOptions: { baseUrl: window.location.origin } 
+        });
         
         let contents;
         if (recording.transcript) {
@@ -295,7 +298,10 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
   const initChat = async (initialMessage?: string) => {
     const config = agentProfile as AgentConfig;
-    const ai = new GoogleGenAI({ apiKey });
+    const ai = new GoogleGenAI({ 
+        apiKey: apiKey || 'dummy', 
+        httpOptions: { baseUrl: window.location.origin } 
+    });
     
     const systemInstruction = config.chatKnowledgeBase || config.knowledgeBase;
     
@@ -476,7 +482,10 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         fullTranscriptRef.current = `Agent: ${greeting}\n`;
         
         try {
-            const ai = new GoogleGenAI({ apiKey });
+            const ai = new GoogleGenAI({ 
+                apiKey: apiKey || 'dummy', 
+                httpOptions: { baseUrl: window.location.origin } 
+            });
             const response = await ai.models.generateContent({
                 model: "gemini-2.5-flash-preview-tts",
                 contents: [{ parts: [{ text: greeting }] }],
@@ -682,8 +691,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
       }
       setTimeout(() => setView('home'), 300);
     } else {
-      // Opening the widget: Permanently dismiss callout for this session
-      sessionStorage.setItem('ai-agent-callout-dismissed', 'true');
       setShowCallout(false);
     }
     setIsOpen(!isOpen);
@@ -716,39 +723,31 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
   const handleDismissCallout = (e: React.MouseEvent) => {
       e.stopPropagation();
-      sessionStorage.setItem('ai-agent-callout-dismissed', 'true');
       setShowCallout(false);
   };
 
-  // Improved resize logic for widget mode to prevent callout clipping
+  // Send resize messages to parent iframe if in widget mode
   useEffect(() => {
     if (!isWidgetMode) return;
     
-    let width = 80;
-    let height = 80;
-    
-    if (isOpen) {
-        width = 400;
-        height = 600;
-    } else if (showCallout) {
-        // Broaden width and increase height to accommodate callout bubble + pointer
-        width = 250;
-        height = 220; 
-    }
+    // When closed, just enough space for the FAB. When open, full widget size.
+    const width = isOpen ? 400 : 80;
+    const height = isOpen ? 600 : 80;
     
     window.parent.postMessage({ type: 'agent-widget-resize', isOpen, width, height }, '*');
-  }, [isOpen, isWidgetMode, showCallout]);
+  }, [isOpen, isWidgetMode]);
   
-  useEffect(() => {
-    // Check if dismissed in this session
-    const calloutDismissed = sessionStorage.getItem('ai-agent-callout-dismissed');
-
-    if (!isOpen && !calloutDismissed && agentProfile.calloutMessage) {
+    useEffect(() => {
+      if (!isOpen && agentProfile.calloutMessage) {
         setShowCallout(true);
-    } else {
+        const timer = setTimeout(() => {
+          setShowCallout(false);
+        }, 5000);
+        return () => clearTimeout(timer);
+      } else {
         setShowCallout(false);
-    }
-  }, [isOpen, agentProfile.calloutMessage]);
+      }
+    }, [isOpen, agentProfile.calloutMessage]);
 
   const themeClass = agentProfile.theme === 'dark' ? 'dark' : '';
 
@@ -996,18 +995,18 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     const fabContent = (
       <div className={`${themeClass} relative group`}>
         {showCallout && agentProfile.calloutMessage && (
-          <div className="absolute bottom-[calc(100%+16px)] right-0 md:right-4 mb-4 w-[220px] px-5 py-3 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.15)] text-left text-sm animate-fade-in-up border border-gray-100 dark:border-gray-700 z-[10000]">
+          <div className="absolute bottom-full right-0 mb-4 w-48 p-3 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-xl shadow-lg text-sm animate-fade-in-up border border-gray-100 dark:border-gray-700">
             <button 
               onClick={handleDismissCallout} 
-              className="absolute top-2 right-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors p-1"
+              className="absolute top-1 right-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
               aria-label="Dismiss callout"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
-            <p className="font-bold leading-tight uppercase tracking-tight pr-4">{agentProfile.calloutMessage}</p>
-            <div className="absolute -bottom-2 right-8 w-4 h-4 bg-white dark:bg-gray-800 transform rotate-45 border-b border-r border-gray-100 dark:border-gray-700"></div>
+            <p className="font-medium pr-4">{agentProfile.calloutMessage}</p>
+            <div className="absolute -bottom-2 right-6 w-4 h-4 bg-white dark:bg-gray-800 transform rotate-45 border-b border-r border-gray-100 dark:border-gray-700"></div>
           </div>
         )}
         <button onClick={toggleWidget} className={`w-16 h-16 rounded-full bg-accent-${accentColorClass} shadow-2xl flex items-center justify-center text-white transform hover:scale-110 transition-all animate-pulse active:scale-95`}>

@@ -1,0 +1,42 @@
+{
+  "entities": {
+    "AgentProfile": {
+      "title": "AgentProfile",
+      "description": "Configuration for an AI agent.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "voice": { "type": "string" },
+        "knowledgeBase": { "type": "string" },
+        "chatKnowledgeBase": { "type": "string" },
+        "initialGreeting": { "type": "string" },
+        "initialGreetingText": { "type": "string" },
+        "theme": { "type": "string" },
+        "accentColor": { "type": "string" },
+        "calloutMessage": { "type": "string" },
+        "emailConfig": {
+          "type": "object",
+          "properties": {
+            "formspreeEndpoint": { "type": "string" }
+          }
+        },
+        "fileUploadConfig": {
+          "type": "object",
+          "properties": {
+            "cloudinaryCloudName": { "type": "string" },
+            "cloudinaryUploadPreset": { "type": "string" }
+          }
+        },
+        "ownerId": { "type": "string" }
+      },
+      "required": ["id", "name", "ownerId"]
+    }
+  },
+  "firestore": {
+    "/agents/{agentId}": {
+      "schema": { "$ref": "#/entities/AgentProfile" },
+      "description": "Agent profiles."
+    }
+  }
+}

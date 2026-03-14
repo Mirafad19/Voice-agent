@@ -46,7 +46,10 @@ export class GeminiLiveService {
   private readonly FRAMES_FOR_INTERRUPTION = 2; // ~50ms of sustained speech
 
   constructor(apiKey: string, config: AgentConfig, callbacks: Callbacks) {
-    this.ai = new GoogleGenAI({ apiKey });
+    this.ai = new GoogleGenAI({ 
+      apiKey: apiKey || 'dummy', 
+      httpOptions: { baseUrl: window.location.origin } 
+    });
     this.config = config;
     this.callbacks = callbacks;
   }
