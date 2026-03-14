@@ -32,6 +32,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       <div className="space-y-8">
         <section className="space-y-4">
           <h4 className="text-lg font-medium text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-700 pb-2">
+            Gemini API
+          </h4>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Connect your Gemini API key to enable voice and chat features.
+          </p>
+          <Button
+            onClick={() => window.aistudio?.openSelectKey()}
+            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white"
+          >
+            Connect Gemini API Key
+          </Button>
+        </section>
+
+        <section className="space-y-4">
+          <h4 className="text-lg font-medium text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-700 pb-2">
             Data Backup & Restore
           </h4>
           <p className="text-sm text-gray-600 dark:text-gray-400">

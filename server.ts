@@ -11,7 +11,7 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
 
   // Proxy Gemini API requests
   const geminiProxy = createProxyMiddleware({

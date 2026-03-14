@@ -198,6 +198,11 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const analyzeAndSendReport = useCallback(async (recording: Omit<Recording, 'id' | 'url'>) => {
     const { emailConfig, fileUploadConfig } = agentProfile as AgentConfig;
 
+    if (!apiKey || apiKey === 'dummy') {
+        console.warn("Skipping report analysis: API Key missing.");
+        return;
+    }
+
     const hasUserInteracted = recording.transcript && recording.transcript.includes('User:');
 
     if (!hasUserInteracted) {
@@ -225,8 +230,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         }
 
         const ai = new GoogleGenAI({ 
-            apiKey: apiKey || 'dummy', 
-            httpOptions: { baseUrl: window.location.origin } 
+            apiKey: apiKey || 'dummy'
         });
         
         let contents;
@@ -299,8 +303,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const initChat = async (initialMessage?: string) => {
     const config = agentProfile as AgentConfig;
     const ai = new GoogleGenAI({ 
-        apiKey: apiKey || 'dummy', 
-        httpOptions: { baseUrl: window.location.origin } 
+        apiKey: apiKey || 'dummy'
     });
     
     const systemInstruction = config.chatKnowledgeBase || config.knowledgeBase;
@@ -322,6 +325,11 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
   const handleChatMessage = async (text: string) => {
     if (!text.trim() || !chatSessionRef.current || !isOnline) return;
+
+    if (!apiKey || apiKey === 'dummy') {
+        setMessages(prev => [...prev, { role: 'model', text: "API Key is missing. Please connect your Gemini API key in the dashboard.", timestamp: new Date() }]);
+        return;
+    }
 
     const userMsg: Message = { role: 'user', text, timestamp: new Date() };
     
@@ -430,6 +438,13 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
   const startVoiceSession = useCallback(async () => {
     if (!isOnline) return;
+
+    if (!apiKey || apiKey === 'dummy') {
+        setWidgetState(WidgetState.Error);
+        setErrorMessage("Gemini API Key is missing. Please connect your API key in the dashboard.");
+        return;
+    }
+
     setView('voice');
     shouldEndAfterSpeakingRef.current = false;
     setWidgetState(WidgetState.Connecting);
@@ -483,8 +498,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         
         try {
             const ai = new GoogleGenAI({ 
-                apiKey: apiKey || 'dummy', 
-                httpOptions: { baseUrl: window.location.origin } 
+                apiKey: apiKey || 'dummy'
             });
             const response = await ai.models.generateContent({
                 model: "gemini-2.5-flash-preview-tts",

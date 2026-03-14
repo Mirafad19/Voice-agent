@@ -21,8 +21,24 @@ export const useAgentProfiles = () => {
       return;
     }
 
+    // Set a timeout to force fallback if Firestore hangs
+    const timeoutId = setTimeout(() => {
+      if (loading) {
+        console.warn("Firestore profiles fetch timed out, using fallback.");
+        const fallbackProfile = {
+          ...DEFAULT_PROFILES[0],
+          id: 'fallback-local',
+          ownerId: user.uid
+        };
+        setProfiles([fallbackProfile]);
+        setActiveProfileId(fallbackProfile.id);
+        setLoading(false);
+      }
+    }, 5000);
+
     const q = query(collection(db, 'agents'), where('ownerId', '==', user.uid));
     const unsubscribe = onSnapshot(q, (snapshot) => {
+      clearTimeout(timeoutId);
       const fetchedProfiles: AgentProfile[] = [];
       snapshot.forEach((doc) => {
         fetchedProfiles.push(doc.data() as AgentProfile);
@@ -35,20 +51,52 @@ export const useAgentProfiles = () => {
           id: `custom-${Date.now()}`,
           ownerId: user.uid
         };
-        setDoc(doc(db, 'agents', defaultProfile.id), defaultProfile);
+        setDoc(doc(db, 'agents', defaultProfile.id), defaultProfile)
+          .then(() => {
+            // Success - the next snapshot will catch this
+          })
+          .catch(error => {
+            console.error("Error creating default profile:", error);
+            // If we can't create a profile in the DB, let's at least show the default one locally
+            // so the app doesn't hang forever
+            setProfiles([defaultProfile]);
+            setActiveProfileId(defaultProfile.id);
+            setLoading(false);
+          });
       } else {
         setProfiles(fetchedProfiles);
         if (!activeProfileId || !fetchedProfiles.find(p => p.id === activeProfileId)) {
           setActiveProfileId(fetchedProfiles[0].id);
         }
+        setLoading(false);
       }
-      setLoading(false);
     }, (error) => {
-      console.error("Error fetching profiles:", error);
+      clearTimeout(timeoutId);
+      console.error("Error fetching profiles:", JSON.stringify({
+        error: error.message,
+        code: error.code,
+        auth: {
+            uid: user.uid,
+            email: user.email
+        },
+        query: "agents where ownerId == " + user.uid
+      }, null, 2));
+      
+      // Fallback to a local default profile if the database is unreachable
+      const fallbackProfile = {
+        ...DEFAULT_PROFILES[0],
+        id: 'fallback-local',
+        ownerId: user.uid
+      };
+      setProfiles([fallbackProfile]);
+      setActiveProfileId(fallbackProfile.id);
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      clearTimeout(timeoutId);
+      unsubscribe();
+    };
   }, [user, activeProfileId]);
 
   useEffect(() => {

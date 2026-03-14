@@ -1,5 +1,5 @@
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useAgentProfiles } from './hooks/useAgentProfiles';
 import { ConfigurationPanel } from './components/ConfigurationPanel';
@@ -10,6 +10,15 @@ import { AgentWidget } from './components/AgentWidget';
 import { Recording, AgentProfile } from './types';
 import { Button } from './components/ui/Button';
 import { AuthProvider, useAuth } from './components/AuthProvider';
+
+declare global {
+  interface Window {
+    aistudio?: {
+      hasSelectedApiKey: () => Promise<boolean>;
+      openSelectKey: () => Promise<void>;
+    };
+  }
+}
 
 const Header: React.FC<{
     onEmbedClick: () => void;
@@ -48,7 +57,7 @@ const Header: React.FC<{
 );
 
 const DashboardContent: React.FC = () => {
-    const { user, loading, login, logout } = useAuth();
+    const { user, loading, error, login, logout } = useAuth();
     const {
         profiles,
         activeProfile,
@@ -64,6 +73,24 @@ const DashboardContent: React.FC = () => {
     const [isEmbedModalOpen, setIsEmbedModalOpen] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [notification, setNotification] = useState('');
+    const [hasGeminiKey, setHasGeminiKey] = useState(true);
+
+    useEffect(() => {
+        const checkApiKey = async () => {
+            if (window.aistudio) {
+                const hasKey = await window.aistudio.hasSelectedApiKey();
+                setHasGeminiKey(hasKey);
+            }
+        };
+        checkApiKey();
+    }, []);
+
+    const handleConnectGemini = async () => {
+        if (window.aistudio) {
+            await window.aistudio.openSelectKey();
+            setHasGeminiKey(true);
+        }
+    };
 
     const handleSessionEnd = useCallback((recording: Recording) => {
         setRecordings(prev => [...prev, recording]);
@@ -141,6 +168,14 @@ const DashboardContent: React.FC = () => {
                 <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-xl max-w-md w-full text-center">
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">AI Voice Agent Dashboard</h1>
                     <p className="text-gray-600 dark:text-gray-400 mb-8">Please sign in to manage your agents securely.</p>
+                    
+                    {error && (
+                        <div className="mb-6 p-4 bg-red-100 border-l-4 border-red-500 text-red-700 text-sm text-left dark:bg-red-900/30 dark:text-red-300">
+                            <p className="font-bold">Login Error</p>
+                            <p>{error}</p>
+                        </div>
+                    )}
+
                     <Button onClick={login} className="w-full py-3 text-lg">Sign in with Google</Button>
                 </div>
             </div>
@@ -163,6 +198,17 @@ const DashboardContent: React.FC = () => {
                 onOpenSettings={() => setIsSettingsOpen(true)}
                 onLogout={logout}
             />
+            {activeProfile?.id === 'fallback-local' && (
+              <div className="max-w-4xl mx-auto mt-4 px-8">
+                <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 dark:bg-red-900/50 dark:text-red-300" role="alert">
+                  <p className="font-bold">Database Connection Error</p>
+                  <p className="text-sm">
+                    We couldn't connect to your Firestore database. The app is running in <b>Offline Mode</b>. 
+                    Changes will not be saved. Please ensure your Firebase Security Rules are set to "Allow Read/Write" in your Firebase Console.
+                  </p>
+                </div>
+              </div>
+            )}
             {notification && (
               <div className="max-w-4xl mx-auto mt-4 px-8">
                 <div className="bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 dark:bg-blue-900/50 dark:text-blue-300" role="alert">
@@ -180,6 +226,19 @@ const DashboardContent: React.FC = () => {
               </div>
             )}
             <main className="p-8 max-w-4xl mx-auto">
+                {!hasGeminiKey && (
+                    <div className="mb-6 p-6 bg-indigo-50 border-2 border-indigo-200 rounded-2xl dark:bg-indigo-900/20 dark:border-indigo-800">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h3 className="text-lg font-bold text-indigo-900 dark:text-indigo-100">Connect Gemini API</h3>
+                                <p className="text-indigo-700 dark:text-indigo-300 text-sm mt-1">
+                                    To use the voice agent, you need to connect your Gemini API key.
+                                </p>
+                            </div>
+                            <Button onClick={handleConnectGemini}>Connect Now</Button>
+                        </div>
+                    </div>
+                )}
                 <ConfigurationPanel
                     profile={activeProfile}
                     onProfileChange={handleProfileUpdate}
@@ -187,7 +246,7 @@ const DashboardContent: React.FC = () => {
             </main>
             <AgentWidget
                 agentProfile={activeProfile}
-                apiKey="dummy"
+                apiKey={process.env.GEMINI_API_KEY || ''}
                 isWidgetMode={false}
                 onSessionEnd={handleSessionEnd}
             />
