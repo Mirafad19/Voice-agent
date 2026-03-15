@@ -19,6 +19,7 @@ if (configParam) {
   try {
     const decodedConfig = safeAtob(configParam);
     const agentConfig: AgentConfig = JSON.parse(decodedConfig);
+    const apiKeyParam = urlParams.get('apiKey');
     
     // Set transparent background for widget mode
     document.body.style.backgroundColor = 'transparent';
@@ -28,6 +29,7 @@ if (configParam) {
       <React.StrictMode>
         <AgentWidget
           agentProfile={agentConfig}
+          apiKey={apiKeyParam || process.env.GEMINI_API_KEY || ''}
           isWidgetMode={true}
         />
       </React.StrictMode>

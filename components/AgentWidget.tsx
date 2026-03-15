@@ -302,8 +302,9 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
   const initChat = async (initialMessage?: string) => {
     const config = agentProfile as AgentConfig;
+    const effectiveApiKey = apiKey || process.env.GEMINI_API_KEY || 'dummy';
     const ai = new GoogleGenAI({ 
-        apiKey: apiKey || 'dummy'
+        apiKey: effectiveApiKey
     });
     
     const systemInstruction = config.chatKnowledgeBase || config.knowledgeBase;
@@ -326,7 +327,9 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const handleChatMessage = async (text: string) => {
     if (!text.trim() || !chatSessionRef.current || !isOnline) return;
 
-    if (!apiKey || apiKey === 'dummy') {
+    const effectiveApiKey = apiKey || process.env.GEMINI_API_KEY;
+
+    if (!effectiveApiKey || effectiveApiKey === 'dummy') {
         setMessages(prev => [...prev, { role: 'model', text: "API Key is missing. Please connect your Gemini API key in the dashboard.", timestamp: new Date() }]);
         return;
     }
@@ -492,13 +495,15 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     await recordingServiceRef.current.start(stream);
 
     const greeting = (agentProfile as AgentConfig).initialGreeting;
+    const effectiveApiKey = apiKey || process.env.GEMINI_API_KEY || 'dummy';
+
     if (greeting) {
         isGreetingProtectedRef.current = true;
         fullTranscriptRef.current = `Agent: ${greeting}\n`;
         
         try {
             const ai = new GoogleGenAI({ 
-                apiKey: apiKey || 'dummy'
+                apiKey: effectiveApiKey
             });
             const response = await ai.models.generateContent({
                 model: "gemini-2.5-flash-preview-tts",
@@ -530,7 +535,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         }
     }
 
-    geminiServiceRef.current = new GeminiLiveService(apiKey, agentProfile as AgentConfig, {
+    geminiServiceRef.current = new GeminiLiveService(effectiveApiKey, agentProfile as AgentConfig, {
       onStateChange: (state) => {
         if (state === 'connected') {
             if (widgetStateRef.current !== WidgetState.Speaking) {
