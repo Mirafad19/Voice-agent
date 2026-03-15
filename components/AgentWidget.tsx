@@ -314,13 +314,21 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         config: { systemInstruction }
     });
 
-    const welcomeText = config.initialGreetingText || config.initialGreeting || "Hello! How can I help you?";
+    const welcomeText = config.initialGreetingText || config.initialGreeting;
     
-    setMessages([{ role: 'model', text: welcomeText, timestamp: new Date() }]);
-    setView('chat');
-
     if (initialMessage) {
+        // If user started with a message, don't show a pre-filled welcome bubble
+        setMessages([]);
+        setView('chat');
         await handleChatMessage(initialMessage);
+    } else {
+        // If user just clicked "Chat", show the welcome text only if it exists
+        if (welcomeText) {
+            setMessages([{ role: 'model', text: welcomeText, timestamp: new Date() }]);
+        } else {
+            setMessages([]);
+        }
+        setView('chat');
     }
   };
 
