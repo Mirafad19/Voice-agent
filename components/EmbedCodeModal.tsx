@@ -33,13 +33,14 @@ export const EmbedCodeModal: React.FC<EmbedCodeModalProps> = ({
     const finalUrl = `${baseUrl}?config=${encodedConfig}`;
     const iframeId = `ai-agent-iframe-${Date.now()}`;
 
-    const code = `<div style="position: fixed; bottom: 20px; right: 20px; z-index: 9999;">
+    const code = `<div style="position: fixed; bottom: 20px; right: 20px; z-index: 9999; display: flex; align-items: flex-end; justify-content: flex-end;">
   <iframe
     id="${iframeId}"
     src="${finalUrl}"
-    style="border: none; outline: none; background-color: transparent; width: 300px; height: 140px; transition: all 0.3s ease-in-out; border-radius: 12px;"
+    style="border: none !important; outline: none !important; background-color: transparent !important; width: 80px; height: 80px; transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); overflow: hidden;"
     allow="microphone"
     frameborder="0"
+    scrolling="no"
     title="${agentProfile.name}"
   ></iframe>
 </div>
@@ -69,8 +70,8 @@ export const EmbedCodeModal: React.FC<EmbedCodeModalProps> = ({
             container.style.top = 'auto';
             iframe.style.width = event.data.width + 'px';
             iframe.style.height = event.data.height + 'px';
-            iframe.style.borderRadius = isOpen ? '16px' : '0px';
-            iframe.style.boxShadow = isOpen ? '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)' : 'none';
+            iframe.style.borderRadius = isOpen ? '24px' : '0px';
+            iframe.style.boxShadow = isOpen ? '0 25px 50px -12px rgba(0, 0, 0, 0.25)' : 'none';
         }
       }
     });

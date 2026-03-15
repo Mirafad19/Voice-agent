@@ -749,12 +749,13 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   useEffect(() => {
     if (!isWidgetMode) return;
     
-    // When closed, just enough space for the FAB. When open, full widget size.
-    const width = isOpen ? 400 : 80;
-    const height = isOpen ? 600 : 80;
+    // When closed, just enough space for the FAB + callout if showing. 
+    // When open, full widget size.
+    const width = isOpen ? 400 : (showCallout && agentProfile.calloutMessage ? 220 : 80);
+    const height = isOpen ? 600 : (showCallout && agentProfile.calloutMessage ? 160 : 80);
     
     window.parent.postMessage({ type: 'agent-widget-resize', isOpen, width, height }, '*');
-  }, [isOpen, isWidgetMode]);
+  }, [isOpen, isWidgetMode, showCallout, agentProfile.calloutMessage]);
   
     useEffect(() => {
       if (!isOpen && agentProfile.calloutMessage) {
