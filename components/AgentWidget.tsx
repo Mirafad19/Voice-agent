@@ -821,11 +821,10 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
               <div className="absolute -right-10 -bottom-20 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none"></div>
           </div>
 
-          <div className="flex-1 bg-gray-50 dark:bg-gray-900 relative -mt-6 rounded-t-[2rem] px-6 pt-8 flex flex-col gap-4 shadow-2xl z-20">
+          <div className="flex-1 bg-gray-50 dark:bg-gray-900 relative -mt-6 rounded-t-[2rem] px-6 pt-6 flex flex-col gap-3 shadow-2xl z-20">
               {!isOnline && <OfflineBanner />}
               
-              <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-gray-700">
-                  <h3 className="font-bold text-gray-900 dark:text-white mb-4">Send us a message</h3>
+              <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
                   <form onSubmit={handleHomeFormSubmit} className="relative w-full">
                       <input 
                         type="text" 
@@ -833,14 +832,14 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                         value={chatInput}
                         disabled={!isOnline}
                         onChange={(e) => setChatInput(e.target.value)}
-                        className={`w-full pl-6 pr-14 py-4 rounded-2xl shadow-sm border-2 border-transparent dark:border-gray-700 bg-gray-50 dark:bg-gray-900 focus:outline-none focus:border-accent-${accentColorClass} text-gray-900 dark:text-white transition-all text-left font-semibold disabled:opacity-50`}
+                        className={`w-full pl-5 pr-12 py-3 rounded-2xl shadow-sm border-2 border-transparent dark:border-gray-700 bg-gray-50 dark:bg-gray-900 focus:outline-none focus:border-accent-${accentColorClass} text-gray-900 dark:text-white transition-all text-left font-semibold disabled:opacity-50 text-sm`}
                       />
                       <button 
                         type="submit" 
                         disabled={!isOnline}
-                        className={`absolute right-3 top-1/2 -translate-y-1/2 p-3 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-500 hover:text-accent-${accentColorClass} transition-colors disabled:opacity-50`}
+                        className={`absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-500 hover:text-accent-${accentColorClass} transition-colors disabled:opacity-50`}
                       >
-                          <SendIcon className="h-5 w-5" />
+                          <SendIcon className="h-4 w-4" />
                       </button>
                   </form>
               </div>
@@ -848,15 +847,15 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
               <button
                   onClick={startVoiceSession}
                   disabled={!isOnline}
-                  className={`w-full bg-gradient-to-r from-accent-${accentColorClass} to-gray-800 rounded-2xl p-1 shadow-xl hover:scale-[1.03] transition-transform group text-left disabled:opacity-50 disabled:grayscale`}
+                  className={`w-full bg-gradient-to-r from-accent-${accentColorClass} to-gray-800 rounded-2xl p-1 shadow-xl hover:scale-[1.02] transition-transform group text-left disabled:opacity-50 disabled:grayscale`}
               >
-                  <div className="bg-white/10 backdrop-blur-md rounded-xl p-5 flex items-center gap-5 h-full">
-                      <div className="p-4 bg-white/20 rounded-2xl shadow-inner animate-pulse">
+                  <div className="bg-white/10 backdrop-blur-md rounded-xl p-4 flex items-center gap-4 h-full">
+                      <div className="p-3 bg-white/20 rounded-2xl shadow-inner animate-pulse">
                           <MicrophoneIcon state={WidgetState.Idle} />
                       </div>
                       <div className="text-left text-white">
-                          <h3 className="font-black text-xl tracking-tighter uppercase leading-none">Talk to AI Assistant</h3>
-                          <p className="text-xs font-bold opacity-80 mt-1 uppercase tracking-widest">Skip typing, we're listening.</p>
+                          <h3 className="font-black text-lg tracking-tighter uppercase leading-none">Talk to AI Assistant</h3>
+                          <p className="text-[10px] font-bold opacity-80 mt-1 uppercase tracking-widest">Skip typing, we're listening.</p>
                       </div>
                   </div>
               </button>
@@ -1080,19 +1079,19 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   }
 
   const containerClasses = isWidgetMode 
-    ? 'w-full h-full' 
+    ? 'w-full h-full flex flex-col justify-between' 
     : 'fixed bottom-0 right-0 md:bottom-24 md:right-6 w-full h-[100dvh] md:w-[400px] md:h-[600px] md:rounded-3xl shadow-[0_35px_60px_-15px_rgba(0,0,0,0.3)] z-[9999] transition-all duration-500 ease-out';
 
   return (
     <>
       <div className={`${themeClass} ${containerClasses}`}>
-          <div className={`flex flex-col w-full h-full bg-white dark:bg-gray-900 text-black dark:text-white md:rounded-[2rem] overflow-hidden border-0 ${!isWidgetMode ? 'shadow-2xl' : ''}`}>
+          <div className={`flex flex-col w-full ${isWidgetMode ? 'h-[calc(100%-60px)]' : 'h-full'} bg-white dark:bg-gray-900 text-black dark:text-white md:rounded-[2rem] overflow-hidden border-0 ${!isWidgetMode ? 'shadow-2xl' : ''}`}>
               {view === 'home' && renderHomeView()}
               {view === 'chat' && renderChatView()}
               {view === 'voice' && renderVoiceView()}
           </div>
           {isWidgetMode && (
-            <div className="absolute bottom-4 right-4 z-[9999]">
+            <div className="flex justify-end p-2 z-[9999]">
               {fabContent}
             </div>
           )}
