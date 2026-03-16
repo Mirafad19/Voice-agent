@@ -167,6 +167,13 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
   // Monitor network quality
   useEffect(() => {
+    if (isWidgetMode) {
+      document.documentElement.style.backgroundColor = 'transparent';
+      document.body.style.backgroundColor = 'transparent';
+      const root = document.getElementById('root');
+      if (root) root.style.backgroundColor = 'transparent';
+    }
+
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
     window.addEventListener('online', handleOnline);
@@ -792,22 +799,24 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
           <div className={`relative h-[45%] bg-gradient-to-br from-accent-${accentColorClass} to-gray-900 flex flex-col p-6 text-white`}>
               <div className="flex items-center justify-between mb-4">
                   {agentProfile.logoUrl ? (
-                      <img src={agentProfile.logoUrl} alt="Logo" className="h-8 w-auto object-contain" referrerPolicy="no-referrer" />
+                      <img src={agentProfile.logoUrl} alt="Logo" className="h-14 w-auto object-contain" referrerPolicy="no-referrer" />
                   ) : (
                       <span className="text-xs font-black tracking-[0.1em] uppercase opacity-75 truncate max-w-[200px]">{agentProfile.name}</span>
                   )}
               </div>
               <div className="mt-auto mb-6 relative z-10">
-                  <div className="flex -space-x-3 mb-4">
-                      {agentProfile.avatar1Url && (
-                          <img src={agentProfile.avatar1Url} alt="Avatar 1" className="w-12 h-12 rounded-full border-2 border-white shadow-md object-cover" referrerPolicy="no-referrer" />
-                      )}
-                      {agentProfile.avatar2Url && (
-                          <img src={agentProfile.avatar2Url} alt="Avatar 2" className="w-12 h-12 rounded-full border-2 border-white shadow-md object-cover" referrerPolicy="no-referrer" />
-                      )}
+                  <div className="flex items-center gap-4 mb-4">
+                      <div className="flex -space-x-3">
+                          {agentProfile.avatar1Url && (
+                              <img src={agentProfile.avatar1Url} alt="Avatar 1" className="w-12 h-12 rounded-full border-2 border-white shadow-md object-cover" referrerPolicy="no-referrer" />
+                          )}
+                          {agentProfile.avatar2Url && (
+                              <img src={agentProfile.avatar2Url} alt="Avatar 2" className="w-12 h-12 rounded-full border-2 border-white shadow-md object-cover" referrerPolicy="no-referrer" />
+                          )}
+                      </div>
+                      <h1 className="text-4xl font-black tracking-tighter leading-none">Hi <span className="animate-wave inline-block">👋</span></h1>
                   </div>
-                  <h1 className="text-4xl font-black tracking-tighter leading-none">Hi <span className="animate-wave inline-block">👋</span></h1>
-                  <p className="text-white/90 mt-3 font-bold text-lg leading-snug">How can we help you today?</p>
+                  <p className="text-white/90 mt-1 font-bold text-lg leading-snug">How can we help you today?</p>
               </div>
               <div className="absolute -right-10 -bottom-20 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none"></div>
           </div>
@@ -1043,30 +1052,31 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     </div>
   );
 
+  const fabContent = (
+    <div className={`${themeClass} relative group`}>
+      {!isOpen && showCallout && agentProfile.calloutMessage && (
+        <div className="absolute bottom-full right-0 mb-4 w-48 p-3 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-xl shadow-lg text-sm animate-fade-in-up border border-gray-100 dark:border-gray-700">
+          <button 
+            onClick={handleDismissCallout} 
+            className="absolute top-1 right-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+            aria-label="Dismiss callout"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+          <p className="font-medium pr-4">{agentProfile.calloutMessage}</p>
+          <div className="absolute -bottom-2 right-6 w-4 h-4 bg-white dark:bg-gray-800 transform rotate-45 border-b border-r border-gray-100 dark:border-gray-700"></div>
+        </div>
+      )}
+      <button onClick={toggleWidget} className={`w-16 h-16 rounded-full bg-accent-${accentColorClass} shadow-xl flex items-center justify-center text-white transform hover:scale-110 transition-all active:scale-95`}>
+        {isOpen ? <ChevronDownIcon className="h-8 w-8 text-white" /> : <FabIcon />}
+      </button>
+    </div>
+  );
+
   if (!isOpen) {
-    const fabContent = (
-      <div className={`${themeClass} relative group`}>
-        {showCallout && agentProfile.calloutMessage && (
-          <div className="absolute bottom-full right-0 mb-4 w-48 p-3 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-xl shadow-lg text-sm animate-fade-in-up border border-gray-100 dark:border-gray-700">
-            <button 
-              onClick={handleDismissCallout} 
-              className="absolute top-1 right-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
-              aria-label="Dismiss callout"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-            <p className="font-medium pr-4">{agentProfile.calloutMessage}</p>
-            <div className="absolute -bottom-2 right-6 w-4 h-4 bg-white dark:bg-gray-800 transform rotate-45 border-b border-r border-gray-100 dark:border-gray-700"></div>
-          </div>
-        )}
-        <button onClick={toggleWidget} className={`w-16 h-16 rounded-full bg-accent-${accentColorClass} shadow-xl flex items-center justify-center text-white transform hover:scale-110 transition-all active:scale-95`}>
-          <FabIcon />
-        </button>
-      </div>
-    );
-    return isWidgetMode ? <div className="w-full h-full flex items-end justify-end bg-transparent overflow-hidden">{fabContent}</div> : <div className="fixed bottom-6 right-6 z-[9999]">{fabContent}</div>;
+    return isWidgetMode ? <div className="w-full h-full flex items-end justify-end bg-transparent overflow-hidden p-0">{fabContent}</div> : <div className="fixed bottom-6 right-6 z-[9999]">{fabContent}</div>;
   }
 
   const containerClasses = isWidgetMode 
@@ -1074,18 +1084,24 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     : 'fixed bottom-0 right-0 md:bottom-24 md:right-6 w-full h-[100dvh] md:w-[400px] md:h-[600px] md:rounded-3xl shadow-[0_35px_60px_-15px_rgba(0,0,0,0.3)] z-[9999] transition-all duration-500 ease-out';
 
   return (
-    <div className={`${themeClass} ${containerClasses}`}>
-        <div className={`flex flex-col w-full h-full bg-white dark:bg-gray-900 text-black dark:text-white md:rounded-[2rem] overflow-hidden border-0 ${!isWidgetMode ? 'shadow-2xl' : ''}`}>
-            {view === 'home' && (
-                <button onClick={toggleWidget} className="absolute top-5 right-5 z-50 p-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all backdrop-blur-md active:scale-90">
-                    <ChevronDownIcon />
-                </button>
-            )}
-
-            {view === 'home' && renderHomeView()}
-            {view === 'chat' && renderChatView()}
-            {view === 'voice' && renderVoiceView()}
+    <>
+      <div className={`${themeClass} ${containerClasses}`}>
+          <div className={`flex flex-col w-full h-full bg-white dark:bg-gray-900 text-black dark:text-white md:rounded-[2rem] overflow-hidden border-0 ${!isWidgetMode ? 'shadow-2xl' : ''}`}>
+              {view === 'home' && renderHomeView()}
+              {view === 'chat' && renderChatView()}
+              {view === 'voice' && renderVoiceView()}
+          </div>
+          {isWidgetMode && (
+            <div className="absolute bottom-4 right-4 z-[9999]">
+              {fabContent}
+            </div>
+          )}
+      </div>
+      {!isWidgetMode && (
+        <div className="fixed bottom-6 right-6 z-[9999]">
+          {fabContent}
         </div>
-    </div>
+      )}
+    </>
   );
 };
