@@ -33,14 +33,15 @@ export const EmbedCodeModal: React.FC<EmbedCodeModalProps> = ({
     const finalUrl = `${baseUrl}?config=${encodedConfig}`;
     const iframeId = `ai-agent-iframe-${Date.now()}`;
 
-    const code = `<div style="position: fixed; bottom: 20px; right: 20px; z-index: 9999; display: flex; align-items: flex-end; justify-content: flex-end;">
+    const code = `<div style="position: fixed; bottom: 20px; right: 20px; z-index: 9999; display: flex; align-items: flex-end; justify-content: flex-end; pointer-events: none;">
   <iframe
     id="${iframeId}"
     src="${finalUrl}"
-    style="border: none !important; outline: none !important; background-color: transparent !important; width: 80px; height: 80px; transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); overflow: hidden;"
+    style="border: none !important; outline: none !important; background-color: transparent !important; width: 80px; height: 80px; transition: width 0.3s cubic-bezier(0.19, 1, 0.22, 1), height 0.3s cubic-bezier(0.19, 1, 0.22, 1), opacity 0.2s ease, transform 0.3s cubic-bezier(0.19, 1, 0.22, 1); overflow: hidden; pointer-events: auto; will-change: width, height; border-radius: 20px; box-shadow: none;"
     allow="microphone"
     frameborder="0"
     scrolling="no"
+    allowtransparency="true"
     title="${agentProfile.name}"
   ></iframe>
 </div>
@@ -63,6 +64,7 @@ export const EmbedCodeModal: React.FC<EmbedCodeModalProps> = ({
             iframe.style.width = '100%';
             iframe.style.height = '100%';
             iframe.style.borderRadius = '0';
+            iframe.style.boxShadow = 'none';
         } else {
             container.style.bottom = '20px';
             container.style.right = '20px';
@@ -70,7 +72,7 @@ export const EmbedCodeModal: React.FC<EmbedCodeModalProps> = ({
             container.style.top = 'auto';
             iframe.style.width = event.data.width + 'px';
             iframe.style.height = event.data.height + 'px';
-            iframe.style.borderRadius = isOpen ? '24px' : '0px';
+            iframe.style.borderRadius = isOpen ? '24px' : '20px';
             iframe.style.boxShadow = isOpen ? '0 25px 50px -12px rgba(0, 0, 0, 0.25)' : 'none';
         }
       }

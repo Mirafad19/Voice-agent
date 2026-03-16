@@ -1037,12 +1037,12 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             <div className="absolute -bottom-2 right-6 w-4 h-4 bg-white dark:bg-gray-800 transform rotate-45 border-b border-r border-gray-100 dark:border-gray-700"></div>
           </div>
         )}
-        <button onClick={toggleWidget} className={`w-16 h-16 rounded-full bg-accent-${accentColorClass} shadow-2xl flex items-center justify-center text-white transform hover:scale-110 transition-all animate-pulse active:scale-95`}>
+        <button onClick={toggleWidget} className={`w-16 h-16 rounded-full bg-accent-${accentColorClass} shadow-xl flex items-center justify-center text-white transform hover:scale-110 transition-all active:scale-95`}>
           <FabIcon />
         </button>
       </div>
     );
-    return isWidgetMode ? <div className="w-full h-full p-2 flex items-end justify-end bg-transparent">{fabContent}</div> : <div className="fixed bottom-6 right-6 z-[9999]">{fabContent}</div>;
+    return isWidgetMode ? <div className="w-full h-full flex items-end justify-end bg-transparent overflow-hidden">{fabContent}</div> : <div className="fixed bottom-6 right-6 z-[9999]">{fabContent}</div>;
   }
 
   const containerClasses = isWidgetMode 
