@@ -70,6 +70,9 @@ export interface AgentProfile {
   voice: AgentVoice;
   accentColor: AccentColor;
   calloutMessage?: string;
+  logoUrl?: string;
+  avatar1Url?: string;
+  avatar2Url?: string;
   emailConfig?: EmailConfig;
   fileUploadConfig?: FileUploadConfig;
   ownerId?: string;

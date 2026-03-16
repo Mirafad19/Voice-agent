@@ -119,6 +119,30 @@ export const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({
           </div>
         </div>
 
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <Input
+            label="Logo URL"
+            id="logoUrl"
+            value={editedProfile.logoUrl || ""}
+            onChange={(e) => handleChange("logoUrl", e.target.value)}
+            placeholder="https://example.com/logo.png"
+          />
+          <Input
+            label="Avatar 1 URL"
+            id="avatar1Url"
+            value={editedProfile.avatar1Url || ""}
+            onChange={(e) => handleChange("avatar1Url", e.target.value)}
+            placeholder="https://example.com/avatar1.png"
+          />
+          <Input
+            label="Avatar 2 URL"
+            id="avatar2Url"
+            value={editedProfile.avatar2Url || ""}
+            onChange={(e) => handleChange("avatar2Url", e.target.value)}
+            placeholder="https://example.com/avatar2.png"
+          />
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Select
             label="Theme"

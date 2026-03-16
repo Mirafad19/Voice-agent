@@ -88,6 +88,12 @@ const ChevronLeftIcon = ({className = "h-6 w-6 text-white"}) => (
     </svg>
 );
 
+const ChevronDownIcon = ({className = "h-6 w-6 text-white"}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" />
+    </svg>
+);
+
 const LiveBadge = () => (
     <div className="flex items-center gap-2 px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full border border-white/30 shadow-sm">
         <span className="relative flex h-2.5 w-2.5">
@@ -783,11 +789,23 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
   const renderHomeView = () => (
       <div className="flex flex-col h-full w-full bg-white dark:bg-gray-900 animate-fade-in-up">
-          <div className={`relative h-[40%] bg-gradient-to-br from-accent-${accentColorClass} to-gray-900 flex flex-col p-6 text-white`}>
+          <div className={`relative h-[45%] bg-gradient-to-br from-accent-${accentColorClass} to-gray-900 flex flex-col p-6 text-white`}>
               <div className="flex items-center justify-between mb-4">
-                  <span className="text-xs font-black tracking-[0.1em] uppercase opacity-75 truncate max-w-[200px]">{agentProfile.name}</span>
+                  {agentProfile.logoUrl ? (
+                      <img src={agentProfile.logoUrl} alt="Logo" className="h-8 w-auto object-contain" referrerPolicy="no-referrer" />
+                  ) : (
+                      <span className="text-xs font-black tracking-[0.1em] uppercase opacity-75 truncate max-w-[200px]">{agentProfile.name}</span>
+                  )}
               </div>
               <div className="mt-auto mb-6 relative z-10">
+                  <div className="flex -space-x-3 mb-4">
+                      {agentProfile.avatar1Url && (
+                          <img src={agentProfile.avatar1Url} alt="Avatar 1" className="w-12 h-12 rounded-full border-2 border-white shadow-md object-cover" referrerPolicy="no-referrer" />
+                      )}
+                      {agentProfile.avatar2Url && (
+                          <img src={agentProfile.avatar2Url} alt="Avatar 2" className="w-12 h-12 rounded-full border-2 border-white shadow-md object-cover" referrerPolicy="no-referrer" />
+                      )}
+                  </div>
                   <h1 className="text-4xl font-black tracking-tighter leading-none">Hi <span className="animate-wave inline-block">👋</span></h1>
                   <p className="text-white/90 mt-3 font-bold text-lg leading-snug">How can we help you today?</p>
               </div>
@@ -796,23 +814,27 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
           <div className="flex-1 bg-gray-50 dark:bg-gray-900 relative -mt-6 rounded-t-[2rem] px-6 pt-8 flex flex-col gap-4 shadow-2xl z-20">
               {!isOnline && <OfflineBanner />}
-              <form onSubmit={handleHomeFormSubmit} className="relative w-full">
-                  <input 
-                    type="text" 
-                    placeholder="Ask a question..." 
-                    value={chatInput}
-                    disabled={!isOnline}
-                    onChange={(e) => setChatInput(e.target.value)}
-                    className={`w-full pl-6 pr-14 py-4 rounded-2xl shadow-sm border-2 border-transparent dark:border-gray-700 bg-white dark:bg-gray-800 focus:outline-none focus:border-accent-${accentColorClass} text-gray-900 dark:text-white transition-all text-left font-semibold disabled:opacity-50`}
-                  />
-                  <button 
-                    type="submit" 
-                    disabled={!isOnline}
-                    className={`absolute right-3 top-1/2 -translate-y-1/2 p-3 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-500 hover:text-accent-${accentColorClass} transition-colors disabled:opacity-50`}
-                  >
-                      <SendIcon className="h-5 w-5" />
-                  </button>
-              </form>
+              
+              <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-gray-700">
+                  <h3 className="font-bold text-gray-900 dark:text-white mb-4">Send us a message</h3>
+                  <form onSubmit={handleHomeFormSubmit} className="relative w-full">
+                      <input 
+                        type="text" 
+                        placeholder="Ask a question..." 
+                        value={chatInput}
+                        disabled={!isOnline}
+                        onChange={(e) => setChatInput(e.target.value)}
+                        className={`w-full pl-6 pr-14 py-4 rounded-2xl shadow-sm border-2 border-transparent dark:border-gray-700 bg-gray-50 dark:bg-gray-900 focus:outline-none focus:border-accent-${accentColorClass} text-gray-900 dark:text-white transition-all text-left font-semibold disabled:opacity-50`}
+                      />
+                      <button 
+                        type="submit" 
+                        disabled={!isOnline}
+                        className={`absolute right-3 top-1/2 -translate-y-1/2 p-3 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-500 hover:text-accent-${accentColorClass} transition-colors disabled:opacity-50`}
+                      >
+                          <SendIcon className="h-5 w-5" />
+                      </button>
+                  </form>
+              </div>
 
               <button
                   onClick={startVoiceSession}
@@ -1056,7 +1078,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         <div className={`flex flex-col w-full h-full bg-white dark:bg-gray-900 text-black dark:text-white md:rounded-[2rem] overflow-hidden border-0 ${!isWidgetMode ? 'shadow-2xl' : ''}`}>
             {view === 'home' && (
                 <button onClick={toggleWidget} className="absolute top-5 right-5 z-50 p-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all backdrop-blur-md active:scale-90">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path d="M6 18L18 6M6 6l12 12" /></svg>
+                    <ChevronDownIcon />
                 </button>
             )}
 
