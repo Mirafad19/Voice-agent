@@ -42,8 +42,8 @@ export class GeminiLiveService {
   private currentOutputTranscription = '';
 
   private speechDetectedFrameCount = 0;
-  private readonly SPEECH_DETECTION_THRESHOLD = 0.025; 
-  private readonly FRAMES_FOR_INTERRUPTION = 2; // ~50ms of sustained speech
+  private readonly SPEECH_DETECTION_THRESHOLD = 0.01; 
+  private readonly FRAMES_FOR_INTERRUPTION = 3; // ~75ms of sustained speech
 
   constructor(apiKey: string, config: AgentConfig, callbacks: Callbacks) {
     this.ai = new GoogleGenAI({ 
@@ -153,7 +153,7 @@ export class GeminiLiveService {
 
         if (speechEnergy > this.SPEECH_DETECTION_THRESHOLD) {
             this.speechDetectedFrameCount++;
-            if (this.speechDetectedFrameCount >= this.FRAMES_FOR_INTERRUPTION) {
+            if (this.speechDetectedFrameCount === this.FRAMES_FOR_INTERRUPTION) {
                 this.callbacks.onLocalInterruption?.();
             }
         } else {

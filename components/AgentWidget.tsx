@@ -155,6 +155,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const silenceTimerRef = useRef<number | null>(null);
   
   const isGreetingProtectedRef = useRef(false);
+  const lastInterruptionTimeRef = useRef<number>(0);
 
   const accentColorClass = agentProfile.accentColor;
 
@@ -429,11 +430,8 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   }, []);
 
   const handleInterruption = useCallback(() => {
-    if (isGreetingProtectedRef.current) {
-        console.debug("Interruption ignored: Agent is delivering forced greeting.");
-        return;
-    }
-
+    isGreetingProtectedRef.current = false;
+    lastInterruptionTimeRef.current = Date.now();
     activeAudioSourcesRef.current.forEach(source => {
         try { source.stop(); } catch(e) {}
     });
@@ -587,6 +585,10 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         }
       },
       onAudioChunk: (chunk) => {
+        // Guard: Ignore chunks arriving within 400ms of an interruption
+        if (Date.now() - lastInterruptionTimeRef.current < 400) {
+            return;
+        }
         audioQueueRef.current.push(chunk);
         recordingServiceRef.current?.addAgentAudioChunk(chunk);
         playAudioQueue();
