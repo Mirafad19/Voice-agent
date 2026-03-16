@@ -94,6 +94,12 @@ const ChevronDownIcon = ({className = "h-6 w-6 text-white"}) => (
     </svg>
 );
 
+const XIcon = ({className = "h-6 w-6"}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+    </svg>
+);
+
 const LiveBadge = () => (
     <div className="flex items-center gap-2 px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full border border-white/30 shadow-sm">
         <span className="relative flex h-2.5 w-2.5">
@@ -821,10 +827,10 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
               <div className="absolute -right-10 -bottom-20 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none"></div>
           </div>
 
-          <div className="flex-1 bg-gray-50 dark:bg-gray-900 relative -mt-6 rounded-t-[2rem] px-6 pt-6 flex flex-col gap-3 shadow-2xl z-20">
+          <div className="flex-1 bg-gray-50 dark:bg-gray-900 relative -mt-6 rounded-t-[2rem] px-6 pt-8 flex flex-col gap-4 shadow-2xl z-20">
               {!isOnline && <OfflineBanner />}
               
-              <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
+              <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-gray-700">
                   <form onSubmit={handleHomeFormSubmit} className="relative w-full">
                       <input 
                         type="text" 
@@ -832,14 +838,14 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                         value={chatInput}
                         disabled={!isOnline}
                         onChange={(e) => setChatInput(e.target.value)}
-                        className={`w-full pl-5 pr-12 py-3 rounded-2xl shadow-sm border-2 border-transparent dark:border-gray-700 bg-gray-50 dark:bg-gray-900 focus:outline-none focus:border-accent-${accentColorClass} text-gray-900 dark:text-white transition-all text-left font-semibold disabled:opacity-50 text-sm`}
+                        className={`w-full pl-6 pr-14 py-4 rounded-2xl shadow-sm border-2 border-transparent dark:border-gray-700 bg-gray-50 dark:bg-gray-900 focus:outline-none focus:border-accent-${accentColorClass} text-gray-900 dark:text-white transition-all text-left font-semibold disabled:opacity-50 text-base`}
                       />
                       <button 
                         type="submit" 
                         disabled={!isOnline}
-                        className={`absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-500 hover:text-accent-${accentColorClass} transition-colors disabled:opacity-50`}
+                        className={`absolute right-3 top-1/2 -translate-y-1/2 p-2.5 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-500 hover:text-accent-${accentColorClass} transition-colors disabled:opacity-50`}
                       >
-                          <SendIcon className="h-4 w-4" />
+                          <SendIcon className="h-5 w-5" />
                       </button>
                   </form>
               </div>
@@ -847,15 +853,15 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
               <button
                   onClick={startVoiceSession}
                   disabled={!isOnline}
-                  className={`w-full bg-gradient-to-r from-accent-${accentColorClass} to-gray-800 rounded-2xl p-1 shadow-xl hover:scale-[1.02] transition-transform group text-left disabled:opacity-50 disabled:grayscale`}
+                  className={`w-full bg-gradient-to-r from-accent-${accentColorClass} to-gray-800 rounded-2xl p-1 shadow-xl hover:scale-[1.03] transition-transform group text-left disabled:opacity-50 disabled:grayscale`}
               >
-                  <div className="bg-white/10 backdrop-blur-md rounded-xl p-4 flex items-center gap-4 h-full">
-                      <div className="p-3 bg-white/20 rounded-2xl shadow-inner animate-pulse">
+                  <div className="bg-white/10 backdrop-blur-md rounded-xl p-5 flex items-center gap-5 h-full">
+                      <div className="p-4 bg-white/20 rounded-2xl shadow-inner animate-pulse">
                           <MicrophoneIcon state={WidgetState.Idle} />
                       </div>
                       <div className="text-left text-white">
-                          <h3 className="font-black text-lg tracking-tighter uppercase leading-none">Talk to AI Assistant</h3>
-                          <p className="text-[10px] font-bold opacity-80 mt-1 uppercase tracking-widest">Skip typing, we're listening.</p>
+                          <h3 className="font-black text-xl tracking-tighter uppercase leading-none">Talk to AI Assistant</h3>
+                          <p className="text-xs font-bold opacity-80 mt-1 uppercase tracking-widest">Skip typing, we're listening.</p>
                       </div>
                   </div>
               </button>
@@ -865,15 +871,15 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
   const renderChatView = () => (
       <div className="flex flex-col h-full w-full bg-white dark:bg-gray-900 animate-fade-in-up">
-          <div className={`flex items-center justify-between p-5 flex-shrink-0 z-20 bg-accent-${accentColorClass} text-white shadow-xl transition-colors duration-300`}>
+          <div className={`flex items-center justify-between p-5 pr-14 flex-shrink-0 z-20 bg-accent-${accentColorClass} text-white shadow-xl transition-colors duration-300`}>
               <div className="flex items-center gap-4 min-w-0">
                   <button onClick={handleBack} className="p-1 rounded-full hover:bg-white/20 transition-all active:scale-90 flex-shrink-0" title="Back">
                       <ChevronLeftIcon />
                   </button>
                   <h3 className="font-black text-lg uppercase tracking-tight leading-tight text-white whitespace-normal break-words">{agentProfile.name}</h3>
               </div>
-              <button onClick={endChatSession} className="text-[10px] font-black bg-white text-red-500 hover:bg-red-50 px-4 py-2 rounded-full shadow-lg transition-all uppercase tracking-widest active:scale-95 flex-shrink-0 ml-2">
-                  End Chat
+              <button onClick={endChatSession} className="text-[10px] font-black bg-white text-red-500 hover:bg-red-50 px-3 py-1.5 rounded-full shadow-lg transition-all uppercase tracking-widest active:scale-95 flex-shrink-0 ml-2">
+                  End
               </button>
           </div>
 
@@ -947,7 +953,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             </div>
         )}
 
-        <div className={`flex items-center justify-between p-5 flex-shrink-0 z-20 bg-accent-${accentColorClass} text-white shadow-xl transition-colors duration-300`}>
+        <div className={`flex items-center justify-between p-5 pr-14 flex-shrink-0 z-20 bg-accent-${accentColorClass} text-white shadow-xl transition-colors duration-300`}>
             <div className="flex items-center gap-4 min-w-0">
                  <button onClick={handleBack} className="p-1 rounded-full hover:bg-white/20 transition-all active:scale-90 flex-shrink-0" title="Back">
                     <ChevronLeftIcon />
@@ -1085,16 +1091,20 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   return (
     <>
       <div className={`${themeClass} ${containerClasses}`}>
-          <div className={`flex flex-col w-full ${isWidgetMode ? 'h-[calc(100%-60px)]' : 'h-full'} bg-white dark:bg-gray-900 text-black dark:text-white md:rounded-[2rem] overflow-hidden border-0 ${!isWidgetMode ? 'shadow-2xl' : ''}`}>
+          <div className={`flex flex-col w-full h-full bg-white dark:bg-gray-900 text-black dark:text-white md:rounded-[2rem] overflow-hidden border-0 relative ${!isWidgetMode ? 'shadow-2xl' : ''}`}>
+              {/* Close Button */}
+              <button 
+                onClick={toggleWidget}
+                className="absolute top-3 right-3 z-[100] p-1.5 rounded-full bg-black/20 hover:bg-black/40 text-white transition-all shadow-lg border border-white/20"
+                aria-label="Close widget"
+              >
+                <XIcon className="h-7 w-7" />
+              </button>
+
               {view === 'home' && renderHomeView()}
               {view === 'chat' && renderChatView()}
               {view === 'voice' && renderVoiceView()}
           </div>
-          {isWidgetMode && (
-            <div className="flex justify-end p-2 z-[9999]">
-              {fabContent}
-            </div>
-          )}
       </div>
       {!isWidgetMode && (
         <div className="fixed bottom-6 right-6 z-[9999]">
