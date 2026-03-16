@@ -799,7 +799,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
           <div className={`relative h-[45%] bg-gradient-to-br from-accent-${accentColorClass} to-gray-900 flex flex-col p-6 text-white`}>
               <div className="flex items-center justify-between mb-4">
                   {agentProfile.logoUrl ? (
-                      <img src={agentProfile.logoUrl} alt="Logo" className="h-14 w-auto object-contain" referrerPolicy="no-referrer" />
+                      <img src={agentProfile.logoUrl} alt="Logo" className="h-20 w-auto object-contain" referrerPolicy="no-referrer" />
                   ) : (
                       <span className="text-xs font-black tracking-[0.1em] uppercase opacity-75 truncate max-w-[200px]">{agentProfile.name}</span>
                   )}
