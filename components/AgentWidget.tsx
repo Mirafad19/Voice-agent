@@ -781,8 +781,8 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
     // When closed: 90px for FAB alone, or 360px for FAB + callout
     // When open: full widget size (400x600 or fullscreen on mobile)
-    const width = isOpen ? 400 : (showCallout && agentProfile.calloutMessage ? 300 : 80);
-    const height = isOpen ? 600 : (showCallout && agentProfile.calloutMessage ? 400 : 100);
+    const width = isOpen ? 400 : (showCallout && agentProfile.calloutMessage ? 340 : 120);
+    const height = isOpen ? 600 : (showCallout && agentProfile.calloutMessage ? 400 : 120);
 
     window.parent.postMessage({ type: 'agent-widget-resize', isOpen, width, height }, '*');
   }, [isOpen, isWidgetMode, showCallout, agentProfile.calloutMessage]);
@@ -1127,7 +1127,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         )}
         {/* FAB - show when closed in widget mode */}
         {!isOpen && (
-          <div className="fixed bottom-6 right-6 z-[9999]">
+          <div className="fixed bottom-4 right-4 z-[9999]" style={{ overflow: 'visible' }}>
             {fabContent}
           </div>
         )}
@@ -1164,7 +1164,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
       {/* FAB Button - always visible when closed */}
       {!isOpen && (
-        <div className="fixed bottom-6 right-6 z-[9999]">
+        <div className="fixed bottom-6 right-6 z-[9999]" style={{ overflow: 'visible' }}>
           {fabContent}
         </div>
       )}

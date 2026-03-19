@@ -23,8 +23,8 @@ if (configParam) {
     // Set transparent background for widget mode
     document.documentElement.style.backgroundColor = 'transparent';
     document.body.style.backgroundColor = 'transparent';
-    document.documentElement.style.overflow = 'hidden';
-    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'visible';
+    document.body.style.overflow = 'visible';
     rootElement.style.height = '100vh';
 
     root.render(
