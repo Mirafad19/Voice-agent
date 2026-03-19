@@ -1104,12 +1104,44 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     ? 'w-full h-full flex flex-col justify-between'
     : `fixed bottom-0 right-0 md:bottom-24 md:right-6 w-full h-[100dvh] md:w-[400px] md:h-[600px] md:rounded-3xl shadow-[0_35px_60px_-15px_rgba(0,0,0,0.3)] z-[9999] transition-all duration-300 ease-out ${isOpen ? 'opacity-100 scale-100 translate-y-0 pointer-events-auto' : 'opacity-0 scale-95 translate-y-4 pointer-events-none'}`;
 
+  // For widget mode, use different layout
+  if (isWidgetMode) {
+    return (
+      <div className={`${themeClass} w-full h-full flex flex-col`}>
+        {/* Widget Panel - full size in widget mode */}
+        {isOpen && (
+          <div className="flex flex-col w-full h-full bg-white dark:bg-gray-900 text-black dark:text-white rounded-none overflow-hidden relative">
+            {/* Close Button - inside panel for widget mode */}
+            <button
+              onClick={toggleWidget}
+              className="absolute top-3 right-3 z-[100] p-1.5 rounded-full bg-black/30 hover:bg-black/50 text-white transition-all shadow-lg"
+              aria-label="Close widget"
+            >
+              <XIcon className="h-6 w-6" />
+            </button>
+
+            {view === 'home' && renderHomeView()}
+            {view === 'chat' && renderChatView()}
+            {view === 'voice' && renderVoiceView()}
+          </div>
+        )}
+        {/* FAB - show when closed in widget mode */}
+        {!isOpen && (
+          <div className="fixed bottom-6 right-6 z-[9999]">
+            {fabContent}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Desktop mode - non-widget
   return (
     <>
       {/* Main Widget Panel - only visible when open */}
       {isOpen && (
-        <div className={`${themeClass} ${widgetContainerClasses}`}>
-            <div className={`flex flex-col w-full h-full bg-white dark:bg-gray-900 text-black dark:text-white md:rounded-[2rem] overflow-hidden border-0 relative ${!isWidgetMode ? 'shadow-2xl' : ''}`}>
+        <div className={`${themeClass} fixed bottom-24 right-6 w-[400px] h-[600px] md:rounded-3xl shadow-[0_35px_60px_-15px_rgba(0,0,0,0.3)] z-[9999] transition-all duration-300 ease-out`}>
+            <div className="flex flex-col w-full h-full bg-white dark:bg-gray-900 text-black dark:text-white rounded-[2rem] overflow-hidden border-0 relative shadow-2xl">
                 {view === 'home' && renderHomeView()}
                 {view === 'chat' && renderChatView()}
                 {view === 'voice' && renderVoiceView()}
@@ -1117,21 +1149,25 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         </div>
       )}
 
-      {/* Close Button - always visible, outside the widget panel */}
-      <div className={`fixed z-[9999] ${isOpen ? 'block' : 'hidden'}`} style={{ bottom: '90px', right: '30px' }}>
-        <button
-          onClick={toggleWidget}
-          className="w-12 h-12 rounded-full bg-gray-800 hover:bg-black text-white flex items-center justify-center shadow-xl transition-all hover:scale-110 active:scale-95"
-          aria-label="Close widget"
-        >
-          <XIcon className="h-6 w-6" />
-        </button>
-      </div>
+      {/* Close Button - outside widget panel, above the FAB */}
+      {isOpen && (
+        <div className="fixed z-[9998]" style={{ bottom: '90px', right: '30px' }}>
+          <button
+            onClick={toggleWidget}
+            className="w-12 h-12 rounded-full bg-gray-800 hover:bg-black text-white flex items-center justify-center shadow-xl transition-all hover:scale-110 active:scale-95"
+            aria-label="Close widget"
+          >
+            <XIcon className="h-6 w-6" />
+          </button>
+        </div>
+      )}
 
-      {/* FAB Button - always visible */}
-      <div className={`fixed bottom-6 right-6 z-[9999]`}>
-        {fabContent}
-      </div>
+      {/* FAB Button - always visible when closed */}
+      {!isOpen && (
+        <div className="fixed bottom-6 right-6 z-[9999]">
+          {fabContent}
+        </div>
+      )}
     </>
   );
 };
