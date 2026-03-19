@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { AgentProfile, AgentConfig, WidgetTheme, WidgetState, Recording, ReportingStatus } from '../types';
 import { GeminiLiveService } from '../services/geminiLiveService';
 import { RecordingService } from '../services/recordingService';
@@ -169,7 +169,8 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const isGreetingProtectedRef = useRef(false);
   const lastInterruptionTimeRef = useRef<number>(0);
 
-  const accentColorClass = agentProfile.accentColor;
+  // Memoize derived values for performance
+  const accentColorClass = useMemo(() => agentProfile.accentColor, [agentProfile.accentColor]);
 
   // Monitor network quality
   useEffect(() => {
@@ -1060,40 +1061,56 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const fabContent = (
     <div className={`${themeClass} relative group`}>
       {!isOpen && showCallout && agentProfile.calloutMessage && (
-        <div className="absolute bottom-full right-0 mb-4 w-48 p-3 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-xl shadow-lg text-sm animate-fade-in-up border border-gray-100 dark:border-gray-700">
-          <button 
-            onClick={handleDismissCallout} 
-            className="absolute top-1 right-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+        <div className="absolute bottom-full right-0 mb-4 w-64 p-4 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-2xl shadow-xl text-sm animate-fade-in-up border border-gray-100 dark:border-gray-700">
+          <button
+            onClick={handleDismissCallout}
+            className="absolute top-2 right-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
             aria-label="Dismiss callout"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
-          <p className="font-medium pr-4">{agentProfile.calloutMessage}</p>
+          <div className="flex items-start gap-3 pr-6">
+            <div className={`w-8 h-8 rounded-full bg-accent-${accentColorClass} flex items-center justify-center flex-shrink-0`}>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+              </svg>
+            </div>
+            <p className="font-medium text-gray-700 dark:text-gray-200 leading-relaxed">{agentProfile.calloutMessage}</p>
+          </div>
           <div className="absolute -bottom-2 right-6 w-4 h-4 bg-white dark:bg-gray-800 transform rotate-45 border-b border-r border-gray-100 dark:border-gray-700"></div>
         </div>
       )}
-      <button onClick={toggleWidget} className={`w-16 h-16 rounded-full bg-accent-${accentColorClass} shadow-xl flex items-center justify-center text-white transform hover:scale-110 transition-all active:scale-95`}>
-        {isOpen ? <ChevronDownIcon className="h-8 w-8 text-white" /> : <FabIcon />}
+      <button
+        onClick={toggleWidget}
+        className={`w-16 h-16 rounded-full bg-accent-${accentColorClass} shadow-xl flex items-center justify-center text-white transform hover:scale-110 transition-all duration-300 active:scale-95 ${isOpen ? 'rotate-180' : 'rotate-0'}`}
+      >
+        <div className={`transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`}>
+          {isOpen ? (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          ) : (
+            <FabIcon />
+          )}
+        </div>
       </button>
     </div>
   );
 
-  if (!isOpen) {
-    return isWidgetMode ? <div className="w-full h-full flex items-end justify-end bg-transparent overflow-hidden p-0">{fabContent}</div> : <div className="fixed bottom-6 right-6 z-[9999]">{fabContent}</div>;
-  }
-
-  const containerClasses = isWidgetMode 
-    ? 'w-full h-full flex flex-col justify-between' 
-    : 'fixed bottom-0 right-0 md:bottom-24 md:right-6 w-full h-[100dvh] md:w-[400px] md:h-[600px] md:rounded-3xl shadow-[0_35px_60px_-15px_rgba(0,0,0,0.3)] z-[9999] transition-all duration-500 ease-out';
+  // Widget animation classes - smooth open/close with scale and opacity
+  const widgetContainerClasses = isWidgetMode
+    ? 'w-full h-full flex flex-col justify-between'
+    : `fixed bottom-0 right-0 md:bottom-24 md:right-6 w-full h-[100dvh] md:w-[400px] md:h-[600px] md:rounded-3xl shadow-[0_35px_60px_-15px_rgba(0,0,0,0.3)] z-[9999] transition-all duration-300 ease-out ${isOpen ? 'opacity-100 scale-100 translate-y-0 pointer-events-auto' : 'opacity-0 scale-95 translate-y-4 pointer-events-none'}`;
 
   return (
     <>
-      <div className={`${themeClass} ${containerClasses}`}>
+      {/* Main Widget Panel */}
+      <div className={`${themeClass} ${widgetContainerClasses}`}>
           <div className={`flex flex-col w-full h-full bg-white dark:bg-gray-900 text-black dark:text-white md:rounded-[2rem] overflow-hidden border-0 relative ${!isWidgetMode ? 'shadow-2xl' : ''}`}>
               {/* Close Button */}
-              <button 
+              <button
                 onClick={toggleWidget}
                 className="absolute top-3 right-3 z-[100] p-1.5 rounded-full bg-black/20 hover:bg-black/40 text-white transition-all shadow-lg border border-white/20"
                 aria-label="Close widget"
@@ -1106,11 +1123,11 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
               {view === 'voice' && renderVoiceView()}
           </div>
       </div>
-      {!isWidgetMode && (
-        <div className="fixed bottom-6 right-6 z-[9999]">
-          {fabContent}
-        </div>
-      )}
+
+      {/* FAB Button - always visible */}
+      <div className={`fixed bottom-6 right-6 z-[9999] transition-all duration-300 ${isOpen ? 'translate-y-0' : 'translate-y-0'}`}>
+        {fabContent}
+      </div>
     </>
   );
 };
