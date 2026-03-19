@@ -802,7 +802,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const themeClass = agentProfile.theme === 'dark' ? 'dark' : '';
 
   const renderHomeView = () => (
-      <div className="flex flex-col h-full w-full bg-white dark:bg-gray-900 animate-fade-in-up">
+      <div className="flex flex-col h-full w-full bg-white dark:bg-gray-900" style={{ touchAction: 'manipulation' }}>
           <div className={`relative h-[45%] bg-gradient-to-br from-accent-${accentColorClass} to-gray-900 flex flex-col p-6 text-white`}>
               <div className="flex items-center justify-between mb-4">
                   {agentProfile.logoUrl ? (
@@ -871,7 +871,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   );
 
   const renderChatView = () => (
-      <div className="flex flex-col h-full w-full bg-white dark:bg-gray-900 animate-fade-in-up">
+      <div className="flex flex-col h-full w-full bg-white dark:bg-gray-900" style={{ touchAction: 'manipulation' }}>
           <div className={`flex items-center justify-between p-5 pr-14 flex-shrink-0 z-20 bg-accent-${accentColorClass} text-white shadow-xl transition-colors duration-300`}>
               <div className="flex items-center gap-4 min-w-0">
                   <button onClick={handleBack} className="p-1 rounded-full hover:bg-white/20 transition-all active:scale-90 flex-shrink-0" title="Back">
@@ -938,7 +938,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   );
 
   const renderVoiceView = () => (
-    <div className="flex flex-col h-full w-full bg-white dark:bg-gray-900 animate-fade-in-up">
+    <div className="flex flex-col h-full w-full bg-white dark:bg-gray-900" style={{ touchAction: 'manipulation' }}>
         {permissionRequested && (
             <div className="absolute inset-0 z-[60] flex flex-col items-center justify-center p-8 text-center animate-fade-in backdrop-blur-xl bg-black/40 text-white/90">
                 <div className="mb-6 p-6 rounded-3xl bg-white/10 animate-bounce shadow-2xl border border-white/20">
@@ -1084,9 +1084,10 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
       )}
       <button
         onClick={toggleWidget}
-        className={`w-16 h-16 rounded-full bg-accent-${accentColorClass} shadow-xl flex items-center justify-center text-white transform hover:scale-110 transition-all duration-300 active:scale-95 ${isOpen ? 'rotate-180' : 'rotate-0'}`}
+        className={`w-16 h-16 rounded-full bg-accent-${accentColorClass} shadow-xl flex items-center justify-center text-white transition-transform duration-200 active:scale-95 ${isOpen ? 'rotate-180' : 'rotate-0'}`}
+        style={{ touchAction: 'manipulation' }}
       >
-        <div className={`transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`}>
+        <div>
           {isOpen ? (
             <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -1110,11 +1111,12 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
       <div className={`${themeClass} w-full h-full flex flex-col`}>
         {/* Widget Panel - full size in widget mode */}
         {isOpen && (
-          <div className="flex flex-col w-full h-full bg-white dark:bg-gray-900 text-black dark:text-white rounded-none overflow-hidden relative">
+          <div className="flex flex-col w-full h-full bg-white dark:bg-gray-900 text-black dark:text-white rounded-none overflow-hidden relative" style={{ touchAction: 'manipulation' }}>
             {/* Close Button - inside panel for widget mode */}
             <button
               onClick={toggleWidget}
-              className="absolute top-3 right-3 z-[100] p-1.5 rounded-full bg-black/30 hover:bg-black/50 text-white transition-all shadow-lg"
+              className="absolute top-3 right-3 z-[100] p-1.5 rounded-full bg-black/30 hover:bg-black/50 text-white transition-colors shadow-lg"
+              style={{ touchAction: 'manipulation' }}
               aria-label="Close widget"
             >
               <XIcon className="h-6 w-6" />
@@ -1154,7 +1156,8 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         <div className="fixed z-[9998]" style={{ bottom: '90px', right: '30px' }}>
           <button
             onClick={toggleWidget}
-            className="w-12 h-12 rounded-full bg-gray-800 hover:bg-black text-white flex items-center justify-center shadow-xl transition-all hover:scale-110 active:scale-95"
+            className="w-12 h-12 rounded-full bg-gray-800 hover:bg-black text-white flex items-center justify-center shadow-xl transition-colors active:scale-95"
+            style={{ touchAction: 'manipulation' }}
             aria-label="Close widget"
           >
             <XIcon className="h-6 w-6" />

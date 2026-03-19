@@ -37,7 +37,7 @@ export const EmbedCodeModal: React.FC<EmbedCodeModalProps> = ({
   <iframe
     id="${iframeId}"
     src="${finalUrl}"
-    style="border: none !important; outline: none !important; background-color: transparent !important; width: 120px; height: 120px; transition: width 0.3s cubic-bezier(0.19, 1, 0.22, 1), height 0.3s cubic-bezier(0.19, 1, 0.22, 1), opacity 0.2s ease, transform 0.3s cubic-bezier(0.19, 1, 0.22, 1); overflow: hidden; pointer-events: auto; will-change: width, height; border-radius: 20px; box-shadow: none;"
+    style="border: none !important; outline: none !important; background-color: transparent !important; width: 120px; height: 120px; transition: width 0.2s ease-out, height 0.2s ease-out; pointer-events: auto; border-radius: 20px; box-shadow: none;"
     allow="microphone"
     frameborder="0"
     scrolling="no"

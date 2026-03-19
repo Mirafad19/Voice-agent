@@ -27,6 +27,15 @@ if (configParam) {
     document.body.style.overflow = 'visible';
     rootElement.style.height = '100vh';
 
+    // Prevent zoom in widget mode - lock the viewport
+    const viewportMeta = document.querySelector('meta[name="viewport"]');
+    if (viewportMeta) {
+      viewportMeta.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no');
+    }
+    // Prevent touch zoom gestures on the entire widget
+    document.documentElement.style.touchAction = 'manipulation';
+    document.body.style.touchAction = 'manipulation';
+
     root.render(
       <React.StrictMode>
         <AgentWidget
