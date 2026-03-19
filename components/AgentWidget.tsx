@@ -1106,26 +1106,30 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
   return (
     <>
-      {/* Main Widget Panel */}
-      <div className={`${themeClass} ${widgetContainerClasses}`}>
-          <div className={`flex flex-col w-full h-full bg-white dark:bg-gray-900 text-black dark:text-white md:rounded-[2rem] overflow-hidden border-0 relative ${!isWidgetMode ? 'shadow-2xl' : ''}`}>
-              {/* Close Button */}
-              <button
-                onClick={toggleWidget}
-                className="absolute top-3 right-3 z-[100] p-1.5 rounded-full bg-black/20 hover:bg-black/40 text-white transition-all shadow-lg border border-white/20"
-                aria-label="Close widget"
-              >
-                <XIcon className="h-7 w-7" />
-              </button>
+      {/* Main Widget Panel - only visible when open */}
+      {isOpen && (
+        <div className={`${themeClass} ${widgetContainerClasses}`}>
+            <div className={`flex flex-col w-full h-full bg-white dark:bg-gray-900 text-black dark:text-white md:rounded-[2rem] overflow-hidden border-0 relative ${!isWidgetMode ? 'shadow-2xl' : ''}`}>
+                {view === 'home' && renderHomeView()}
+                {view === 'chat' && renderChatView()}
+                {view === 'voice' && renderVoiceView()}
+            </div>
+        </div>
+      )}
 
-              {view === 'home' && renderHomeView()}
-              {view === 'chat' && renderChatView()}
-              {view === 'voice' && renderVoiceView()}
-          </div>
+      {/* Close Button - always visible, outside the widget panel */}
+      <div className={`fixed z-[9999] ${isOpen ? 'block' : 'hidden'}`} style={{ bottom: '90px', right: '30px' }}>
+        <button
+          onClick={toggleWidget}
+          className="w-12 h-12 rounded-full bg-gray-800 hover:bg-black text-white flex items-center justify-center shadow-xl transition-all hover:scale-110 active:scale-95"
+          aria-label="Close widget"
+        >
+          <XIcon className="h-6 w-6" />
+        </button>
       </div>
 
       {/* FAB Button - always visible */}
-      <div className={`fixed bottom-6 right-6 z-[9999] transition-all duration-300 ${isOpen ? 'translate-y-0' : 'translate-y-0'}`}>
+      <div className={`fixed bottom-6 right-6 z-[9999]`}>
         {fabContent}
       </div>
     </>
