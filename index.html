@@ -10,6 +10,70 @@
     <link rel="shortcut icon" href="https://image2url.com/r2/default/images/1773703333770-c9e20d08-1933-459c-a8c7-d7c78bf2bc22.png?v=5">
     <link rel="apple-touch-icon" href="https://image2url.com/r2/default/images/1773703333770-c9e20d08-1933-459c-a8c7-d7c78bf2bc22.png?v=5">
     
+    <!-- CSS Reset and Isolation Styles - Must be first -->
+    <style id="widget-isolation-styles">
+      /* Complete CSS Reset for Widget Isolation */
+      html, body, #root, #root *, #root *::before, #root *::after {
+        all: initial;
+        box-sizing: border-box;
+      }
+
+      html {
+        background-color: transparent !important;
+      }
+
+      body {
+        background-color: transparent !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+        overflow: hidden !important;
+      }
+
+      #root {
+        display: block !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        min-height: 100% !important;
+        background-color: transparent !important;
+        overflow: hidden !important;
+      }
+
+      /* Prevent host page styles from leaking */
+      #root button {
+        background: none !important;
+        border: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        cursor: pointer !important;
+        font: inherit !important;
+        color: inherit !important;
+        display: inline-flex !important;
+      }
+
+      #root input, #root textarea {
+        font: inherit !important;
+        color: inherit !important;
+        background: none !important;
+      }
+
+      #root svg {
+        display: inline-block !important;
+        vertical-align: baseline !important;
+      }
+
+      /* Ensure images don't inherit weird styles */
+      #root img {
+        max-width: 100% !important;
+        height: auto !important;
+      }
+
+      /* Dark mode class */
+      #root .dark {
+        color-scheme: dark;
+      }
+    </style>
+
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -47,11 +111,17 @@
                 '50%': { opacity: '0.5' },
                 '100%': { transform: 'scale(1.5)', opacity: '0' },
               },
+              'wave': {
+                '0%, 100%': { transform: 'rotate(0deg)' },
+                '25%': { transform: 'rotate(20deg)' },
+                '75%': { transform: 'rotate(-20deg)' },
+              },
             },
             animation: {
               'gradient-pan': 'gradient-pan 8s ease-in-out infinite',
               'fade-in-up': 'fade-in-up 0.5s ease-out forwards',
               'sonar-ping': 'sonar-ping 2s ease-out infinite',
+              'wave': 'wave 0.5s ease-in-out',
             }
           }
         }
@@ -67,17 +137,6 @@
   }
 }
 </script>
-<link rel="stylesheet" href="/index.css">
-    <style>
-      html, body {
-        background-color: transparent !important;
-        margin: 0;
-        padding: 0;
-      }
-      #root {
-        background-color: transparent !important;
-      }
-    </style>
 </head>
   <body>
     <div id="root"></div>

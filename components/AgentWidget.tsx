@@ -1100,6 +1100,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   );
 
   // Widget animation classes - smooth open/close with scale and opacity
+  // Use isolated positioning with transform to avoid parent stacking context issues
   const widgetContainerClasses = isWidgetMode
     ? 'w-full h-full flex flex-col justify-between'
     : `fixed bottom-0 right-0 md:bottom-24 md:right-6 w-full h-[100dvh] md:w-[400px] md:h-[600px] md:rounded-3xl shadow-[0_35px_60px_-15px_rgba(0,0,0,0.3)] z-[9999] transition-all duration-300 ease-out ${isOpen ? 'opacity-100 scale-100 translate-y-0 pointer-events-auto' : 'opacity-0 scale-95 translate-y-4 pointer-events-none'}`;
@@ -1107,13 +1108,28 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   return (
     <>
       {/* Main Widget Panel */}
-      <div className={`${themeClass} ${widgetContainerClasses}`}>
-          <div className={`flex flex-col w-full h-full bg-white dark:bg-gray-900 text-black dark:text-white md:rounded-[2rem] overflow-hidden border-0 relative ${!isWidgetMode ? 'shadow-2xl' : ''}`}>
-              {/* Close Button */}
+      {/* Use transform and isolation to prevent parent layout from affecting positioning */}
+      <div
+        className={`${themeClass} ${widgetContainerClasses}`}
+        style={{
+          transform: 'translateZ(0)', // Force GPU compositing and create new stacking context
+          isolation: 'isolate',
+        }}
+      >
+          <div
+            className={`flex flex-col w-full h-full bg-white dark:bg-gray-900 text-black dark:text-white md:rounded-[2rem] overflow-hidden border-0 relative ${!isWidgetMode ? 'shadow-2xl' : ''}`}
+            style={{ position: 'relative', isolation: 'isolate' }}
+          >
+              {/* Close Button - positioned with transform to be independent of parent layout */}
               <button
                 onClick={toggleWidget}
-                className="absolute top-3 right-3 z-[100] p-1.5 rounded-full bg-black/20 hover:bg-black/40 text-white transition-all shadow-lg border border-white/20"
+                className="absolute z-[100] p-1.5 rounded-full bg-black/20 hover:bg-black/40 text-white transition-all shadow-lg border border-white/20"
                 aria-label="Close widget"
+                style={{
+                  top: '12px',
+                  right: '12px',
+                  transform: 'translateZ(0)', // GPU compositing for consistent positioning
+                }}
               >
                 <XIcon className="h-7 w-7" />
               </button>
@@ -1124,8 +1140,14 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
           </div>
       </div>
 
-      {/* FAB Button - always visible */}
-      <div className={`fixed bottom-6 right-6 z-[9999] transition-all duration-300 ${isOpen ? 'translate-y-0' : 'translate-y-0'}`}>
+      {/* FAB Button - always visible with isolated positioning */}
+      <div
+        className={`fixed bottom-6 right-6 z-[9999] transition-all duration-300 ${isOpen ? 'translate-y-0' : 'translate-y-0'}`}
+        style={{
+          transform: 'translateZ(0)',
+          isolation: 'isolate',
+        }}
+      >
         {fabContent}
       </div>
     </>
