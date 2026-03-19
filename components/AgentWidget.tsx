@@ -778,12 +778,12 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   // Send resize messages to parent iframe if in widget mode
   useEffect(() => {
     if (!isWidgetMode) return;
-    
-    // When closed, just enough space for the FAB + callout if showing. 
-    // When open, full widget size.
-    const width = isOpen ? 400 : (showCallout && agentProfile.calloutMessage ? 220 : 80);
-    const height = isOpen ? 600 : (showCallout && agentProfile.calloutMessage ? 160 : 80);
-    
+
+    // When closed: 90px for FAB alone, or 360px for FAB + callout
+    // When open: full widget size (400x600 or fullscreen on mobile)
+    const width = isOpen ? 400 : (showCallout && agentProfile.calloutMessage ? 300 : 80);
+    const height = isOpen ? 600 : (showCallout && agentProfile.calloutMessage ? 400 : 100);
+
     window.parent.postMessage({ type: 'agent-widget-resize', isOpen, width, height }, '*');
   }, [isOpen, isWidgetMode, showCallout, agentProfile.calloutMessage]);
   
