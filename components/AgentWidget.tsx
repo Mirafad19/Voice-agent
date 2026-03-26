@@ -324,6 +324,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
   const initChat = async (initialMessage?: string) => {
     try {
+        console.log("Chat session initialized with tools.");
         const config = agentProfile as AgentConfig;
         const effectiveApiKey = apiKey || process.env.GEMINI_API_KEY || 'dummy';
         const ai = new GoogleGenAI({ 
@@ -334,13 +335,23 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
           ${config.chatKnowledgeBase || config.knowledgeBase}
           
           APPOINTMENT BOOKING RULES: 
-          - You are an AI Agent capable of checking availability and booking appointments.
-          - ALWAYS check availability using 'check_availability' BEFORE confirming any booking to the user.
-          - If a slot is taken, inform the user clearly and suggest they pick another time.
-          - Once a slot is confirmed as available, use 'book_appointment' to finalize it.
-          - Ask for the patient's full name if it hasn't been provided yet.
-          - Today's date is ${new Date().toISOString().split('T')[0]}.
-          - Be precise with dates (YYYY-MM-DD) and times (HH:mm).
+          - You are a proactive AI Agent. Your goal is to book appointments efficiently.
+          - Your name is ${agentProfile.name}.
+          - Today's date is ${new Date().toISOString().split('T')[0]}. Current time is ${new Date().toLocaleTimeString()}.
+          
+          WORKFLOW:
+          1. If the user's name is unknown, ask for it.
+          2. If the user provides a date and time (even relative ones like "tomorrow", "next Monday", "10am"), you MUST IMMEDIATELY call 'check_availability'. 
+          3. DO NOT ask for confirmation. DO NOT say "I can help with that". JUST CALL THE TOOL.
+          4. NEVER ask for information the user has already provided. If the user says "Tomorrow at 10am", you have both date and time.
+          5. If 'check_availability' returns available=true, immediately call 'book_appointment'.
+          6. If 'check_availability' returns available=false, inform the user and ask for an alternative time.
+          
+          DATA FORMATTING:
+          - Convert relative dates (e.g., "tomorrow", "this Saturday") to absolute YYYY-MM-DD format based on today's date.
+          - Convert times (e.g., "10am", "2pm") to 24-hour HH:mm format (e.g., "10:00", "14:00").
+          
+          Example: If today is 2026-03-26 and user says "Tomorrow at 10am", call check_availability(date="2026-03-27", time="10:00").
         `;
 
         const checkAvailabilityTool: FunctionDeclaration = {
@@ -428,6 +439,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                     const responses = await Promise.all(toolCalls.map(async (call) => {
                         let toolResult;
                         try {
+                            console.log(`AI calling tool: ${call.name}`, call.args);
                             if (call.name === 'check_availability') {
                                 const { date, time } = call.args as any;
                                 const isAvailable = await appointmentService.checkAvailability(agentProfile.name, date, time);
