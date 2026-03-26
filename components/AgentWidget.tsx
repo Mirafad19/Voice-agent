@@ -410,78 +410,81 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     try {
         let result = await chatSessionRef.current.sendMessageStream({ message: text });
         
-        let fullResponse = "";
-        let toolCallHandled = false;
+        const processStream = async (stream: any) => {
+            let fullResponse = "";
+            let toolCallHandled = false;
 
-        for await (const chunk of result) {
-            if (chunk.functionCalls) {
-                const toolCalls = chunk.functionCalls;
-                const responses = await Promise.all(toolCalls.map(async (call) => {
-                    let toolResult;
-                    try {
-                        if (call.name === 'check_availability') {
-                            const { date, time } = call.args as any;
-                            const isAvailable = await appointmentService.checkAvailability(agentProfile.name, date, time);
-                            toolResult = { isAvailable, message: isAvailable ? "This slot is available." : "This slot is already booked. Please ask the user for another time." };
-                        } else if (call.name === 'book_appointment') {
-                            const { date, time, patientName } = call.args as any;
-                            const appointmentId = await appointmentService.bookAppointment({
-                                date,
-                                time,
-                                patientName,
-                                agentId: agentProfile.name
-                            });
-                            toolResult = { success: true, appointmentId, message: `Appointment successfully booked for ${patientName} on ${date} at ${time}.` };
-                        }
-                    } catch (error) {
-                        toolResult = { success: false, error: error instanceof Error ? error.message : "Unknown error" };
-                    }
-                    return {
-                        id: call.id,
-                        response: { result: toolResult }
-                    };
-                }));
-
-                // Send tool responses back to the model
-                result = await chatSessionRef.current.sendMessageStream({
-                    message: {
-                        role: 'user',
-                        parts: responses.map(r => ({
-                            functionResponse: {
-                                name: toolCalls.find(tc => tc.id === r.id)?.name || '',
-                                response: r.response
+            for await (const chunk of stream) {
+                if (chunk.functionCalls) {
+                    const toolCalls = chunk.functionCalls;
+                    const responses = await Promise.all(toolCalls.map(async (call) => {
+                        let toolResult;
+                        try {
+                            if (call.name === 'check_availability') {
+                                const { date, time } = call.args as any;
+                                const isAvailable = await appointmentService.checkAvailability(agentProfile.name, date, time);
+                                toolResult = { isAvailable, message: isAvailable ? "This slot is available." : "This slot is already booked. Please ask the user for another time." };
+                            } else if (call.name === 'book_appointment') {
+                                const { date, time, patientName } = call.args as any;
+                                const appointmentId = await appointmentService.bookAppointment({
+                                    date,
+                                    time,
+                                    patientName,
+                                    agentId: agentProfile.name
+                                });
+                                toolResult = { success: true, appointmentId, message: `Appointment successfully booked for ${patientName} on ${date} at ${time}.` };
                             }
-                        }))
-                    }
-                });
-                toolCallHandled = true;
-                continue; // Continue to the next stream (the model's response to the tool output)
-            }
+                        } catch (error) {
+                            toolResult = { success: false, error: error instanceof Error ? error.message : "Unknown error" };
+                        }
+                        return {
+                            id: call.id,
+                            response: { result: toolResult }
+                        };
+                    }));
 
-            if (!toolCallHandled) {
-                // Only start showing the "model" bubble if we haven't already (or if we're in the final response phase)
-                setMessages(prev => {
-                    const lastMsg = prev[prev.length - 1];
-                    if (lastMsg.role !== 'model' || lastMsg.text !== "") {
-                        if (lastMsg.role === 'model' && lastMsg.text === "") return prev;
-                        return [...prev, { role: 'model', text: "", timestamp: new Date() }];
-                    }
-                    return prev;
-                });
-            }
-
-            const chunkText = chunk.text;
-            fullResponse += chunkText;
-            
-            setMessages(prev => {
-                const updatedHistory = [...prev];
-                const lastIndex = updatedHistory.length - 1;
-                if (lastIndex >= 0 && updatedHistory[lastIndex].role === 'model') {
-                    updatedHistory[lastIndex] = { ...updatedHistory[lastIndex], text: fullResponse };
+                    const nextStream = await chatSessionRef.current!.sendMessageStream({
+                        message: {
+                            role: 'user',
+                            parts: responses.map(r => ({
+                                functionResponse: {
+                                    name: toolCalls.find(tc => tc.id === r.id)?.name || '',
+                                    response: r.response
+                                }
+                            }))
+                        }
+                    });
+                    await processStream(nextStream);
+                    toolCallHandled = true;
+                    break; 
                 }
-                return updatedHistory;
-            });
-        }
+
+                if (!toolCallHandled) {
+                    setMessages(prev => {
+                        const lastMsg = prev[prev.length - 1];
+                        if (lastMsg.role !== 'model' || lastMsg.text !== "") {
+                            if (lastMsg.role === 'model' && lastMsg.text === "") return prev;
+                            return [...prev, { role: 'model', text: "", timestamp: new Date() }];
+                        }
+                        return prev;
+                    });
+                }
+
+                const chunkText = chunk.text;
+                fullResponse += chunkText;
+                
+                setMessages(prev => {
+                    const updatedHistory = [...prev];
+                    const lastIndex = updatedHistory.length - 1;
+                    if (lastIndex >= 0 && updatedHistory[lastIndex].role === 'model') {
+                        updatedHistory[lastIndex] = { ...updatedHistory[lastIndex], text: fullResponse };
+                    }
+                    return updatedHistory;
+                });
+            }
+        };
+
+        await processStream(result);
     } catch (e) {
         console.error("Chat error:", e);
         setMessages(prev => [...prev, { role: 'model', text: "I'm having trouble connecting right now. Please try again.", timestamp: new Date() }]);
@@ -908,11 +911,11 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
               <div className="mt-auto mb-6 relative z-10">
                   <div className="flex items-center gap-4 mb-4">
                       <div className="flex -space-x-3">
-                          {(agentProfile.avatar1Url || 'https://i.pravatar.cc/150?u=doctor1') && (
-                              <img src={agentProfile.avatar1Url || 'https://i.pravatar.cc/150?u=doctor1'} alt="Avatar 1" className="w-12 h-12 rounded-full border-2 border-white shadow-md object-cover" referrerPolicy="no-referrer" />
+                          {agentProfile.avatar1Url && (
+                              <img src={agentProfile.avatar1Url} alt="Avatar 1" className="w-12 h-12 rounded-full border-2 border-white shadow-md object-cover" referrerPolicy="no-referrer" />
                           )}
-                          {(agentProfile.avatar2Url || 'https://i.pravatar.cc/150?u=nurse1') && (
-                              <img src={agentProfile.avatar2Url || 'https://i.pravatar.cc/150?u=nurse1'} alt="Avatar 2" className="w-12 h-12 rounded-full border-2 border-white shadow-md object-cover" referrerPolicy="no-referrer" />
+                          {agentProfile.avatar2Url && (
+                              <img src={agentProfile.avatar2Url} alt="Avatar 2" className="w-12 h-12 rounded-full border-2 border-white shadow-md object-cover" referrerPolicy="no-referrer" />
                           )}
                       </div>
                       <h1 className="text-4xl font-black tracking-tighter leading-none">Hi <span className="animate-wave inline-block">👋</span></h1>
