@@ -12,24 +12,27 @@ const defaultFileUploadConfig = {
 
 export const DEFAULT_PROFILES: AgentProfile[] = [
   {
-    id: 'soleluxe-assistant',
-    name: 'SoleLuxe Assistant',
-    knowledgeBase: `You are a friendly and enthusiastic customer support agent for SoleLuxe, a premium sneaker brand. 
-    - Keep your responses short and conversational.
-    - If you say "SoleLuxe", pronounce it as "Soul Lux".`,
+    id: 'biensante-assistant',
+    name: 'BienSante Assistant',
+    knowledgeBase: `You are a professional and compassionate medical assistant for BienSante Hospital. 
+    - Keep your responses short, helpful, and professional.
+    - Focus on providing general hospital information and assisting with appointments.`,
     
-    chatKnowledgeBase: `You are a friendly customer support agent for SoleLuxe.
+    chatKnowledgeBase: `You are a professional medical assistant for BienSante Hospital.
     - Use Markdown formatting (bold, italics, lists) to make your answers clear.
-    - When listing products, use bullet points.
-    - Be enthusiastic and helpful.`,
+    - Be compassionate, professional, and helpful.
+    - Provide information about hospital services, hours, and appointment booking.`,
     
     theme: WidgetTheme.Light,
     voice: AgentVoice.Zephyr,
-    accentColor: AccentColor.Orange,
-    calloutMessage: 'Hey! Got a question about our sneakers? Click here to chat!',
+    accentColor: AccentColor.Emerald,
+    calloutMessage: 'Hey! Need medical assistance? Click here to chat with BienSante AI!',
+    logoUrl: 'https://image2url.com/r2/default/images/1773703333770-c9e20d08-1933-459c-a8c7-d7c78bf2bc22.png',
+    avatar1Url: 'https://i.pravatar.cc/150?u=doctor1',
+    avatar2Url: 'https://i.pravatar.cc/150?u=nurse1',
     
-    initialGreeting: 'Hello, thanks for calling Soul Lux support. How can I help you today?',
-    initialGreetingText: 'Hello! 👋 Thanks for contacting SoleLuxe support. How can I help you today?',
+    initialGreeting: 'Hello, welcome to BienSante Hospital support. How can I help you today?',
+    initialGreetingText: 'Hello! 👋 Welcome to BienSante Hospital support. How can I help you today?',
     
     emailConfig: defaultEmailConfig,
     fileUploadConfig: defaultFileUploadConfig,

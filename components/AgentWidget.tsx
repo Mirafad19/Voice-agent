@@ -1,12 +1,13 @@
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AgentProfile, AgentConfig, WidgetTheme, WidgetState, Recording, ReportingStatus } from '../types';
 import { GeminiLiveService } from '../services/geminiLiveService';
 import { RecordingService } from '../services/recordingService';
 import { Spinner } from './ui/Spinner';
-import { GoogleGenAI, Type, Modality, Chat } from '@google/genai';
+import { GoogleGenAI, Type, Modality, Chat, FunctionDeclaration } from '@google/genai';
 import { blobToBase64 } from '../utils';
 import { decodePcmChunk } from '../utils/audio';
+import * as appointmentService from '../services/appointmentService';
 
 interface AgentWidgetProps {
   agentProfile: AgentProfile | AgentConfig;
@@ -169,8 +170,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const isGreetingProtectedRef = useRef(false);
   const lastInterruptionTimeRef = useRef<number>(0);
 
-  // Memoize derived values for performance
-  const accentColorClass = useMemo(() => agentProfile.accentColor, [agentProfile.accentColor]);
+  const accentColorClass = agentProfile.accentColor;
 
   // Monitor network quality
   useEffect(() => {
@@ -328,11 +328,49 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         apiKey: effectiveApiKey
     });
     
-    const systemInstruction = config.chatKnowledgeBase || config.knowledgeBase;
+    const systemInstruction = `
+      ${config.chatKnowledgeBase || config.knowledgeBase}
+      
+      APPOINTMENT BOOKING: 
+      - ALWAYS check availability using 'check_availability' BEFORE confirming any booking.
+      - If a slot is taken, inform the user and suggest they pick another time.
+      - Once a slot is confirmed as available, use 'book_appointment' to finalize it.
+      - Today's date is ${new Date().toISOString().split('T')[0]}.
+    `;
+
+    const checkAvailabilityTool: FunctionDeclaration = {
+        name: 'check_availability',
+        description: 'Check if a specific date and time is available for an appointment.',
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            date: { type: Type.STRING, description: 'The date in YYYY-MM-DD format.' },
+            time: { type: Type.STRING, description: 'The time in HH:mm format (e.g., 09:00, 14:30).' }
+          },
+          required: ['date', 'time']
+        }
+    };
+
+    const bookAppointmentTool: FunctionDeclaration = {
+        name: 'book_appointment',
+        description: 'Book an appointment for a patient at a specific date and time.',
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            date: { type: Type.STRING, description: 'The date in YYYY-MM-DD format.' },
+            time: { type: Type.STRING, description: 'The time in HH:mm format.' },
+            patientName: { type: Type.STRING, description: 'The full name of the patient.' }
+          },
+          required: ['date', 'time', 'patientName']
+        }
+    };
     
     chatSessionRef.current = ai.chats.create({
         model: 'gemini-3-flash-preview',
-        config: { systemInstruction }
+        config: { 
+            systemInstruction,
+            tools: [{ functionDeclarations: [checkAvailabilityTool, bookAppointmentTool] }]
+        }
     });
 
     const welcomeText = config.initialGreetingText || config.initialGreeting;
@@ -370,12 +408,68 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     setIsChatTyping(true);
 
     try {
-        const result = await chatSessionRef.current.sendMessageStream({ message: text });
+        let result = await chatSessionRef.current.sendMessageStream({ message: text });
         
         let fullResponse = "";
-        setMessages(prev => [...prev, { role: 'model', text: "", timestamp: new Date() }]);
+        let toolCallHandled = false;
 
         for await (const chunk of result) {
+            if (chunk.functionCalls) {
+                const toolCalls = chunk.functionCalls;
+                const responses = await Promise.all(toolCalls.map(async (call) => {
+                    let toolResult;
+                    try {
+                        if (call.name === 'check_availability') {
+                            const { date, time } = call.args as any;
+                            const isAvailable = await appointmentService.checkAvailability(agentProfile.name, date, time);
+                            toolResult = { isAvailable, message: isAvailable ? "This slot is available." : "This slot is already booked. Please ask the user for another time." };
+                        } else if (call.name === 'book_appointment') {
+                            const { date, time, patientName } = call.args as any;
+                            const appointmentId = await appointmentService.bookAppointment({
+                                date,
+                                time,
+                                patientName,
+                                agentId: agentProfile.name
+                            });
+                            toolResult = { success: true, appointmentId, message: `Appointment successfully booked for ${patientName} on ${date} at ${time}.` };
+                        }
+                    } catch (error) {
+                        toolResult = { success: false, error: error instanceof Error ? error.message : "Unknown error" };
+                    }
+                    return {
+                        id: call.id,
+                        response: { result: toolResult }
+                    };
+                }));
+
+                // Send tool responses back to the model
+                result = await chatSessionRef.current.sendMessageStream({
+                    message: {
+                        role: 'user',
+                        parts: responses.map(r => ({
+                            functionResponse: {
+                                name: toolCalls.find(tc => tc.id === r.id)?.name || '',
+                                response: r.response
+                            }
+                        }))
+                    }
+                });
+                toolCallHandled = true;
+                continue; // Continue to the next stream (the model's response to the tool output)
+            }
+
+            if (!toolCallHandled) {
+                // Only start showing the "model" bubble if we haven't already (or if we're in the final response phase)
+                setMessages(prev => {
+                    const lastMsg = prev[prev.length - 1];
+                    if (lastMsg.role !== 'model' || lastMsg.text !== "") {
+                        if (lastMsg.role === 'model' && lastMsg.text === "") return prev;
+                        return [...prev, { role: 'model', text: "", timestamp: new Date() }];
+                    }
+                    return prev;
+                });
+            }
+
             const chunkText = chunk.text;
             fullResponse += chunkText;
             
@@ -778,12 +872,12 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   // Send resize messages to parent iframe if in widget mode
   useEffect(() => {
     if (!isWidgetMode) return;
-
-    // When closed: 90px for FAB alone, or 360px for FAB + callout
-    // When open: full widget size (400x600 or fullscreen on mobile)
-    const width = isOpen ? 400 : (showCallout && agentProfile.calloutMessage ? 340 : 120);
-    const height = isOpen ? 600 : (showCallout && agentProfile.calloutMessage ? 400 : 120);
-
+    
+    // When closed, just enough space for the FAB + callout if showing. 
+    // When open, full widget size.
+    const width = isOpen ? 400 : (showCallout && agentProfile.calloutMessage ? 220 : 80);
+    const height = isOpen ? 600 : (showCallout && agentProfile.calloutMessage ? 160 : 80);
+    
     window.parent.postMessage({ type: 'agent-widget-resize', isOpen, width, height }, '*');
   }, [isOpen, isWidgetMode, showCallout, agentProfile.calloutMessage]);
   
@@ -802,11 +896,11 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const themeClass = agentProfile.theme === 'dark' ? 'dark' : '';
 
   const renderHomeView = () => (
-      <div className="flex flex-col h-full w-full bg-white dark:bg-gray-900" style={{ touchAction: 'manipulation' }}>
+      <div className="flex flex-col h-full w-full bg-white dark:bg-gray-900 animate-fade-in-up">
           <div className={`relative h-[45%] bg-gradient-to-br from-accent-${accentColorClass} to-gray-900 flex flex-col p-6 text-white`}>
               <div className="flex items-center justify-between mb-4">
-                  {agentProfile.logoUrl ? (
-                      <img src={agentProfile.logoUrl} alt="Logo" className="h-20 w-auto object-contain" referrerPolicy="no-referrer" />
+                  {(agentProfile.logoUrl || 'https://image2url.com/r2/default/images/1773703333770-c9e20d08-1933-459c-a8c7-d7c78bf2bc22.png') ? (
+                      <img src={agentProfile.logoUrl || 'https://image2url.com/r2/default/images/1773703333770-c9e20d08-1933-459c-a8c7-d7c78bf2bc22.png'} alt="Logo" className="h-20 w-auto object-contain" referrerPolicy="no-referrer" />
                   ) : (
                       <span className="text-xs font-black tracking-[0.1em] uppercase opacity-75 truncate max-w-[200px]">{agentProfile.name}</span>
                   )}
@@ -814,11 +908,11 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
               <div className="mt-auto mb-6 relative z-10">
                   <div className="flex items-center gap-4 mb-4">
                       <div className="flex -space-x-3">
-                          {agentProfile.avatar1Url && (
-                              <img src={agentProfile.avatar1Url} alt="Avatar 1" className="w-12 h-12 rounded-full border-2 border-white shadow-md object-cover" referrerPolicy="no-referrer" />
+                          {(agentProfile.avatar1Url || 'https://i.pravatar.cc/150?u=doctor1') && (
+                              <img src={agentProfile.avatar1Url || 'https://i.pravatar.cc/150?u=doctor1'} alt="Avatar 1" className="w-12 h-12 rounded-full border-2 border-white shadow-md object-cover" referrerPolicy="no-referrer" />
                           )}
-                          {agentProfile.avatar2Url && (
-                              <img src={agentProfile.avatar2Url} alt="Avatar 2" className="w-12 h-12 rounded-full border-2 border-white shadow-md object-cover" referrerPolicy="no-referrer" />
+                          {(agentProfile.avatar2Url || 'https://i.pravatar.cc/150?u=nurse1') && (
+                              <img src={agentProfile.avatar2Url || 'https://i.pravatar.cc/150?u=nurse1'} alt="Avatar 2" className="w-12 h-12 rounded-full border-2 border-white shadow-md object-cover" referrerPolicy="no-referrer" />
                           )}
                       </div>
                       <h1 className="text-4xl font-black tracking-tighter leading-none">Hi <span className="animate-wave inline-block">👋</span></h1>
@@ -861,7 +955,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                           <MicrophoneIcon state={WidgetState.Idle} />
                       </div>
                       <div className="text-left text-white">
-                          <h3 className="font-black text-xl tracking-tighter uppercase leading-none">Talk to AI AGENT</h3>
+                          <h3 className="font-black text-xl tracking-tighter uppercase leading-none">Talk to AI Assistant</h3>
                           <p className="text-xs font-bold opacity-80 mt-1 uppercase tracking-widest">Skip typing, we're listening.</p>
                       </div>
                   </div>
@@ -871,7 +965,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   );
 
   const renderChatView = () => (
-      <div className="flex flex-col h-full w-full bg-white dark:bg-gray-900" style={{ touchAction: 'manipulation' }}>
+      <div className="flex flex-col h-full w-full bg-white dark:bg-gray-900 animate-fade-in-up">
           <div className={`flex items-center justify-between p-5 pr-14 flex-shrink-0 z-20 bg-accent-${accentColorClass} text-white shadow-xl transition-colors duration-300`}>
               <div className="flex items-center gap-4 min-w-0">
                   <button onClick={handleBack} className="p-1 rounded-full hover:bg-white/20 transition-all active:scale-90 flex-shrink-0" title="Back">
@@ -938,7 +1032,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   );
 
   const renderVoiceView = () => (
-    <div className="flex flex-col h-full w-full bg-white dark:bg-gray-900" style={{ touchAction: 'manipulation' }}>
+    <div className="flex flex-col h-full w-full bg-white dark:bg-gray-900 animate-fade-in-up">
         {permissionRequested && (
             <div className="absolute inset-0 z-[60] flex flex-col items-center justify-center p-8 text-center animate-fade-in backdrop-blur-xl bg-black/40 text-white/90">
                 <div className="mb-6 p-6 rounded-3xl bg-white/10 animate-bounce shadow-2xl border border-white/20">
@@ -1061,113 +1155,54 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const fabContent = (
     <div className={`${themeClass} relative group`}>
       {!isOpen && showCallout && agentProfile.calloutMessage && (
-        <div className="absolute bottom-full right-0 mb-4 w-64 p-4 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-2xl shadow-xl text-sm animate-fade-in-up border border-gray-100 dark:border-gray-700">
-          <button
-            onClick={handleDismissCallout}
-            className="absolute top-2 right-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
+        <div className="absolute bottom-full right-0 mb-4 w-48 p-3 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-xl shadow-lg text-sm animate-fade-in-up border border-gray-100 dark:border-gray-700">
+          <button 
+            onClick={handleDismissCallout} 
+            className="absolute top-1 right-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
             aria-label="Dismiss callout"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
-          <div className="flex items-start gap-3 pr-6">
-            <div className={`w-8 h-8 rounded-full bg-accent-${accentColorClass} flex items-center justify-center flex-shrink-0`}>
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-              </svg>
-            </div>
-            <p className="font-medium text-gray-700 dark:text-gray-200 leading-relaxed">{agentProfile.calloutMessage}</p>
-          </div>
+          <p className="font-medium pr-4">{agentProfile.calloutMessage}</p>
           <div className="absolute -bottom-2 right-6 w-4 h-4 bg-white dark:bg-gray-800 transform rotate-45 border-b border-r border-gray-100 dark:border-gray-700"></div>
         </div>
       )}
-      <button
-        onClick={toggleWidget}
-        className={`w-16 h-16 rounded-full bg-accent-${accentColorClass} shadow-xl flex items-center justify-center text-white transition-transform duration-200 active:scale-95 ${isOpen ? 'rotate-180' : 'rotate-0'}`}
-        style={{ touchAction: 'manipulation' }}
-      >
-        <div>
-          {isOpen ? (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          ) : (
-            <FabIcon />
-          )}
-        </div>
+      <button onClick={toggleWidget} className={`w-16 h-16 rounded-full bg-accent-${accentColorClass} shadow-xl flex items-center justify-center text-white transform hover:scale-110 transition-all active:scale-95`}>
+        {isOpen ? <ChevronDownIcon className="h-8 w-8 text-white" /> : <FabIcon />}
       </button>
     </div>
   );
 
-  // Widget animation classes - smooth open/close with scale and opacity
-  const widgetContainerClasses = isWidgetMode
-    ? 'w-full h-full flex flex-col justify-between'
-    : `fixed bottom-0 right-0 md:bottom-24 md:right-6 w-full h-[100dvh] md:w-[400px] md:h-[600px] md:rounded-3xl shadow-[0_35px_60px_-15px_rgba(0,0,0,0.3)] z-[9999] transition-all duration-300 ease-out ${isOpen ? 'opacity-100 scale-100 translate-y-0 pointer-events-auto' : 'opacity-0 scale-95 translate-y-4 pointer-events-none'}`;
-
-  // For widget mode, use different layout
-  if (isWidgetMode) {
-    return (
-      <div className={`${themeClass} w-full h-full flex flex-col`}>
-        {/* Widget Panel - full size in widget mode */}
-        {isOpen && (
-          <div className="flex flex-col w-full h-full bg-white dark:bg-gray-900 text-black dark:text-white rounded-none overflow-hidden relative" style={{ touchAction: 'manipulation' }}>
-            {/* Close Button - inside panel for widget mode */}
-            <button
-              onClick={toggleWidget}
-              className="absolute top-3 right-3 z-[100] p-1.5 rounded-full bg-black/30 hover:bg-black/50 text-white transition-colors shadow-lg"
-              style={{ touchAction: 'manipulation' }}
-              aria-label="Close widget"
-            >
-              <XIcon className="h-6 w-6" />
-            </button>
-
-            {view === 'home' && renderHomeView()}
-            {view === 'chat' && renderChatView()}
-            {view === 'voice' && renderVoiceView()}
-          </div>
-        )}
-        {/* FAB - show when closed in widget mode */}
-        {!isOpen && (
-          <div className="fixed bottom-4 right-4 z-[9999]" style={{ overflow: 'visible' }}>
-            {fabContent}
-          </div>
-        )}
-      </div>
-    );
+  if (!isOpen) {
+    return isWidgetMode ? <div className="w-full h-full flex items-end justify-end bg-transparent overflow-hidden p-0">{fabContent}</div> : <div className="fixed bottom-6 right-6 z-[9999]">{fabContent}</div>;
   }
 
-  // Desktop mode - non-widget
+  const containerClasses = isWidgetMode 
+    ? 'w-full h-full flex flex-col justify-between' 
+    : 'fixed bottom-0 right-0 md:bottom-24 md:right-6 w-full h-[100dvh] md:w-[400px] md:h-[600px] md:rounded-3xl shadow-[0_35px_60px_-15px_rgba(0,0,0,0.3)] z-[9999] transition-all duration-500 ease-out';
+
   return (
     <>
-      {/* Main Widget Panel - only visible when open */}
-      {isOpen && (
-        <div className={`${themeClass} fixed bottom-24 right-6 w-[400px] h-[600px] md:rounded-3xl shadow-[0_35px_60px_-15px_rgba(0,0,0,0.3)] z-[9999] transition-all duration-300 ease-out`}>
-            <div className="flex flex-col w-full h-full bg-white dark:bg-gray-900 text-black dark:text-white rounded-[2rem] overflow-hidden border-0 relative shadow-2xl">
-                {view === 'home' && renderHomeView()}
-                {view === 'chat' && renderChatView()}
-                {view === 'voice' && renderVoiceView()}
-            </div>
-        </div>
-      )}
+      <div className={`${themeClass} ${containerClasses}`}>
+          <div className={`flex flex-col w-full h-full bg-white dark:bg-gray-900 text-black dark:text-white md:rounded-[2rem] overflow-hidden border-0 relative ${!isWidgetMode ? 'shadow-2xl' : ''}`}>
+              {/* Close Button */}
+              <button 
+                onClick={toggleWidget}
+                className="absolute top-3 right-3 z-[100] p-1.5 rounded-full bg-black/20 hover:bg-black/40 text-white transition-all shadow-lg border border-white/20"
+                aria-label="Close widget"
+              >
+                <XIcon className="h-7 w-7" />
+              </button>
 
-      {/* Close Button - outside widget panel, above the FAB */}
-      {isOpen && (
-        <div className="fixed z-[9998]" style={{ bottom: '90px', right: '30px' }}>
-          <button
-            onClick={toggleWidget}
-            className="w-12 h-12 rounded-full bg-gray-800 hover:bg-black text-white flex items-center justify-center shadow-xl transition-colors active:scale-95"
-            style={{ touchAction: 'manipulation' }}
-            aria-label="Close widget"
-          >
-            <XIcon className="h-6 w-6" />
-          </button>
-        </div>
-      )}
-
-      {/* FAB Button - always visible when closed */}
-      {!isOpen && (
-        <div className="fixed bottom-6 right-6 z-[9999]" style={{ overflow: 'visible' }}>
+              {view === 'home' && renderHomeView()}
+              {view === 'chat' && renderChatView()}
+              {view === 'voice' && renderVoiceView()}
+          </div>
+      </div>
+      {!isWidgetMode && (
+        <div className="fixed bottom-6 right-6 z-[9999]">
           {fabContent}
         </div>
       )}

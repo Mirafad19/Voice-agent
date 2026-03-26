@@ -1,3 +1,4 @@
+
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
@@ -19,23 +20,14 @@ if (configParam) {
     const decodedConfig = safeAtob(configParam);
     const agentConfig: AgentConfig = JSON.parse(decodedConfig);
     const apiKeyParam = urlParams.get('apiKey');
-
+    
     // Set transparent background for widget mode
     document.documentElement.style.backgroundColor = 'transparent';
     document.body.style.backgroundColor = 'transparent';
-    document.documentElement.style.overflow = 'visible';
-    document.body.style.overflow = 'visible';
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
     rootElement.style.height = '100vh';
-
-    // Prevent zoom in widget mode - lock the viewport
-    const viewportMeta = document.querySelector('meta[name="viewport"]');
-    if (viewportMeta) {
-      viewportMeta.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no');
-    }
-    // Prevent touch zoom gestures on the entire widget
-    document.documentElement.style.touchAction = 'manipulation';
-    document.body.style.touchAction = 'manipulation';
-
+    
     root.render(
       <React.StrictMode>
         <AgentWidget

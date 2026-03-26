@@ -41,5 +41,26 @@
       "schema": { "$ref": "#/entities/AgentProfile" },
       "description": "Agent profiles."
     }
+    "Appointment": {
+      "title": "Appointment",
+      "description": "A medical appointment booked through the AI agent.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string", "description": "YYYY-MM-DD" },
+        "time": { "type": "string", "description": "HH:mm" },
+        "patientName": { "type": "string" },
+        "agentId": { "type": "string" },
+        "status": { "type": "string", "enum": ["booked", "cancelled", "completed"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "date", "time", "agentId", "status"]
+    }
+  },
+  "firestore": {
+    "/appointments/{appointmentId}": {
+      "schema": "Appointment",
+      "description": "Stores all medical appointments."
+    }
   }
 }
