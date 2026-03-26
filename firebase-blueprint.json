@@ -34,13 +34,7 @@
         "ownerId": { "type": "string" }
       },
       "required": ["id", "name", "ownerId"]
-    }
-  },
-  "firestore": {
-    "/agents/{agentId}": {
-      "schema": { "$ref": "#/entities/AgentProfile" },
-      "description": "Agent profiles."
-    }
+    },
     "Appointment": {
       "title": "Appointment",
       "description": "A medical appointment booked through the AI agent.",
@@ -58,8 +52,12 @@
     }
   },
   "firestore": {
+    "/agents/{agentId}": {
+      "schema": { "$ref": "#/entities/AgentProfile" },
+      "description": "Agent profiles."
+    },
     "/appointments/{appointmentId}": {
-      "schema": "Appointment",
+      "schema": { "$ref": "#/entities/Appointment" },
       "description": "Stores all medical appointments."
     }
   }

@@ -4,7 +4,7 @@ import { AgentProfile, AgentConfig, WidgetTheme, WidgetState, Recording, Reporti
 import { GeminiLiveService } from '../services/geminiLiveService';
 import { RecordingService } from '../services/recordingService';
 import { Spinner } from './ui/Spinner';
-import { GoogleGenAI, Type, Modality, Chat, FunctionDeclaration } from '@google/genai';
+import { GoogleGenAI, Type, Modality, Chat, FunctionDeclaration, ThinkingLevel } from '@google/genai';
 import { blobToBase64 } from '../utils';
 import { decodePcmChunk } from '../utils/audio';
 import * as appointmentService from '../services/appointmentService';
@@ -382,10 +382,11 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         };
         
         chatSessionRef.current = ai.chats.create({
-            model: 'gemini-3-flash-preview',
+            model: 'gemini-3.1-pro-preview',
             config: { 
                 systemInstruction,
-                tools: [{ functionDeclarations: [checkAvailabilityTool, bookAppointmentTool] }]
+                tools: [{ functionDeclarations: [checkAvailabilityTool, bookAppointmentTool] }],
+                thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH }
             }
         });
 
@@ -442,7 +443,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                             console.log(`AI calling tool: ${call.name}`, call.args);
                             if (call.name === 'check_availability') {
                                 const { date, time } = call.args as any;
-                                const isAvailable = await appointmentService.checkAvailability(agentProfile.name, date, time);
+                                const isAvailable = await appointmentService.checkAvailability(agentProfile.id, date, time);
                                 toolResult = { isAvailable, message: isAvailable ? "This slot is available." : "This slot is already booked. Please ask the user for another time." };
                             } else if (call.name === 'book_appointment') {
                                 const { date, time, patientName } = call.args as any;
@@ -450,7 +451,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                                     date,
                                     time,
                                     patientName,
-                                    agentId: agentProfile.name
+                                    agentId: agentProfile.id
                                 });
                                 toolResult = { success: true, appointmentId, message: `Appointment successfully booked for ${patientName} on ${date} at ${time}.` };
                             }
@@ -465,11 +466,12 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
                     const nextStream = await chatSessionRef.current!.sendMessageStream({
                         message: {
-                            role: 'user',
+                            role: 'function',
                             parts: responses.map(r => ({
                                 functionResponse: {
                                     name: toolCalls.find(tc => tc.id === r.id)?.name || '',
-                                    response: r.response
+                                    response: r.response,
+                                    id: r.id
                                 }
                             }))
                         }
