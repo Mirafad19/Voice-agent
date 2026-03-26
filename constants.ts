@@ -28,11 +28,11 @@ export const DEFAULT_PROFILES: AgentProfile[] = [
     accentColor: AccentColor.Emerald,
     calloutMessage: 'Hey! Need medical assistance? Click here to chat with BienSante AI!',
     logoUrl: 'https://image2url.com/r2/default/images/1773703333770-c9e20d08-1933-459c-a8c7-d7c78bf2bc22.png',
-    avatar1Url: 'https://i.pravatar.cc/150?u=doctor1',
-    avatar2Url: 'https://i.pravatar.cc/150?u=nurse1',
+    avatar1Url: '',
+    avatar2Url: '',
     
-    initialGreeting: 'Hello, welcome to BienSante Hospital support. How can I help you today?',
-    initialGreetingText: 'Hello! 👋 Welcome to BienSante Hospital support. How can I help you today?',
+    initialGreeting: 'Hello, welcome to PSSDC Lagos support. How can I help you today?',
+    initialGreetingText: 'Hello! 👋 Welcome to PSSDC Lagos support. How can I help you today?',
     
     emailConfig: defaultEmailConfig,
     fileUploadConfig: defaultFileUploadConfig,

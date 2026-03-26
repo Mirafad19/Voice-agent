@@ -169,6 +169,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   
   const isGreetingProtectedRef = useRef(false);
   const lastInterruptionTimeRef = useRef<number>(0);
+  const isInitializingChat = useRef(false);
 
   const accentColorClass = agentProfile.accentColor;
 
@@ -322,72 +323,79 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
 
   const initChat = async (initialMessage?: string) => {
-    const config = agentProfile as AgentConfig;
-    const effectiveApiKey = apiKey || process.env.GEMINI_API_KEY || 'dummy';
-    const ai = new GoogleGenAI({ 
-        apiKey: effectiveApiKey
-    });
-    
-    const systemInstruction = `
-      ${config.chatKnowledgeBase || config.knowledgeBase}
-      
-      APPOINTMENT BOOKING: 
-      - ALWAYS check availability using 'check_availability' BEFORE confirming any booking.
-      - If a slot is taken, inform the user and suggest they pick another time.
-      - Once a slot is confirmed as available, use 'book_appointment' to finalize it.
-      - Today's date is ${new Date().toISOString().split('T')[0]}.
-    `;
+    try {
+        const config = agentProfile as AgentConfig;
+        const effectiveApiKey = apiKey || process.env.GEMINI_API_KEY || 'dummy';
+        const ai = new GoogleGenAI({ 
+            apiKey: effectiveApiKey
+        });
+        
+        const systemInstruction = `
+          ${config.chatKnowledgeBase || config.knowledgeBase}
+          
+          APPOINTMENT BOOKING RULES: 
+          - You are an AI Agent capable of checking availability and booking appointments.
+          - ALWAYS check availability using 'check_availability' BEFORE confirming any booking to the user.
+          - If a slot is taken, inform the user clearly and suggest they pick another time.
+          - Once a slot is confirmed as available, use 'book_appointment' to finalize it.
+          - Ask for the patient's full name if it hasn't been provided yet.
+          - Today's date is ${new Date().toISOString().split('T')[0]}.
+          - Be precise with dates (YYYY-MM-DD) and times (HH:mm).
+        `;
 
-    const checkAvailabilityTool: FunctionDeclaration = {
-        name: 'check_availability',
-        description: 'Check if a specific date and time is available for an appointment.',
-        parameters: {
-          type: Type.OBJECT,
-          properties: {
-            date: { type: Type.STRING, description: 'The date in YYYY-MM-DD format.' },
-            time: { type: Type.STRING, description: 'The time in HH:mm format (e.g., 09:00, 14:30).' }
-          },
-          required: ['date', 'time']
-        }
-    };
+        const checkAvailabilityTool: FunctionDeclaration = {
+            name: 'check_availability',
+            description: 'Check if a specific date and time is available for an appointment.',
+            parameters: {
+              type: Type.OBJECT,
+              properties: {
+                date: { type: Type.STRING, description: 'The date in YYYY-MM-DD format.' },
+                time: { type: Type.STRING, description: 'The time in HH:mm format (e.g., 09:00, 14:30).' }
+              },
+              required: ['date', 'time']
+            }
+        };
 
-    const bookAppointmentTool: FunctionDeclaration = {
-        name: 'book_appointment',
-        description: 'Book an appointment for a patient at a specific date and time.',
-        parameters: {
-          type: Type.OBJECT,
-          properties: {
-            date: { type: Type.STRING, description: 'The date in YYYY-MM-DD format.' },
-            time: { type: Type.STRING, description: 'The time in HH:mm format.' },
-            patientName: { type: Type.STRING, description: 'The full name of the patient.' }
-          },
-          required: ['date', 'time', 'patientName']
-        }
-    };
-    
-    chatSessionRef.current = ai.chats.create({
-        model: 'gemini-3-flash-preview',
-        config: { 
-            systemInstruction,
-            tools: [{ functionDeclarations: [checkAvailabilityTool, bookAppointmentTool] }]
-        }
-    });
+        const bookAppointmentTool: FunctionDeclaration = {
+            name: 'book_appointment',
+            description: 'Book an appointment for a patient at a specific date and time.',
+            parameters: {
+              type: Type.OBJECT,
+              properties: {
+                date: { type: Type.STRING, description: 'The date in YYYY-MM-DD format.' },
+                time: { type: Type.STRING, description: 'The time in HH:mm format.' },
+                patientName: { type: Type.STRING, description: 'The full name of the patient.' }
+              },
+              required: ['date', 'time', 'patientName']
+            }
+        };
+        
+        chatSessionRef.current = ai.chats.create({
+            model: 'gemini-3-flash-preview',
+            config: { 
+                systemInstruction,
+                tools: [{ functionDeclarations: [checkAvailabilityTool, bookAppointmentTool] }]
+            }
+        });
 
-    const welcomeText = config.initialGreetingText || config.initialGreeting;
-    
-    if (initialMessage) {
-        // If user started with a message, don't show a pre-filled welcome bubble
-        setMessages([]);
-        setView('chat');
-        await handleChatMessage(initialMessage);
-    } else {
-        // If user just clicked "Chat", show the welcome text only if it exists
-        if (welcomeText) {
-            setMessages([{ role: 'model', text: welcomeText, timestamp: new Date() }]);
-        } else {
+        const welcomeText = config.initialGreetingText || config.initialGreeting;
+        
+        if (initialMessage) {
+            // If user started with a message, don't show a pre-filled welcome bubble
             setMessages([]);
+            setView('chat');
+            await handleChatMessage(initialMessage);
+        } else {
+            // If user just clicked "Chat", show the welcome text only if it exists
+            if (welcomeText) {
+                setMessages([{ role: 'model', text: welcomeText, timestamp: new Date() }]);
+            } else {
+                setMessages([]);
+            }
+            setView('chat');
         }
-        setView('chat');
+    } finally {
+        isInitializingChat.current = false;
     }
   };
 
@@ -462,8 +470,8 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                 if (!toolCallHandled) {
                     setMessages(prev => {
                         const lastMsg = prev[prev.length - 1];
-                        if (lastMsg.role !== 'model' || lastMsg.text !== "") {
-                            if (lastMsg.role === 'model' && lastMsg.text === "") return prev;
+                        // Only add a new bubble if the last message is NOT from the model
+                        if (!lastMsg || lastMsg.role !== 'model') {
                             return [...prev, { role: 'model', text: "", timestamp: new Date() }];
                         }
                         return prev;
@@ -838,6 +846,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
       setTimeout(() => setView('home'), 300);
     } else {
       setShowCallout(false);
+      sessionStorage.setItem('ai-agent-callout-dismissed', 'true');
     }
     setIsOpen(!isOpen);
   };
@@ -855,7 +864,8 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
   const handleHomeFormSubmit = (e: React.FormEvent) => {
       e.preventDefault();
-      if(chatInput.trim()) {
+      if(chatInput.trim() && !isInitializingChat.current) {
+          isInitializingChat.current = true;
           initChat(chatInput);
       }
   };
@@ -870,6 +880,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const handleDismissCallout = (e: React.MouseEvent) => {
       e.stopPropagation();
       setShowCallout(false);
+      sessionStorage.setItem('ai-agent-callout-dismissed', 'true');
   };
 
   // Send resize messages to parent iframe if in widget mode
@@ -878,19 +889,16 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     
     // When closed, just enough space for the FAB + callout if showing. 
     // When open, full widget size.
-    const width = isOpen ? 400 : (showCallout && agentProfile.calloutMessage ? 220 : 80);
-    const height = isOpen ? 600 : (showCallout && agentProfile.calloutMessage ? 160 : 80);
+    const width = isOpen ? 400 : (showCallout && agentProfile.calloutMessage ? 250 : 80);
+    const height = isOpen ? 600 : (showCallout && agentProfile.calloutMessage ? 220 : 80);
     
     window.parent.postMessage({ type: 'agent-widget-resize', isOpen, width, height }, '*');
   }, [isOpen, isWidgetMode, showCallout, agentProfile.calloutMessage]);
   
     useEffect(() => {
-      if (!isOpen && agentProfile.calloutMessage) {
+      const isDismissed = sessionStorage.getItem('ai-agent-callout-dismissed');
+      if (!isOpen && agentProfile.calloutMessage && !isDismissed) {
         setShowCallout(true);
-        const timer = setTimeout(() => {
-          setShowCallout(false);
-        }, 5000);
-        return () => clearTimeout(timer);
       } else {
         setShowCallout(false);
       }
@@ -911,10 +919,10 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
               <div className="mt-auto mb-6 relative z-10">
                   <div className="flex items-center gap-4 mb-4">
                       <div className="flex -space-x-3">
-                          {agentProfile.avatar1Url && (
+                          {agentProfile.avatar1Url && agentProfile.avatar1Url.trim() !== '' && (
                               <img src={agentProfile.avatar1Url} alt="Avatar 1" className="w-12 h-12 rounded-full border-2 border-white shadow-md object-cover" referrerPolicy="no-referrer" />
                           )}
-                          {agentProfile.avatar2Url && (
+                          {agentProfile.avatar2Url && agentProfile.avatar2Url.trim() !== '' && (
                               <img src={agentProfile.avatar2Url} alt="Avatar 2" className="w-12 h-12 rounded-full border-2 border-white shadow-md object-cover" referrerPolicy="no-referrer" />
                           )}
                       </div>
@@ -1158,17 +1166,20 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const fabContent = (
     <div className={`${themeClass} relative group`}>
       {!isOpen && showCallout && agentProfile.calloutMessage && (
-        <div className="absolute bottom-full right-0 mb-4 w-48 p-3 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-xl shadow-lg text-sm animate-fade-in-up border border-gray-100 dark:border-gray-700">
+        <div className="absolute bottom-full right-0 mb-4 w-56 p-4 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.15)] text-sm animate-fade-in-up border border-gray-100 dark:border-gray-700">
           <button 
             onClick={handleDismissCallout} 
-            className="absolute top-1 right-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+            className="absolute top-2 right-2 p-1 rounded-full text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all"
             aria-label="Dismiss callout"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
-          <p className="font-medium pr-4">{agentProfile.calloutMessage}</p>
+          <div className="flex flex-col gap-1.5">
+            <span className={`text-[10px] font-black uppercase tracking-widest text-accent-${accentColorClass} opacity-80`}>Help is here</span>
+            <p className="font-bold pr-4 leading-tight text-gray-800 dark:text-gray-100">{agentProfile.calloutMessage}</p>
+          </div>
           <div className="absolute -bottom-2 right-6 w-4 h-4 bg-white dark:bg-gray-800 transform rotate-45 border-b border-r border-gray-100 dark:border-gray-700"></div>
         </div>
       )}
