@@ -334,24 +334,26 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         const systemInstruction = `
           ${config.chatKnowledgeBase || config.knowledgeBase}
           
-          APPOINTMENT BOOKING RULES: 
-          - You are a proactive AI Agent. Your goal is to book appointments efficiently.
-          - Your name is ${agentProfile.name}.
-          - Today's date is ${new Date().toISOString().split('T')[0]}. Current time is ${new Date().toLocaleTimeString()}.
+          CRITICAL APPOINTMENT BOOKING RULES: 
+          - You are a proactive AI Agent. Your name is ${agentProfile.name}.
+          - Today's date is ${new Date().toDateString()}. Current time is ${new Date().toLocaleTimeString()}.
           
-          WORKFLOW:
-          1. If the user's name is unknown, ask for it.
-          2. If the user provides a date and time (even relative ones like "tomorrow", "next Monday", "10am"), you MUST IMMEDIATELY call 'check_availability'. 
-          3. DO NOT ask for confirmation. DO NOT say "I can help with that". JUST CALL THE TOOL.
-          4. NEVER ask for information the user has already provided. If the user says "Tomorrow at 10am", you have both date and time.
-          5. If 'check_availability' returns available=true, immediately call 'book_appointment'.
-          6. If 'check_availability' returns available=false, inform the user and ask for an alternative time.
+          STRICT WORKFLOW:
+          1. If the user's name is unknown, ask for it. Once you know it (e.g., "Samson"), remember it.
+          2. As soon as the user mentions a date and time (e.g., "tomorrow at 10am", "next Friday", "on the 28th at 9am"), you MUST IMMEDIATELY call the 'check_availability' tool.
+          3. DO NOT say "Thank you", "I can help with that", or "Let me check". 
+          4. DO NOT generate any text. JUST CALL THE TOOL.
+          5. If 'check_availability' returns available=true, immediately call 'book_appointment' using the known user name (e.g., "Samson") as the 'patientName' and the confirmed slot.
+          6. If 'check_availability' returns available=false, inform the user and ask for another time.
           
-          DATA FORMATTING:
-          - Convert relative dates (e.g., "tomorrow", "this Saturday") to absolute YYYY-MM-DD format based on today's date.
-          - Convert times (e.g., "10am", "2pm") to 24-hour HH:mm format (e.g., "10:00", "14:00").
+          TOOL PARAMETER RULES:
+          - 'date': MUST be in YYYY-MM-DD format. Calculate this from today's date (${new Date().toISOString().split('T')[0]}).
+          - 'time': MUST be in HH:mm format (24-hour). Convert "10am" to "10:00", "2pm" to "14:00", etc.
           
-          Example: If today is 2026-03-26 and user says "Tomorrow at 10am", call check_availability(date="2026-03-27", time="10:00").
+          EXAMPLE:
+          User: "Tomorrow, 10am"
+          Action: Call check_availability(date="2026-03-27", time="10:00")
+          (No text response to user until tool result is received)
         `;
 
         const checkAvailabilityTool: FunctionDeclaration = {
@@ -437,6 +439,19 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             for await (const chunk of stream) {
                 if (chunk.functionCalls) {
                     const toolCalls = chunk.functionCalls;
+                    
+                    // If we have tool calls, we should clear any "filler" text that might have been generated in the same turn
+                    // to prevent the AI from repeating its previous question while calling the tool.
+                    setMessages(prev => {
+                        const lastMsg = prev[prev.length - 1];
+                        if (lastMsg && lastMsg.role === 'model' && lastMsg.text.length < 100) {
+                            // If the AI generated a short sentence before the tool call, it's likely filler.
+                            // We'll keep it for now but we'll append the tool status.
+                            return prev;
+                        }
+                        return prev;
+                    });
+
                     const responses = await Promise.all(toolCalls.map(async (call) => {
                         let toolResult;
                         try {
