@@ -1069,7 +1069,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             <XIcon className="h-4 w-4" />
           </button>
           <div className="flex flex-col gap-1.5">
-            <span className="text-[12px] font-black text-sky-400 uppercase tracking-widest">Help is here</span>
+            <span className={`text-[12px] font-black text-accent-${accentColorClass} uppercase tracking-widest`}>Help is here</span>
             <p className="text-[16px] font-bold text-gray-800 leading-tight pr-4">
               {agentProfile.calloutMessage}
             </p>
