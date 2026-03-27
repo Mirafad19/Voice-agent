@@ -811,17 +811,17 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                   )}
               </div>
               <div className="mt-auto mb-6 relative z-10">
-                  <div className="flex items-center gap-4 mb-4">
-                      <div className="flex -space-x-3">
-                          {(agentProfile.avatar1Url || 'https://i.pravatar.cc/150?u=doctor1') && (
-                              <img src={agentProfile.avatar1Url || 'https://i.pravatar.cc/150?u=doctor1'} alt="Avatar 1" className="w-12 h-12 rounded-full border-2 border-white shadow-md object-cover" referrerPolicy="no-referrer" />
-                          )}
-                          {(agentProfile.avatar2Url || 'https://i.pravatar.cc/150?u=nurse1') && (
-                              <img src={agentProfile.avatar2Url || 'https://i.pravatar.cc/150?u=nurse1'} alt="Avatar 2" className="w-12 h-12 rounded-full border-2 border-white shadow-md object-cover" referrerPolicy="no-referrer" />
-                          )}
-                      </div>
-                      <h1 className="text-4xl font-black tracking-tighter leading-none">Hi <span className="animate-wave inline-block">👋</span></h1>
-                  </div>
+                    <div className="flex items-center gap-4 mb-4">
+                        <div className="flex -space-x-3">
+                            {agentProfile.avatar1Url && (
+                                <img src={agentProfile.avatar1Url} alt="Avatar 1" className="w-12 h-12 rounded-full border-2 border-white shadow-md object-cover" referrerPolicy="no-referrer" />
+                            )}
+                            {agentProfile.avatar2Url && (
+                                <img src={agentProfile.avatar2Url} alt="Avatar 2" className="w-12 h-12 rounded-full border-2 border-white shadow-md object-cover" referrerPolicy="no-referrer" />
+                            )}
+                        </div>
+                        <h1 className="text-4xl font-black tracking-tighter leading-none">Hi <span className="animate-wave inline-block">👋</span></h1>
+                    </div>
                   <p className="text-white/90 mt-1 font-bold text-lg leading-snug">How can we help you today?</p>
               </div>
               <div className="absolute -right-10 -bottom-20 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none"></div>
@@ -1060,18 +1060,22 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const fabContent = (
     <div className={`${themeClass} relative group`}>
       {!isOpen && showCallout && agentProfile.calloutMessage && (
-        <div className="absolute bottom-full right-0 mb-4 w-48 p-3 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-xl shadow-lg text-sm animate-fade-in-up border border-gray-100 dark:border-gray-700">
+        <div className="absolute bottom-full right-0 mb-6 w-[280px] p-6 bg-white rounded-[2rem] shadow-[0_10px_40px_rgba(0,0,0,0.15)] animate-fade-in-up border border-gray-50 z-[10000]">
           <button 
             onClick={handleDismissCallout} 
-            className="absolute top-1 right-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
             aria-label="Dismiss callout"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <XIcon className="h-5 w-5" />
           </button>
-          <p className="font-medium pr-4">{agentProfile.calloutMessage}</p>
-          <div className="absolute -bottom-2 right-6 w-4 h-4 bg-white dark:bg-gray-800 transform rotate-45 border-b border-r border-gray-100 dark:border-gray-700"></div>
+          <div className="flex flex-col gap-2">
+            <span className={`text-[11px] font-black text-accent-${accentColorClass} uppercase tracking-widest`}>Help is here</span>
+            <p className="text-[17px] font-bold text-gray-800 leading-tight pr-4">
+              {agentProfile.calloutMessage}
+            </p>
+          </div>
+          {/* Speech bubble triangle */}
+          <div className="absolute -bottom-3 right-8 w-6 h-6 bg-white transform rotate-45 border-r border-b border-gray-50 shadow-[4px_4px_10px_rgba(0,0,0,0.02)]"></div>
         </div>
       )}
       <button onClick={toggleWidget} className={`w-16 h-16 rounded-full bg-accent-${accentColorClass} shadow-xl flex items-center justify-center text-white transform hover:scale-110 transition-all active:scale-95`}>
