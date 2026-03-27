@@ -780,8 +780,8 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     
     // When closed, just enough space for the FAB + callout if showing. 
     // When open, full widget size.
-    const width = isOpen ? 400 : (showCallout && agentProfile.calloutMessage ? 220 : 80);
-    const height = isOpen ? 600 : (showCallout && agentProfile.calloutMessage ? 160 : 80);
+    const width = isOpen ? 400 : (showCallout && agentProfile.calloutMessage ? 300 : 80);
+    const height = isOpen ? 600 : (showCallout && agentProfile.calloutMessage ? 200 : 80);
     
     window.parent.postMessage({ type: 'agent-widget-resize', isOpen, width, height }, '*');
   }, [isOpen, isWidgetMode, showCallout, agentProfile.calloutMessage]);
@@ -1060,22 +1060,22 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const fabContent = (
     <div className={`${themeClass} relative group`}>
       {!isOpen && showCallout && agentProfile.calloutMessage && (
-        <div className="absolute bottom-full right-0 mb-6 w-[280px] p-6 bg-white rounded-[2rem] shadow-[0_10px_40px_rgba(0,0,0,0.15)] animate-fade-in-up border border-gray-50 z-[10000]">
+        <div className="absolute bottom-full right-0 mb-6 w-[260px] p-5 bg-white rounded-[1.5rem] shadow-[0_10px_30px_rgba(0,0,0,0.1)] animate-fade-in-up border border-gray-50 z-[10000]">
           <button 
             onClick={handleDismissCallout} 
             className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
             aria-label="Dismiss callout"
           >
-            <XIcon className="h-5 w-5" />
+            <XIcon className="h-4 w-4" />
           </button>
-          <div className="flex flex-col gap-2">
-            <span className={`text-[11px] font-black text-accent-${accentColorClass} uppercase tracking-widest`}>Help is here</span>
-            <p className="text-[17px] font-bold text-gray-800 leading-tight pr-4">
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[12px] font-black text-sky-400 uppercase tracking-widest">Help is here</span>
+            <p className="text-[16px] font-bold text-gray-800 leading-tight pr-4">
               {agentProfile.calloutMessage}
             </p>
           </div>
           {/* Speech bubble triangle */}
-          <div className="absolute -bottom-3 right-8 w-6 h-6 bg-white transform rotate-45 border-r border-b border-gray-50 shadow-[4px_4px_10px_rgba(0,0,0,0.02)]"></div>
+          <div className="absolute -bottom-2 right-8 w-4 h-4 bg-white transform rotate-45 border-r border-b border-gray-50 shadow-[2px_2px_5px_rgba(0,0,0,0.02)]"></div>
         </div>
       )}
       <button onClick={toggleWidget} className={`w-16 h-16 rounded-full bg-accent-${accentColorClass} shadow-xl flex items-center justify-center text-white transform hover:scale-110 transition-all active:scale-95`}>
