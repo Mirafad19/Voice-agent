@@ -34,31 +34,12 @@
         "ownerId": { "type": "string" }
       },
       "required": ["id", "name", "ownerId"]
-    },
-    "Appointment": {
-      "title": "Appointment",
-      "description": "A medical appointment booked through the AI agent.",
-      "type": "object",
-      "properties": {
-        "id": { "type": "string" },
-        "date": { "type": "string", "description": "YYYY-MM-DD" },
-        "time": { "type": "string", "description": "HH:mm" },
-        "patientName": { "type": "string" },
-        "agentId": { "type": "string" },
-        "status": { "type": "string", "enum": ["booked", "cancelled", "completed"] },
-        "createdAt": { "type": "string", "format": "date-time" }
-      },
-      "required": ["id", "date", "time", "agentId", "status"]
     }
   },
   "firestore": {
     "/agents/{agentId}": {
       "schema": { "$ref": "#/entities/AgentProfile" },
       "description": "Agent profiles."
-    },
-    "/appointments/{appointmentId}": {
-      "schema": { "$ref": "#/entities/Appointment" },
-      "description": "Stores all medical appointments."
     }
   }
 }

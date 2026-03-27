@@ -4,10 +4,9 @@ import { AgentProfile, AgentConfig, WidgetTheme, WidgetState, Recording, Reporti
 import { GeminiLiveService } from '../services/geminiLiveService';
 import { RecordingService } from '../services/recordingService';
 import { Spinner } from './ui/Spinner';
-import { GoogleGenAI, Type, Modality, Chat, FunctionDeclaration, ThinkingLevel } from '@google/genai';
+import { GoogleGenAI, Type, Modality, Chat } from '@google/genai';
 import { blobToBase64 } from '../utils';
 import { decodePcmChunk } from '../utils/audio';
-import * as appointmentService from '../services/appointmentService';
 
 interface AgentWidgetProps {
   agentProfile: AgentProfile | AgentConfig;
@@ -169,7 +168,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   
   const isGreetingProtectedRef = useRef(false);
   const lastInterruptionTimeRef = useRef<number>(0);
-  const isInitializingChat = useRef(false);
 
   const accentColorClass = agentProfile.accentColor;
 
@@ -323,93 +321,34 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
 
   const initChat = async (initialMessage?: string) => {
-    try {
-        console.log("Chat session initialized with tools.");
-        const config = agentProfile as AgentConfig;
-        const effectiveApiKey = apiKey || process.env.GEMINI_API_KEY || 'dummy';
-        const ai = new GoogleGenAI({ 
-            apiKey: effectiveApiKey
-        });
-        
-        const systemInstruction = `
-          ${config.chatKnowledgeBase || config.knowledgeBase}
-          
-          CRITICAL APPOINTMENT BOOKING RULES: 
-          - You are a proactive AI Agent. Your name is ${agentProfile.name}.
-          - Today's date is ${new Date().toDateString()}. Current time is ${new Date().toLocaleTimeString()}.
-          
-          STRICT WORKFLOW:
-          1. If the user's name is unknown, ask for it. Once you know it (e.g., "Samson"), remember it.
-          2. As soon as the user mentions a date and time (e.g., "tomorrow at 10am", "next Friday", "on the 28th at 9am"), you MUST IMMEDIATELY call the 'check_availability' tool.
-          3. DO NOT say "Thank you", "I can help with that", or "Let me check". 
-          4. DO NOT generate any text. JUST CALL THE TOOL.
-          5. If 'check_availability' returns available=true, immediately call 'book_appointment' using the known user name (e.g., "Samson") as the 'patientName' and the confirmed slot.
-          6. If 'check_availability' returns available=false, inform the user and ask for another time.
-          
-          TOOL PARAMETER RULES:
-          - 'date': MUST be in YYYY-MM-DD format. Calculate this from today's date (${new Date().toISOString().split('T')[0]}).
-          - 'time': MUST be in HH:mm format (24-hour). Convert "10am" to "10:00", "2pm" to "14:00", etc.
-          
-          EXAMPLE:
-          User: "Tomorrow, 10am"
-          Action: Call check_availability(date="2026-03-27", time="10:00")
-          (No text response to user until tool result is received)
-        `;
+    const config = agentProfile as AgentConfig;
+    const effectiveApiKey = apiKey || process.env.GEMINI_API_KEY || 'dummy';
+    const ai = new GoogleGenAI({ 
+        apiKey: effectiveApiKey
+    });
+    
+    const systemInstruction = config.chatKnowledgeBase || config.knowledgeBase;
+    
+    chatSessionRef.current = ai.chats.create({
+        model: 'gemini-3-flash-preview',
+        config: { systemInstruction }
+    });
 
-        const checkAvailabilityTool: FunctionDeclaration = {
-            name: 'check_availability',
-            description: 'Check if a specific date and time is available for an appointment.',
-            parameters: {
-              type: Type.OBJECT,
-              properties: {
-                date: { type: Type.STRING, description: 'The date in YYYY-MM-DD format.' },
-                time: { type: Type.STRING, description: 'The time in HH:mm format (e.g., 09:00, 14:30).' }
-              },
-              required: ['date', 'time']
-            }
-        };
-
-        const bookAppointmentTool: FunctionDeclaration = {
-            name: 'book_appointment',
-            description: 'Book an appointment for a patient at a specific date and time.',
-            parameters: {
-              type: Type.OBJECT,
-              properties: {
-                date: { type: Type.STRING, description: 'The date in YYYY-MM-DD format.' },
-                time: { type: Type.STRING, description: 'The time in HH:mm format.' },
-                patientName: { type: Type.STRING, description: 'The full name of the patient.' }
-              },
-              required: ['date', 'time', 'patientName']
-            }
-        };
-        
-        chatSessionRef.current = ai.chats.create({
-            model: 'gemini-3.1-pro-preview',
-            config: { 
-                systemInstruction,
-                tools: [{ functionDeclarations: [checkAvailabilityTool, bookAppointmentTool] }],
-                thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH }
-            }
-        });
-
-        const welcomeText = config.initialGreetingText || config.initialGreeting;
-        
-        if (initialMessage) {
-            // If user started with a message, don't show a pre-filled welcome bubble
-            setMessages([]);
-            setView('chat');
-            await handleChatMessage(initialMessage);
+    const welcomeText = config.initialGreetingText || config.initialGreeting;
+    
+    if (initialMessage) {
+        // If user started with a message, don't show a pre-filled welcome bubble
+        setMessages([]);
+        setView('chat');
+        await handleChatMessage(initialMessage);
+    } else {
+        // If user just clicked "Chat", show the welcome text only if it exists
+        if (welcomeText) {
+            setMessages([{ role: 'model', text: welcomeText, timestamp: new Date() }]);
         } else {
-            // If user just clicked "Chat", show the welcome text only if it exists
-            if (welcomeText) {
-                setMessages([{ role: 'model', text: welcomeText, timestamp: new Date() }]);
-            } else {
-                setMessages([]);
-            }
-            setView('chat');
+            setMessages([]);
         }
-    } finally {
-        isInitializingChat.current = false;
+        setView('chat');
     }
   };
 
@@ -430,98 +369,24 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     setIsChatTyping(true);
 
     try {
-        let result = await chatSessionRef.current.sendMessageStream({ message: text });
+        const result = await chatSessionRef.current.sendMessageStream({ message: text });
         
-        const processStream = async (stream: any) => {
-            let fullResponse = "";
-            let toolCallHandled = false;
+        let fullResponse = "";
+        setMessages(prev => [...prev, { role: 'model', text: "", timestamp: new Date() }]);
 
-            for await (const chunk of stream) {
-                if (chunk.functionCalls) {
-                    const toolCalls = chunk.functionCalls;
-                    
-                    // If we have tool calls, we should clear any "filler" text that might have been generated in the same turn
-                    // to prevent the AI from repeating its previous question while calling the tool.
-                    setMessages(prev => {
-                        const lastMsg = prev[prev.length - 1];
-                        if (lastMsg && lastMsg.role === 'model' && lastMsg.text.length < 100) {
-                            // If the AI generated a short sentence before the tool call, it's likely filler.
-                            // We'll keep it for now but we'll append the tool status.
-                            return prev;
-                        }
-                        return prev;
-                    });
-
-                    const responses = await Promise.all(toolCalls.map(async (call) => {
-                        let toolResult;
-                        try {
-                            console.log(`AI calling tool: ${call.name}`, call.args);
-                            if (call.name === 'check_availability') {
-                                const { date, time } = call.args as any;
-                                const isAvailable = await appointmentService.checkAvailability(agentProfile.id, date, time);
-                                toolResult = { isAvailable, message: isAvailable ? "This slot is available." : "This slot is already booked. Please ask the user for another time." };
-                            } else if (call.name === 'book_appointment') {
-                                const { date, time, patientName } = call.args as any;
-                                const appointmentId = await appointmentService.bookAppointment({
-                                    date,
-                                    time,
-                                    patientName,
-                                    agentId: agentProfile.id
-                                });
-                                toolResult = { success: true, appointmentId, message: `Appointment successfully booked for ${patientName} on ${date} at ${time}.` };
-                            }
-                        } catch (error) {
-                            toolResult = { success: false, error: error instanceof Error ? error.message : "Unknown error" };
-                        }
-                        return {
-                            id: call.id,
-                            response: { result: toolResult }
-                        };
-                    }));
-
-                    const nextStream = await chatSessionRef.current!.sendMessageStream({
-                        message: {
-                            role: 'function',
-                            parts: responses.map(r => ({
-                                functionResponse: {
-                                    name: toolCalls.find(tc => tc.id === r.id)?.name || '',
-                                    response: r.response,
-                                    id: r.id
-                                }
-                            }))
-                        }
-                    });
-                    await processStream(nextStream);
-                    toolCallHandled = true;
-                    break; 
+        for await (const chunk of result) {
+            const chunkText = chunk.text;
+            fullResponse += chunkText;
+            
+            setMessages(prev => {
+                const updatedHistory = [...prev];
+                const lastIndex = updatedHistory.length - 1;
+                if (lastIndex >= 0 && updatedHistory[lastIndex].role === 'model') {
+                    updatedHistory[lastIndex] = { ...updatedHistory[lastIndex], text: fullResponse };
                 }
-
-                if (!toolCallHandled) {
-                    setMessages(prev => {
-                        const lastMsg = prev[prev.length - 1];
-                        // Only add a new bubble if the last message is NOT from the model
-                        if (!lastMsg || lastMsg.role !== 'model') {
-                            return [...prev, { role: 'model', text: "", timestamp: new Date() }];
-                        }
-                        return prev;
-                    });
-                }
-
-                const chunkText = chunk.text;
-                fullResponse += chunkText;
-                
-                setMessages(prev => {
-                    const updatedHistory = [...prev];
-                    const lastIndex = updatedHistory.length - 1;
-                    if (lastIndex >= 0 && updatedHistory[lastIndex].role === 'model') {
-                        updatedHistory[lastIndex] = { ...updatedHistory[lastIndex], text: fullResponse };
-                    }
-                    return updatedHistory;
-                });
-            }
-        };
-
-        await processStream(result);
+                return updatedHistory;
+            });
+        }
     } catch (e) {
         console.error("Chat error:", e);
         setMessages(prev => [...prev, { role: 'model', text: "I'm having trouble connecting right now. Please try again.", timestamp: new Date() }]);
@@ -875,7 +740,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
       setTimeout(() => setView('home'), 300);
     } else {
       setShowCallout(false);
-      sessionStorage.setItem('ai-agent-callout-dismissed', 'true');
     }
     setIsOpen(!isOpen);
   };
@@ -893,8 +757,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
   const handleHomeFormSubmit = (e: React.FormEvent) => {
       e.preventDefault();
-      if(chatInput.trim() && !isInitializingChat.current) {
-          isInitializingChat.current = true;
+      if(chatInput.trim()) {
           initChat(chatInput);
       }
   };
@@ -909,7 +772,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const handleDismissCallout = (e: React.MouseEvent) => {
       e.stopPropagation();
       setShowCallout(false);
-      sessionStorage.setItem('ai-agent-callout-dismissed', 'true');
   };
 
   // Send resize messages to parent iframe if in widget mode
@@ -918,16 +780,19 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     
     // When closed, just enough space for the FAB + callout if showing. 
     // When open, full widget size.
-    const width = isOpen ? 400 : (showCallout && agentProfile.calloutMessage ? 250 : 80);
-    const height = isOpen ? 600 : (showCallout && agentProfile.calloutMessage ? 220 : 80);
+    const width = isOpen ? 400 : (showCallout && agentProfile.calloutMessage ? 220 : 80);
+    const height = isOpen ? 600 : (showCallout && agentProfile.calloutMessage ? 160 : 80);
     
     window.parent.postMessage({ type: 'agent-widget-resize', isOpen, width, height }, '*');
   }, [isOpen, isWidgetMode, showCallout, agentProfile.calloutMessage]);
   
     useEffect(() => {
-      const isDismissed = sessionStorage.getItem('ai-agent-callout-dismissed');
-      if (!isOpen && agentProfile.calloutMessage && !isDismissed) {
+      if (!isOpen && agentProfile.calloutMessage) {
         setShowCallout(true);
+        const timer = setTimeout(() => {
+          setShowCallout(false);
+        }, 5000);
+        return () => clearTimeout(timer);
       } else {
         setShowCallout(false);
       }
@@ -948,11 +813,11 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
               <div className="mt-auto mb-6 relative z-10">
                   <div className="flex items-center gap-4 mb-4">
                       <div className="flex -space-x-3">
-                          {agentProfile.avatar1Url && agentProfile.avatar1Url.trim() !== '' && (
-                              <img src={agentProfile.avatar1Url} alt="Avatar 1" className="w-12 h-12 rounded-full border-2 border-white shadow-md object-cover" referrerPolicy="no-referrer" />
+                          {(agentProfile.avatar1Url || 'https://i.pravatar.cc/150?u=doctor1') && (
+                              <img src={agentProfile.avatar1Url || 'https://i.pravatar.cc/150?u=doctor1'} alt="Avatar 1" className="w-12 h-12 rounded-full border-2 border-white shadow-md object-cover" referrerPolicy="no-referrer" />
                           )}
-                          {agentProfile.avatar2Url && agentProfile.avatar2Url.trim() !== '' && (
-                              <img src={agentProfile.avatar2Url} alt="Avatar 2" className="w-12 h-12 rounded-full border-2 border-white shadow-md object-cover" referrerPolicy="no-referrer" />
+                          {(agentProfile.avatar2Url || 'https://i.pravatar.cc/150?u=nurse1') && (
+                              <img src={agentProfile.avatar2Url || 'https://i.pravatar.cc/150?u=nurse1'} alt="Avatar 2" className="w-12 h-12 rounded-full border-2 border-white shadow-md object-cover" referrerPolicy="no-referrer" />
                           )}
                       </div>
                       <h1 className="text-4xl font-black tracking-tighter leading-none">Hi <span className="animate-wave inline-block">👋</span></h1>
@@ -1195,20 +1060,17 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const fabContent = (
     <div className={`${themeClass} relative group`}>
       {!isOpen && showCallout && agentProfile.calloutMessage && (
-        <div className="absolute bottom-full right-0 mb-4 w-56 p-4 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.15)] text-sm animate-fade-in-up border border-gray-100 dark:border-gray-700">
+        <div className="absolute bottom-full right-0 mb-4 w-48 p-3 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-xl shadow-lg text-sm animate-fade-in-up border border-gray-100 dark:border-gray-700">
           <button 
             onClick={handleDismissCallout} 
-            className="absolute top-2 right-2 p-1 rounded-full text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all"
+            className="absolute top-1 right-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
             aria-label="Dismiss callout"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
-          <div className="flex flex-col gap-1.5">
-            <span className={`text-[10px] font-black uppercase tracking-widest text-accent-${accentColorClass} opacity-80`}>Help is here</span>
-            <p className="font-bold pr-4 leading-tight text-gray-800 dark:text-gray-100">{agentProfile.calloutMessage}</p>
-          </div>
+          <p className="font-medium pr-4">{agentProfile.calloutMessage}</p>
           <div className="absolute -bottom-2 right-6 w-4 h-4 bg-white dark:bg-gray-800 transform rotate-45 border-b border-r border-gray-100 dark:border-gray-700"></div>
         </div>
       )}

@@ -1,7 +1,6 @@
 
-import { GoogleGenAI, Modality, LiveServerMessage, Type, FunctionDeclaration } from '@google/genai';
+import { GoogleGenAI, Modality, LiveServerMessage } from '@google/genai';
 import { AgentConfig } from '../types';
-import * as appointmentService from './appointmentService';
 
 type LiveSession = Awaited<ReturnType<InstanceType<typeof GoogleGenAI>['live']['connect']>>;
 
@@ -67,33 +66,6 @@ export class GeminiLiveService {
         ? `INITIALIZATION: You have just spoken the following greeting to the user: "${this.config.initialGreeting}". The user has heard this. Do NOT repeat it. Your goal is to WAIT for the user to reply to this greeting.` 
         : `INITIALIZATION: Wait for the user to speak first.`;
 
-      const checkAvailabilityTool: FunctionDeclaration = {
-        name: 'check_availability',
-        description: 'Check if a specific date and time is available for an appointment.',
-        parameters: {
-          type: Type.OBJECT,
-          properties: {
-            date: { type: Type.STRING, description: 'The date in YYYY-MM-DD format.' },
-            time: { type: Type.STRING, description: 'The time in HH:mm format (e.g., 09:00, 14:30).' }
-          },
-          required: ['date', 'time']
-        }
-      };
-
-      const bookAppointmentTool: FunctionDeclaration = {
-        name: 'book_appointment',
-        description: 'Book an appointment for a patient at a specific date and time.',
-        parameters: {
-          type: Type.OBJECT,
-          properties: {
-            date: { type: Type.STRING, description: 'The date in YYYY-MM-DD format.' },
-            time: { type: Type.STRING, description: 'The time in HH:mm format.' },
-            patientName: { type: Type.STRING, description: 'The full name of the patient.' }
-          },
-          required: ['date', 'time', 'patientName']
-        }
-      };
-
       this.sessionPromise = this.ai.live.connect({
         model: 'gemini-2.5-flash-native-audio-preview-12-2025',
         config: {
@@ -101,7 +73,6 @@ export class GeminiLiveService {
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: this.config.voice } },
           },
-          tools: [{ functionDeclarations: [checkAvailabilityTool, bookAppointmentTool] }],
           systemInstruction: `
           CRITICAL OPERATIONAL RULES:
           1. LANGUAGE ENFORCEMENT: You must speak ONLY in English. 
@@ -110,11 +81,6 @@ export class GeminiLiveService {
           4. AGGRESSIVE SILENCE: If the user starts talking while you are speaking, STOP IMMEDIATELY. Prioritize the user's voice above your own.
           5. SOURCE OF TRUTH: Use the provided knowledge base accurately.
           6. SILENCE HANDLING: If you receive "[[SILENCE_DETECTED]]", ask "Are you still there?".
-          7. APPOINTMENT BOOKING: 
-             - ALWAYS check availability using 'check_availability' BEFORE confirming any booking.
-             - If a slot is taken, inform the user and suggest they pick another time.
-             - Once a slot is confirmed as available, use 'book_appointment' to finalize it.
-             - Today's date is ${new Date().toISOString().split('T')[0]}.
           
           KNOWLEDGE BASE:
           ${this.config.knowledgeBase}`,
@@ -222,46 +188,9 @@ export class GeminiLiveService {
     }
   }
 
-  private async handleSessionMessage(message: LiveServerMessage): Promise<void> {
+  private handleSessionMessage(message: LiveServerMessage): void {
     if (message.serverContent?.interrupted) {
       this.callbacks.onInterruption();
-    }
-
-    if (message.toolCall) {
-        const toolCalls = message.toolCall.functionCalls;
-        if (toolCalls) {
-            const responses = await Promise.all(toolCalls.map(async (call) => {
-                let result;
-                try {
-                    if (call.name === 'check_availability') {
-                        const { date, time } = call.args as any;
-                        const isAvailable = await appointmentService.checkAvailability(this.config.name, date, time);
-                        result = { isAvailable, message: isAvailable ? "This slot is available." : "This slot is already booked. Please ask the user for another time." };
-                    } else if (call.name === 'book_appointment') {
-                        const { date, time, patientName } = call.args as any;
-                        const appointmentId = await appointmentService.bookAppointment({
-                            date,
-                            time,
-                            patientName,
-                            agentId: this.config.name
-                        });
-                        result = { success: true, appointmentId, message: `Appointment successfully booked for ${patientName} on ${date} at ${time}.` };
-                    }
-                } catch (error) {
-                    result = { success: false, error: error instanceof Error ? error.message : "Unknown error" };
-                }
-                return {
-                    id: call.id,
-                    response: { result }
-                };
-            }));
-
-            if (this.sessionPromise) {
-                this.sessionPromise.then(session => {
-                    session.sendToolResponse({ functionResponses: responses });
-                });
-            }
-        }
     }
     
     if (message.serverContent?.outputTranscription) {
