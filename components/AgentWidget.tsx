@@ -19,9 +19,78 @@ interface Message {
     role: 'user' | 'model';
     text: string;
     timestamp: Date;
+    attachments?: ChatAttachment[];
 }
 
 type ViewState = 'home' | 'voice' | 'chat';
+
+interface ChatAttachment {
+    id: string;
+    name: string;
+    mimeType: string;
+    size: number;
+    base64: string;
+    previewUrl?: string;
+    isImage: boolean;
+}
+
+const MAX_CHAT_ATTACHMENT_SIZE = 10 * 1024 * 1024;
+const CHAT_ATTACHMENT_ACCEPT = 'image/*,.pdf,.txt,.csv,.json,.md,.doc,.docx,.xls,.xlsx,.ppt,.pptx';
+
+function readFileAsDataUrl(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+            if (typeof reader.result === 'string') {
+                resolve(reader.result);
+            } else {
+                reject(new Error('Unable to read file.'));
+            }
+        };
+        reader.onerror = () => reject(reader.error || new Error('Unable to read file.'));
+        reader.readAsDataURL(file);
+    });
+}
+
+async function prepareChatAttachment(file: File): Promise<ChatAttachment> {
+    const dataUrl = await readFileAsDataUrl(file);
+    const base64 = dataUrl.split(',')[1] || '';
+
+    if (!base64) {
+        throw new Error(`Unable to process ${file.name}.`);
+    }
+
+    return {
+        id: `${file.name}-${file.lastModified}-${file.size}`,
+        name: file.name,
+        mimeType: file.type || 'application/octet-stream',
+        size: file.size,
+        base64,
+        previewUrl: file.type.startsWith('image/') ? dataUrl : undefined,
+        isImage: file.type.startsWith('image/'),
+    };
+}
+
+function formatAttachmentLabel(count: number): string {
+    return count === 1 ? '1 attachment' : `${count} attachments`;
+}
+
+function buildUserMessageText(text: string, attachments: ChatAttachment[]): string {
+    const trimmed = text.trim();
+    if (trimmed) return trimmed;
+    return `Sent ${formatAttachmentLabel(attachments.length)}`;
+}
+
+function buildTranscriptEntry(message: Message): string {
+    if (!message.attachments?.length) {
+        return message.text;
+    }
+
+    const attachmentList = message.attachments.map(attachment => attachment.name).join(', ');
+    return message.text
+        ? `${message.text}\nAttachments: ${attachmentList}`
+        : `Attachments: ${attachmentList}`;
+}
 
 async function getCloudinaryShareableLink(cloudName: string, uploadPreset: string, recording: Omit<Recording, 'id' | 'url'>): Promise<string> {
     if (!recording.blob || recording.blob.size === 0) return 'N/A (Text Chat)';
@@ -79,6 +148,12 @@ const MicrophoneIcon = ({state}: {state: WidgetState}) => (
 const SendIcon = ({className = "h-5 w-5"}) => (
   <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 20 20" fill="currentColor">
     <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
+  </svg>
+);
+
+const PaperclipIcon = ({className = "h-5 w-5"}) => (
+  <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.9-9.9a4 4 0 115.66 5.66l-9.9 9.9a2 2 0 11-2.83-2.83l9.19-9.19" />
   </svg>
 );
 
@@ -149,10 +224,13 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [chatInput, setChatInput] = useState('');
+  const [pendingAttachments, setPendingAttachments] = useState<ChatAttachment[]>([]);
   const [isChatTyping, setIsChatTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [errorMessage, setErrorMessage] = useState('');
+  const [chatComposerError, setChatComposerError] = useState('');
 
   const geminiServiceRef = useRef<GeminiLiveService | null>(null);
   const recordingServiceRef = useRef<RecordingService | null>(null);
@@ -320,7 +398,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   }, [agentProfile, apiKey, view]);
 
 
-  const initChat = async (initialMessage?: string) => {
+  const initChat = async (initialMessage?: string, initialAttachments: ChatAttachment[] = []) => {
     const config = agentProfile as AgentConfig;
     const effectiveApiKey = apiKey || process.env.GEMINI_API_KEY || 'dummy';
     const ai = new GoogleGenAI({ 
@@ -336,11 +414,11 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
     const welcomeText = config.initialGreetingText || config.initialGreeting;
     
-    if (initialMessage) {
-        // If user started with a message, don't show a pre-filled welcome bubble
+    if (initialMessage?.trim() || initialAttachments.length > 0) {
+        // If user started with content, don't show a pre-filled welcome bubble
         setMessages([]);
         setView('chat');
-        await handleChatMessage(initialMessage);
+        await handleChatMessage(initialMessage || '', initialAttachments);
     } else {
         // If user just clicked "Chat", show the welcome text only if it exists
         if (welcomeText) {
@@ -352,8 +430,8 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     }
   };
 
-  const handleChatMessage = async (text: string) => {
-    if (!text.trim() || !chatSessionRef.current || !isOnline) return;
+  const handleChatMessage = async (text: string, attachments: ChatAttachment[] = pendingAttachments) => {
+    if ((!text.trim() && attachments.length === 0) || !chatSessionRef.current || !isOnline) return;
 
     const effectiveApiKey = apiKey || process.env.GEMINI_API_KEY;
 
@@ -362,14 +440,33 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         return;
     }
 
-    const userMsg: Message = { role: 'user', text, timestamp: new Date() };
+    const trimmedText = text.trim();
+    const userMsg: Message = {
+        role: 'user',
+        text: buildUserMessageText(trimmedText, attachments),
+        timestamp: new Date(),
+        attachments: attachments.length ? attachments : undefined,
+    };
     
     setMessages(prev => [...prev, userMsg]);
     setChatInput('');
+    setPendingAttachments([]);
+    setChatComposerError('');
     setIsChatTyping(true);
 
     try {
-        const result = await chatSessionRef.current.sendMessageStream({ message: text });
+        const promptText = trimmedText || `Please review the attached ${attachments.length === 1 ? 'file' : 'files'} and help me with it.`;
+        const messageParts = [
+            { text: promptText },
+            ...attachments.map(attachment => ({
+                inlineData: {
+                    mimeType: attachment.mimeType,
+                    data: attachment.base64,
+                },
+            })),
+        ];
+
+        const result = await chatSessionRef.current.sendMessageStream({ message: messageParts });
         
         let fullResponse = "";
         setMessages(prev => [...prev, { role: 'model', text: "", timestamp: new Date() }]);
@@ -399,10 +496,12 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     if (messages.length <= 1) {
         setView('home');
         setMessages([]);
+        setPendingAttachments([]);
+        setChatComposerError('');
         return;
     }
 
-    const transcript = messages.map(m => `${m.role === 'user' ? 'User' : 'Agent'}: ${m.text}`).join('\n\n');
+    const transcript = messages.map(m => `${m.role === 'user' ? 'User' : 'Agent'}: ${buildTranscriptEntry(m)}`).join('\n\n');
     const now = new Date();
     const dateString = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -417,6 +516,8 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     analyzeAndSendReport(newRecording);
     
     setMessages([]);
+    setPendingAttachments([]);
+    setChatComposerError('');
     chatSessionRef.current = null;
     setView('home');
     
@@ -757,16 +858,63 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
   const handleHomeFormSubmit = (e: React.FormEvent) => {
       e.preventDefault();
-      if(chatInput.trim()) {
-          initChat(chatInput);
+      if(chatInput.trim() || pendingAttachments.length > 0) {
+          initChat(chatInput, pendingAttachments);
       }
   };
 
   const handleChatFormSubmit = (e: React.FormEvent) => {
       e.preventDefault();
-      if(chatInput.trim()) {
+      if(chatInput.trim() || pendingAttachments.length > 0) {
           handleChatMessage(chatInput);
       }
+  };
+
+  const openFilePicker = () => {
+      if (!isOnline) return;
+      fileInputRef.current?.click();
+  };
+
+  const removePendingAttachment = (attachmentId: string) => {
+      setPendingAttachments(prev => prev.filter(attachment => attachment.id !== attachmentId));
+  };
+
+  const handleAttachmentSelection = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = Array.from(e.target.files || []);
+      if (!files.length) return;
+
+      setChatComposerError('');
+
+      const nextAttachments: ChatAttachment[] = [];
+      const errors: string[] = [];
+
+      for (const file of files) {
+          if (file.size > MAX_CHAT_ATTACHMENT_SIZE) {
+              errors.push(`${file.name} is larger than 10MB.`);
+              continue;
+          }
+
+          try {
+              nextAttachments.push(await prepareChatAttachment(file));
+          } catch (error) {
+              console.error('Attachment processing error:', error);
+              errors.push(`Couldn't attach ${file.name}.`);
+          }
+      }
+
+      if (nextAttachments.length > 0) {
+          setPendingAttachments(prev => {
+              const existingIds = new Set(prev.map(attachment => attachment.id));
+              const deduped = nextAttachments.filter(attachment => !existingIds.has(attachment.id));
+              return [...prev, ...deduped];
+          });
+      }
+
+      if (errors.length > 0) {
+          setChatComposerError(errors.join(' '));
+      }
+
+      e.target.value = '';
   };
 
   const handleDismissCallout = (e: React.MouseEvent) => {
@@ -831,23 +979,63 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
               {!isOnline && <OfflineBanner />}
               
               <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-gray-700">
-                  <form onSubmit={handleHomeFormSubmit} className="relative w-full">
-                      <input 
-                        type="text" 
-                        placeholder="Ask a question..." 
-                        value={chatInput}
-                        disabled={!isOnline}
-                        onChange={(e) => setChatInput(e.target.value)}
-                        className={`w-full pl-6 pr-14 py-4 rounded-2xl shadow-sm border-2 border-transparent dark:border-gray-700 bg-gray-50 dark:bg-gray-900 focus:outline-none focus:border-accent-${accentColorClass} text-gray-900 dark:text-white transition-all text-left font-semibold disabled:opacity-50 text-base`}
+                  <form onSubmit={handleHomeFormSubmit} className="w-full">
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept={CHAT_ATTACHMENT_ACCEPT}
+                        multiple
+                        className="hidden"
+                        onChange={handleAttachmentSelection}
                       />
-                      <button 
-                        type="submit" 
-                        disabled={!isOnline}
-                        className={`absolute right-3 top-1/2 -translate-y-1/2 p-2.5 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-500 hover:text-accent-${accentColorClass} transition-colors disabled:opacity-50`}
-                      >
-                          <SendIcon className="h-5 w-5" />
-                      </button>
+                      {pendingAttachments.length > 0 && (
+                        <div className="mb-4 flex flex-wrap gap-2">
+                            {pendingAttachments.map((attachment) => (
+                                <div key={attachment.id} className="flex items-center gap-2 rounded-full bg-gray-100 dark:bg-gray-700 px-3 py-2 text-xs font-bold text-gray-700 dark:text-gray-100 max-w-full">
+                                    <PaperclipIcon className="h-4 w-4 flex-shrink-0" />
+                                    <span className="truncate max-w-[180px]">{attachment.name}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => removePendingAttachment(attachment.id)}
+                                      className="text-gray-400 hover:text-red-500 transition-colors"
+                                      aria-label={`Remove ${attachment.name}`}
+                                    >
+                                        <XIcon className="h-4 w-4" />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                      )}
+                      <div className="relative">
+                          <input 
+                            type="text" 
+                            placeholder="Ask a question or attach a file..." 
+                            value={chatInput}
+                            disabled={!isOnline}
+                            onChange={(e) => setChatInput(e.target.value)}
+                            className={`w-full pl-14 pr-14 py-4 rounded-2xl shadow-sm border-2 border-transparent dark:border-gray-700 bg-gray-50 dark:bg-gray-900 focus:outline-none focus:border-accent-${accentColorClass} text-gray-900 dark:text-white transition-all text-left font-semibold disabled:opacity-50 text-base`}
+                          />
+                          <button
+                            type="button"
+                            onClick={openFilePicker}
+                            disabled={!isOnline}
+                            className={`absolute left-3 top-1/2 -translate-y-1/2 p-2.5 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-500 hover:text-accent-${accentColorClass} transition-colors disabled:opacity-50`}
+                            aria-label="Attach a file"
+                          >
+                              <PaperclipIcon className="h-5 w-5" />
+                          </button>
+                          <button 
+                            type="submit" 
+                            disabled={(!chatInput.trim() && pendingAttachments.length === 0) || !isOnline}
+                            className={`absolute right-3 top-1/2 -translate-y-1/2 p-2.5 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-500 hover:text-accent-${accentColorClass} transition-colors disabled:opacity-50`}
+                          >
+                              <SendIcon className="h-5 w-5" />
+                          </button>
+                      </div>
                   </form>
+                  {chatComposerError && (
+                    <p className="mt-3 text-xs font-bold text-red-500">{chatComposerError}</p>
+                  )}
               </div>
 
               <button
@@ -895,6 +1083,25 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                             : 'bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 text-gray-800 dark:text-gray-200 rounded-bl-none font-semibold'
                         }`}>
                             {msg.text}
+                            {msg.attachments?.length ? (
+                              <div className="mt-3 space-y-2">
+                                  {msg.attachments.map((attachment) => (
+                                      <div key={attachment.id} className={`rounded-2xl overflow-hidden border ${isUser ? 'border-white/20 bg-white/10' : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/60'}`}>
+                                          {attachment.isImage && attachment.previewUrl ? (
+                                            <img src={attachment.previewUrl} alt={attachment.name} className="w-full max-h-56 object-cover" />
+                                          ) : (
+                                            <div className="flex items-center gap-3 px-3 py-3">
+                                                <PaperclipIcon className="h-4 w-4 flex-shrink-0" />
+                                                <div className="min-w-0">
+                                                    <p className="text-sm font-bold truncate">{attachment.name}</p>
+                                                    <p className={`text-[11px] ${isUser ? 'text-white/70' : 'text-gray-500'}`}>{attachment.mimeType}</p>
+                                                </div>
+                                            </div>
+                                          )}
+                                      </div>
+                                  ))}
+                              </div>
+                            ) : null}
                             <span className={`text-[10px] block text-right mt-1 opacity-70 font-black ${isUser ? 'text-white/80' : 'text-gray-400'}`}>
                                 {msg.timestamp ? msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                             </span>
@@ -915,23 +1122,61 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
           </div>
 
           <form onSubmit={handleChatFormSubmit} className="p-5 border-t border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-900">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={CHAT_ATTACHMENT_ACCEPT}
+                multiple
+                className="hidden"
+                onChange={handleAttachmentSelection}
+              />
+              {pendingAttachments.length > 0 && (
+                <div className="mb-3 flex flex-wrap gap-2">
+                    {pendingAttachments.map((attachment) => (
+                        <div key={attachment.id} className="flex items-center gap-2 rounded-full bg-gray-100 dark:bg-gray-800 px-3 py-2 text-xs font-bold text-gray-700 dark:text-gray-100 max-w-full">
+                            <PaperclipIcon className="h-4 w-4 flex-shrink-0" />
+                            <span className="truncate max-w-[180px]">{attachment.name}</span>
+                            <button
+                              type="button"
+                              onClick={() => removePendingAttachment(attachment.id)}
+                              className="text-gray-400 hover:text-red-500 transition-colors"
+                              aria-label={`Remove ${attachment.name}`}
+                            >
+                                <XIcon className="h-4 w-4" />
+                            </button>
+                        </div>
+                    ))}
+                </div>
+              )}
               <div className="relative">
+                  <button
+                    type="button"
+                    onClick={openFilePicker}
+                    disabled={!isOnline}
+                    className={`absolute left-2 top-1/2 -translate-y-1/2 p-3 rounded-xl text-gray-500 hover:text-accent-${accentColorClass} disabled:opacity-50 transition-all`}
+                    aria-label="Attach a file"
+                  >
+                      <PaperclipIcon className="h-5 w-5" />
+                  </button>
                   <input
                     type="text"
                     value={chatInput}
                     disabled={!isOnline}
                     onChange={(e) => setChatInput(e.target.value)}
-                    placeholder="Type a message..."
-                    className={`w-full pl-5 pr-14 py-4 rounded-2xl border-2 border-transparent bg-gray-100 dark:bg-gray-800 focus:outline-none focus:border-accent-${accentColorClass} dark:text-white transition-all font-semibold disabled:opacity-50`}
+                    placeholder="Type a message or attach a file..."
+                    className={`w-full pl-14 pr-14 py-4 rounded-2xl border-2 border-transparent bg-gray-100 dark:bg-gray-800 focus:outline-none focus:border-accent-${accentColorClass} dark:text-white transition-all font-semibold disabled:opacity-50`}
                   />
                   <button 
                     type="submit"
-                    disabled={!chatInput.trim() || !isOnline}
+                    disabled={(!chatInput.trim() && pendingAttachments.length === 0) || !isOnline}
                     className={`absolute right-2 top-1/2 -translate-y-1/2 p-3 rounded-xl text-white bg-accent-${accentColorClass} hover:brightness-110 disabled:opacity-50 transition-all shadow-md`}
                   >
                       <SendIcon className="h-5 w-5" />
                   </button>
               </div>
+              {chatComposerError && (
+                <p className="mt-3 text-xs font-bold text-red-500">{chatComposerError}</p>
+              )}
           </form>
       </div>
   );
