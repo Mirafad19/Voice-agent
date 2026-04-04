@@ -947,6 +947,10 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     }, [isOpen, agentProfile.calloutMessage]);
 
   const themeClass = agentProfile.theme === 'dark' ? 'dark' : '';
+  const chatAvatarUrl =
+    agentProfile.avatar1Url ||
+    agentProfile.logoUrl ||
+    'https://image2url.com/r2/default/images/1773703333770-c9e20d08-1933-459c-a8c7-d7c78bf2bc22.png';
 
   const renderHomeView = () => (
       <div className="flex flex-col h-full w-full bg-white dark:bg-gray-900 animate-fade-in-up">
@@ -1077,35 +1081,70 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                   const isUser = msg.role === 'user';
                   return (
                     <div key={idx} className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-[85%] rounded-2xl p-4 text-[15px] shadow-sm relative group whitespace-pre-wrap leading-relaxed ${
-                            isUser
-                            ? `bg-accent-${accentColorClass} text-white rounded-br-none font-bold` 
-                            : 'bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 text-gray-800 dark:text-gray-200 rounded-bl-none font-semibold'
-                        }`}>
-                            {msg.text}
-                            {msg.attachments?.length ? (
-                              <div className="mt-3 space-y-2">
-                                  {msg.attachments.map((attachment) => (
-                                      <div key={attachment.id} className={`rounded-2xl overflow-hidden border ${isUser ? 'border-white/20 bg-white/10' : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/60'}`}>
-                                          {attachment.isImage && attachment.previewUrl ? (
-                                            <img src={attachment.previewUrl} alt={attachment.name} className="w-full max-h-56 object-cover" />
-                                          ) : (
-                                            <div className="flex items-center gap-3 px-3 py-3">
-                                                <PaperclipIcon className="h-4 w-4 flex-shrink-0" />
-                                                <div className="min-w-0">
-                                                    <p className="text-sm font-bold truncate">{attachment.name}</p>
-                                                    <p className={`text-[11px] ${isUser ? 'text-white/70' : 'text-gray-500'}`}>{attachment.mimeType}</p>
+                        {isUser ? (
+                          <div className={`max-w-[85%] rounded-2xl p-4 text-[15px] shadow-sm relative group whitespace-pre-wrap leading-relaxed bg-accent-${accentColorClass} text-white rounded-br-none font-bold`}>
+                              {msg.text}
+                              {msg.attachments?.length ? (
+                                <div className="mt-3 space-y-2">
+                                    {msg.attachments.map((attachment) => (
+                                        <div key={attachment.id} className="rounded-2xl overflow-hidden border border-white/20 bg-white/10">
+                                            {attachment.isImage && attachment.previewUrl ? (
+                                              <img src={attachment.previewUrl} alt={attachment.name} className="w-full max-h-56 object-cover" />
+                                            ) : (
+                                              <div className="flex items-center gap-3 px-3 py-3">
+                                                  <PaperclipIcon className="h-4 w-4 flex-shrink-0" />
+                                                  <div className="min-w-0">
+                                                      <p className="text-sm font-bold truncate">{attachment.name}</p>
+                                                      <p className="text-[11px] text-white/70">{attachment.mimeType}</p>
+                                                  </div>
+                                              </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                              ) : null}
+                              <span className="text-[10px] block text-right mt-1 opacity-70 font-black text-white/80">
+                                  {msg.timestamp ? msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                              </span>
+                          </div>
+                        ) : (
+                          <div className="flex items-end gap-3 max-w-[92%]">
+                              <img
+                                src={chatAvatarUrl}
+                                alt={`${agentProfile.name} avatar`}
+                                className="w-10 h-10 rounded-xl object-cover shadow-sm border border-gray-200 dark:border-gray-700 bg-white flex-shrink-0"
+                                referrerPolicy="no-referrer"
+                              />
+                              <div className="min-w-0">
+                                  <p className="text-xs font-bold text-gray-500 dark:text-gray-400 mb-1 px-1">{agentProfile.name}</p>
+                                  <div className="max-w-[85%] rounded-2xl p-4 text-[15px] shadow-sm relative group whitespace-pre-wrap leading-relaxed bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 text-gray-800 dark:text-gray-200 rounded-bl-none font-semibold">
+                                      {msg.text}
+                                      {msg.attachments?.length ? (
+                                        <div className="mt-3 space-y-2">
+                                            {msg.attachments.map((attachment) => (
+                                                <div key={attachment.id} className="rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/60">
+                                                    {attachment.isImage && attachment.previewUrl ? (
+                                                      <img src={attachment.previewUrl} alt={attachment.name} className="w-full max-h-56 object-cover" />
+                                                    ) : (
+                                                      <div className="flex items-center gap-3 px-3 py-3">
+                                                          <PaperclipIcon className="h-4 w-4 flex-shrink-0" />
+                                                          <div className="min-w-0">
+                                                              <p className="text-sm font-bold truncate">{attachment.name}</p>
+                                                              <p className="text-[11px] text-gray-500">{attachment.mimeType}</p>
+                                                          </div>
+                                                      </div>
+                                                    )}
                                                 </div>
-                                            </div>
-                                          )}
-                                      </div>
-                                  ))}
+                                            ))}
+                                        </div>
+                                      ) : null}
+                                      <span className="text-[10px] block text-right mt-1 opacity-70 font-black text-gray-400">
+                                          {msg.timestamp ? msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                                      </span>
+                                  </div>
                               </div>
-                            ) : null}
-                            <span className={`text-[10px] block text-right mt-1 opacity-70 font-black ${isUser ? 'text-white/80' : 'text-gray-400'}`}>
-                                {msg.timestamp ? msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
-                            </span>
-                        </div>
+                          </div>
+                        )}
                     </div>
                   );
               })}
