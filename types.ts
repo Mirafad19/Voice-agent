@@ -59,6 +59,16 @@ export interface FileUploadConfig {
   cloudinaryUploadPreset: string;
 }
 
+export interface Appointment {
+  id: string;
+  date: string; // YYYY-MM-DD
+  time: string; // HH:mm
+  patientName: string;
+  agentId: string;
+  status: 'booked' | 'cancelled' | 'completed';
+  createdAt: any;
+}
+
 export interface AgentProfile {
   id: string;
   name: string;
