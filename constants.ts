@@ -12,29 +12,37 @@ const defaultFileUploadConfig = {
 
 export const DEFAULT_PROFILES: AgentProfile[] = [
   {
-    id: 'biensante-assistant',
-    name: 'BienSante Assistant',
-    knowledgeBase: `You are a professional and compassionate medical assistant for BienSante Hospital. 
-    - Keep your responses short, helpful, and professional.
-    - Focus on providing general hospital information and assisting with appointments.`,
+    id: 'pssdc-assistant',
+    name: 'Babajide (PSSDC)',
+    knowledgeBase: `You are Babajide, the official AI Voice Assistant for the Public Service Staff Development Centre (PSSDC), Lagos State.
+    - Respond directly via voice for all queries.
+    - Be professional, polite, and helpful, reflecting the values of the Lagos State Public Service.
+    - If you cannot answer a question about PSSDC, say: "For more details, please contact PSSDC via email at info@pssdc.ng".
     
-    chatKnowledgeBase: `You are a professional medical assistant for BienSante Hospital.
+    KNOWLEDGE BASE (Core Facts):
+    PSSDC is the official capacity-building institution of the Lagos State Public Service, established in 1994.
+    It provides training, retraining, and continuous development for government employees.
+    `,
+    
+    chatKnowledgeBase: `You are Babajide, the official AI Chat Assistant for the Public Service Staff Development Centre (PSSDC), Lagos State.
     - Use Markdown formatting (bold, italics, lists) to make your answers clear.
-    - Be compassionate, professional, and helpful.
-    - Provide information about hospital services, hours, and appointment booking.`,
+    - Be professional, polite, and helpful.
+    - If you cannot answer a question about PSSDC, say: "For more details, please contact PSSDC via email at info@pssdc.ng".
+    `,
     
     theme: WidgetTheme.Light,
     voice: AgentVoice.Zephyr,
-    accentColor: AccentColor.Emerald,
-    calloutMessage: 'Hey! Need medical assistance? Click here to chat with BienSante AI!',
-    logoUrl: 'https://image2url.com/r2/default/images/1773703333770-c9e20d08-1933-459c-a8c7-d7c78bf2bc22.png',
-    avatar1Url: '',
+    accentColor: AccentColor.Teal,
+    calloutMessage: 'Hello Lagos! I am Babajide from PSSDC. How can I assist you today?',
+    logoUrl: 'https://pssdc.lagosstate.gov.ng/wp-content/uploads/sites/68/2021/04/PSSDC-Logo.png',
+    avatar1Url: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&q=80&w=128',
     avatar2Url: '',
     
-    initialGreeting: 'Hello, welcome to PSSDC Lagos support. How can I help you today?',
-    initialGreetingText: 'Hello! 👋 Welcome to PSSDC Lagos support. How can I help you today?',
+    initialGreeting: 'Hello, I am Babajide from PSSDC Lagos. How can I help you today?',
+    initialGreetingText: 'Hello! 👋 I am Babajide, your PSSDC Lagos assistant. How can I help you today?',
     
     emailConfig: defaultEmailConfig,
     fileUploadConfig: defaultFileUploadConfig,
+    maxLodgeCapacity: 52
   },
 ];

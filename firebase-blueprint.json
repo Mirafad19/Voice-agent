@@ -18,6 +18,7 @@
         "logoUrl": { "type": "string" },
         "avatar1Url": { "type": "string" },
         "avatar2Url": { "type": "string" },
+        "maxLodgeCapacity": { "type": "number", "description": "Maximum beds in the lodge, default 52" },
         "emailConfig": {
           "type": "object",
           "properties": {
@@ -35,20 +36,22 @@
       },
       "required": ["id", "name", "ownerId"]
     },
-    "Appointment": {
-      "title": "Appointment",
-      "description": "A medical appointment booked through the AI agent.",
+    "Booking": {
+      "title": "Booking",
+      "description": "A facility booking at PSSDC.",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
-        "date": { "type": "string", "description": "YYYY-MM-DD" },
-        "time": { "type": "string", "description": "HH:mm" },
-        "patientName": { "type": "string" },
+        "userName": { "type": "string" },
+        "userPhone": { "type": "string", "description": "11-digit phone number" },
+        "bookingDate": { "type": "string", "description": "YYYY-MM-DD" },
+        "purpose": { "type": "string" },
+        "facility": { "type": "string", "enum": ["Guest Lodge"] },
+        "status": { "type": "string", "enum": ["Pending", "Confirmed", "Rejected"] },
         "agentId": { "type": "string" },
-        "status": { "type": "string", "enum": ["booked", "cancelled", "completed"] },
         "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["id", "date", "time", "agentId", "status"]
+      "required": ["id", "userName", "userPhone", "bookingDate", "agentId", "status"]
     }
   },
   "firestore": {
@@ -56,9 +59,9 @@
       "schema": { "$ref": "#/entities/AgentProfile" },
       "description": "Agent profiles."
     },
-    "/appointments/{appointmentId}": {
-      "schema": { "$ref": "#/entities/Appointment" },
-      "description": "Stores all medical appointments."
+    "/bookings/{bookingId}": {
+      "schema": { "$ref": "#/entities/Booking" },
+      "description": "Stores all facility bookings."
     }
   }
 }

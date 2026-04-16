@@ -4,9 +4,10 @@ import { AgentProfile, AgentConfig, WidgetTheme, WidgetState, Recording, Reporti
 import { GeminiLiveService } from '../services/geminiLiveService';
 import { RecordingService } from '../services/recordingService';
 import { Spinner } from './ui/Spinner';
-import { GoogleGenAI, Type, Modality, Chat } from '@google/genai';
+import { GoogleGenAI, Type, Modality, Chat, FunctionDeclaration } from '@google/genai';
 import { blobToBase64 } from '../utils';
 import { decodePcmChunk } from '../utils/audio';
+import * as bookingService from '../services/bookingService';
 
 interface AgentWidgetProps {
   agentProfile: AgentProfile | AgentConfig;
@@ -129,6 +130,21 @@ const OfflineBanner = () => (
         Reconnecting... Check Internet
     </div>
 );
+
+const ACCENT_COLORS: Record<string, string> = {
+  red: '#ef4444',
+  orange: '#fb923c',
+  gold: '#facc15',
+  cyan: '#22d3ee',
+  pink: '#f472b6',
+  lime: '#a3e635',
+  violet: '#a78bfa',
+  black: '#1f2937',
+  teal: '#2dd4bf',
+  emerald: '#34d399',
+  sky: '#38bdf8',
+  rose: '#fb7185',
+};
 
 export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, isWidgetMode, onSessionEnd }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -327,11 +343,56 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         apiKey: effectiveApiKey
     });
     
-    const systemInstruction = config.chatKnowledgeBase || config.knowledgeBase;
+    const checkAvailabilityTool: FunctionDeclaration = {
+      name: 'check_facility_availability',
+      description: 'Check if a specific date is available for the PSSDC Guest Lodge.',
+      parameters: {
+        type: Type.OBJECT,
+        properties: {
+          date: { type: Type.STRING, description: 'The date in YYYY-MM-DD format.' }
+        },
+        required: ['date']
+      }
+    };
+
+    const bookFacilityTool: FunctionDeclaration = {
+      name: 'book_facility',
+      description: 'Request a booking for the PSSDC Guest Lodge on a specific date.',
+      parameters: {
+        type: Type.OBJECT,
+        properties: {
+          userName: { type: Type.STRING, description: 'The full name of the user.' },
+          userPhone: { type: Type.STRING, description: 'The 11-digit phone number of the user.' },
+          bookingDate: { type: Type.STRING, description: 'The date in YYYY-MM-DD format.' },
+          purpose: { type: Type.STRING, description: 'The purpose of the visit.' }
+        },
+        required: ['userName', 'userPhone', 'bookingDate', 'purpose']
+      }
+    };
+
+    const systemInstruction = `
+    ${config.chatKnowledgeBase || config.knowledgeBase}
+    
+    CRITICAL OPERATIONAL RULES:
+    - Today's date is ${new Date().toISOString().split('T')[0]}.
+    - FALLBACK: If you cannot answer a question about PSSDC, say: "For more details, please contact PSSDC via email at info@pssdc.ng".
+    - FACILITY BOOKING (GUEST LODGE): 
+        - ALWAYS check availability using 'check_facility_availability' BEFORE starting the booking flow.
+        - If a date is taken (unavailable), inform the user: "I'm sorry, that date is already fully booked. Would you like to check another day?"
+        - If the date is available, proceed with the BOOOKING FLOW:
+            a. Ask for full name.
+            b. Ask for phone number (Must be 11 digits).
+            c. Ask for purpose of visit.
+        - Once all info is collected, use 'book_facility' to record the request.
+        - Final confirmation: Tell the user the request is PENDING and that the Facility Manager will contact them for final confirmation.
+    `;
     
     chatSessionRef.current = ai.chats.create({
         model: 'gemini-3-flash-preview',
-        config: { systemInstruction }
+        config: { 
+            systemInstruction,
+            tools: [{ functionDeclarations: [checkAvailabilityTool, bookFacilityTool] }]
+        }
     });
 
     const welcomeText = config.initialGreetingText || config.initialGreeting;
@@ -369,23 +430,72 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     setIsChatTyping(true);
 
     try {
-        const result = await chatSessionRef.current.sendMessageStream({ message: text });
+        let result = await chatSessionRef.current.sendMessageStream({ message: text });
         
         let fullResponse = "";
-        setMessages(prev => [...prev, { role: 'model', text: "", timestamp: new Date() }]);
+        
+        // Handle tool calls in a loop
+        while (true) {
+            let chunkResponse;
+            try {
+                // We need to consume the stream or get the final response for tool calls
+                // For simplicity with streaming and tool calls, we'll check candidates
+                // Actually sendMessageStream works well. Let's iterate.
+                for await (const chunk of result) {
+                    if (chunk.functionCalls) {
+                        const responses = await Promise.all(chunk.functionCalls.map(async (call) => {
+                            let toolResult;
+                            try {
+                                if (call.name === 'check_facility_availability') {
+                                    const { date } = call.args as any;
+                                    const isAvailable = await bookingService.checkFacilityAvailability(agentProfile.name, date);
+                                    toolResult = { isAvailable, message: isAvailable ? "This date is available." : "This date is already fully booked. Suggest another day." };
+                                } else if (call.name === 'book_facility') {
+                                    const { userName, userPhone, bookingDate, purpose } = call.args as any;
+                                    const bookingId = await bookingService.createBooking({
+                                        userName,
+                                        userPhone,
+                                        bookingDate,
+                                        purpose,
+                                        facility: 'Guest Lodge',
+                                        agentId: agentProfile.name
+                                    });
+                                    toolResult = { success: true, bookingId, message: `Booking request recorded for ${bookingDate}. Inform the user it is PENDING manager confirmation.` };
+                                }
+                            } catch (error) {
+                                toolResult = { success: false, error: error instanceof Error ? error.message : "Unknown error" };
+                            }
+                            return { id: call.id, response: { result: toolResult } };
+                        }));
 
-        for await (const chunk of result) {
-            const chunkText = chunk.text;
-            fullResponse += chunkText;
-            
-            setMessages(prev => {
-                const updatedHistory = [...prev];
-                const lastIndex = updatedHistory.length - 1;
-                if (lastIndex >= 0 && updatedHistory[lastIndex].role === 'model') {
-                    updatedHistory[lastIndex] = { ...updatedHistory[lastIndex], text: fullResponse };
+                        result = await chatSessionRef.current.sendMessageStream({
+                            functionResponses: responses
+                        });
+                        continue; // Re-check for more tool calls or text
+                    }
+
+                    const chunkText = chunk.text;
+                    if (chunkText) {
+                        if (fullResponse === "") {
+                            setMessages(prev => [...prev, { role: 'model', text: "", timestamp: new Date() }]);
+                        }
+                        fullResponse += chunkText;
+                        
+                        setMessages(prev => {
+                            const updatedHistory = [...prev];
+                            const lastIndex = updatedHistory.length - 1;
+                            if (lastIndex >= 0 && updatedHistory[lastIndex].role === 'model') {
+                                updatedHistory[lastIndex] = { ...updatedHistory[lastIndex], text: fullResponse };
+                            }
+                            return updatedHistory;
+                        });
+                    }
                 }
-                return updatedHistory;
-            });
+                break; // Exit while loop when no more tool calls
+            } catch (streamError) {
+                console.error("Stream error:", streamError);
+                throw streamError;
+            }
         }
     } catch (e) {
         console.error("Chat error:", e);
@@ -1069,7 +1179,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             <XIcon className="h-4 w-4" />
           </button>
           <div className="flex flex-col gap-1.5">
-            <span className={`text-[12px] font-black text-accent-${accentColorClass} uppercase tracking-widest`}>Help is here</span>
+            <span style={{ color: ACCENT_COLORS[accentColorClass] || '#22d3ee' }} className="text-[12px] font-black uppercase tracking-widest">Help is here</span>
             <p className="text-[16px] font-bold text-gray-800 leading-tight pr-4">
               {agentProfile.calloutMessage}
             </p>

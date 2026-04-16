@@ -7,6 +7,7 @@ import { RecordingService } from './components/RecordingsPanel';
 import { EmbedCodeModal } from './components/EmbedCodeModal';
 import { SettingsModal } from './components/SettingsModal';
 import { AgentWidget } from './components/AgentWidget';
+import { BookingDashboard } from './components/BookingDashboard';
 import { Recording, AgentProfile } from './types';
 import { Button } from './components/ui/Button';
 import { AuthProvider, useAuth } from './components/AuthProvider';
@@ -75,6 +76,7 @@ const DashboardContent: React.FC = () => {
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [notification, setNotification] = useState('');
     const [hasGeminiKey, setHasGeminiKey] = useState(true);
+    const [activeTab, setActiveTab] = useState<'config' | 'bookings'>('config');
 
     useEffect(() => {
         const checkApiKey = async () => {
@@ -240,10 +242,40 @@ const DashboardContent: React.FC = () => {
                         </div>
                     </div>
                 )}
-                <ConfigurationPanel
-                    profile={activeProfile}
-                    onProfileChange={handleProfileUpdate}
-                />
+                
+                <div className="flex space-x-1 mb-6 bg-gray-200 dark:bg-gray-800 p-1 rounded-xl">
+                  <button
+                    onClick={() => setActiveTab('config')}
+                    className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${
+                      activeTab === 'config'
+                        ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                        : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                    }`}
+                  >
+                    Configuration
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('bookings')}
+                    className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${
+                      activeTab === 'bookings'
+                        ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                        : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                    }`}
+                  >
+                    Booking Requests
+                  </button>
+                </div>
+
+                {activeTab === 'config' ? (
+                  <ConfigurationPanel
+                      profile={activeProfile}
+                      onProfileChange={handleProfileUpdate}
+                  />
+                ) : (
+                  <BookingDashboard
+                    agentProfile={activeProfile}
+                  />
+                )}
             </main>
             <AgentWidget
                 agentProfile={activeProfile}

@@ -1,7 +1,7 @@
 
 import { GoogleGenAI, Modality, LiveServerMessage, Type, FunctionDeclaration } from '@google/genai';
 import { AgentConfig } from '../types';
-import * as appointmentService from './appointmentService';
+import * as bookingService from './bookingService';
 
 type LiveSession = Awaited<ReturnType<InstanceType<typeof GoogleGenAI>['live']['connect']>>;
 
@@ -68,29 +68,29 @@ export class GeminiLiveService {
         : `INITIALIZATION: Wait for the user to speak first.`;
 
       const checkAvailabilityTool: FunctionDeclaration = {
-        name: 'check_availability',
-        description: 'Check if a specific date and time is available for an appointment.',
+        name: 'check_facility_availability',
+        description: 'Check if a specific date is available for the PSSDC Guest Lodge.',
         parameters: {
           type: Type.OBJECT,
           properties: {
-            date: { type: Type.STRING, description: 'The date in YYYY-MM-DD format.' },
-            time: { type: Type.STRING, description: 'The time in HH:mm format (e.g., 09:00, 14:30).' }
+            date: { type: Type.STRING, description: 'The date in YYYY-MM-DD format.' }
           },
-          required: ['date', 'time']
+          required: ['date']
         }
       };
 
-      const bookAppointmentTool: FunctionDeclaration = {
-        name: 'book_appointment',
-        description: 'Book an appointment for a patient at a specific date and time.',
+      const bookFacilityTool: FunctionDeclaration = {
+        name: 'book_facility',
+        description: 'Request a booking for the PSSDC Guest Lodge on a specific date.',
         parameters: {
           type: Type.OBJECT,
           properties: {
-            date: { type: Type.STRING, description: 'The date in YYYY-MM-DD format.' },
-            time: { type: Type.STRING, description: 'The time in HH:mm format.' },
-            patientName: { type: Type.STRING, description: 'The full name of the patient.' }
+            userName: { type: Type.STRING, description: 'The full name of the user.' },
+            userPhone: { type: Type.STRING, description: 'The 11-digit phone number of the user.' },
+            bookingDate: { type: Type.STRING, description: 'The date in YYYY-MM-DD format.' },
+            purpose: { type: Type.STRING, description: 'The purpose of the visit.' }
           },
-          required: ['date', 'time', 'patientName']
+          required: ['userName', 'userPhone', 'bookingDate', 'purpose']
         }
       };
 
@@ -101,7 +101,7 @@ export class GeminiLiveService {
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: this.config.voice } },
           },
-          tools: [{ functionDeclarations: [checkAvailabilityTool, bookAppointmentTool] }],
+          tools: [{ functionDeclarations: [checkAvailabilityTool, bookFacilityTool] }],
           systemInstruction: `
           CRITICAL OPERATIONAL RULES:
           1. LANGUAGE ENFORCEMENT: You must speak ONLY in English. 
@@ -110,10 +110,16 @@ export class GeminiLiveService {
           4. AGGRESSIVE SILENCE: If the user starts talking while you are speaking, STOP IMMEDIATELY. Prioritize the user's voice above your own.
           5. SOURCE OF TRUTH: Use the provided knowledge base accurately.
           6. SILENCE HANDLING: If you receive "[[SILENCE_DETECTED]]", ask "Are you still there?".
-          7. APPOINTMENT BOOKING: 
-             - ALWAYS check availability using 'check_availability' BEFORE confirming any booking.
-             - If a slot is taken, inform the user and suggest they pick another time.
-             - Once a slot is confirmed as available, use 'book_appointment' to finalize it.
+          7. FALLBACK: If you cannot answer a question about PSSDC, say: "For more details, please contact PSSDC via email at info@pssdc.ng".
+          8. FACILITY BOOKING (GUEST LODGE): 
+             - ALWAYS check availability using 'check_facility_availability' BEFORE starting the booking flow.
+             - If a date is taken (unavailable), inform the user: "I'm sorry, that date is already fully booked. Would you like to check another day?"
+             - If the date is available, proceed with the BOOOKING FLOW:
+               a. Ask for full name.
+               b. Ask for phone number (Must be 11 digits).
+               c. Ask for purpose of visit.
+             - Once all info is collected, use 'book_facility' to record the request.
+             - Final confirmation: Tell the user the request is PENDING and that the Facility Manager will contact them for final confirmation.
              - Today's date is ${new Date().toISOString().split('T')[0]}.
           
           KNOWLEDGE BASE:
@@ -163,7 +169,7 @@ export class GeminiLiveService {
       this.analyser = this.inputAudioContext.createAnalyser();
       this.analyser.fftSize = 2048;
       this.mediaStreamSource.connect(this.analyser);
-
+ 
       this.scriptProcessor = this.inputAudioContext.createScriptProcessor(2048, 1, 1);
       
       const frequencyData = new Float32Array(this.analyser.frequencyBinCount);
@@ -233,19 +239,21 @@ export class GeminiLiveService {
             const responses = await Promise.all(toolCalls.map(async (call) => {
                 let result;
                 try {
-                    if (call.name === 'check_availability') {
-                        const { date, time } = call.args as any;
-                        const isAvailable = await appointmentService.checkAvailability(this.config.name, date, time);
-                        result = { isAvailable, message: isAvailable ? "This slot is available." : "This slot is already booked. Please ask the user for another time." };
-                    } else if (call.name === 'book_appointment') {
-                        const { date, time, patientName } = call.args as any;
-                        const appointmentId = await appointmentService.bookAppointment({
-                            date,
-                            time,
-                            patientName,
+                    if (call.name === 'check_facility_availability') {
+                        const { date } = call.args as any;
+                        const isAvailable = await bookingService.checkFacilityAvailability(this.config.name, date);
+                        result = { isAvailable, message: isAvailable ? "This date is available." : "This date is already fully booked. Suggest another day." };
+                    } else if (call.name === 'book_facility') {
+                        const { userName, userPhone, bookingDate, purpose } = call.args as any;
+                        const bookingId = await bookingService.createBooking({
+                            userName,
+                            userPhone,
+                            bookingDate,
+                            purpose,
+                            facility: 'Guest Lodge',
                             agentId: this.config.name
                         });
-                        result = { success: true, appointmentId, message: `Appointment successfully booked for ${patientName} on ${date} at ${time}.` };
+                        result = { success: true, bookingId, message: `Booking request recorded for ${bookingDate}. Inform the user it is PENDING manager confirmation.` };
                     }
                 } catch (error) {
                     result = { success: false, error: error instanceof Error ? error.message : "Unknown error" };

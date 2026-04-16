@@ -232,7 +232,7 @@ export const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({
         </h3>
 
         <div>
-          <Input
+           <Input
             label="Chat Welcome Message (Text)"
             id="initialGreetingText"
             value={editedProfile.initialGreetingText || ""}
@@ -265,6 +265,21 @@ export const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({
             Rules for the Chat Agent. If left blank, it uses the Voice
             Instructions.
           </p>
+        </div>
+
+        <h3 className="text-xl font-semibold text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-700 pb-2 pt-4">
+          Facility Settings (Guest Lodge)
+        </h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Input
+            label="Max Lodge Capacity (Beds)"
+            id="maxLodgeCapacity"
+            type="number"
+            min={1}
+            value={editedProfile.maxLodgeCapacity || 52}
+            onChange={(e) => handleChange("maxLodgeCapacity", parseInt(e.target.value) || 52)}
+          />
         </div>
 
         <details className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">

@@ -59,13 +59,15 @@ export interface FileUploadConfig {
   cloudinaryUploadPreset: string;
 }
 
-export interface Appointment {
+export interface Booking {
   id: string;
-  date: string; // YYYY-MM-DD
-  time: string; // HH:mm
-  patientName: string;
+  userName: string;
+  userPhone: string;
+  bookingDate: string; // YYYY-MM-DD
+  purpose: string;
+  facility: 'Guest Lodge';
+  status: 'Pending' | 'Confirmed' | 'Rejected';
   agentId: string;
-  status: 'booked' | 'cancelled' | 'completed';
   createdAt: any;
 }
 
@@ -83,6 +85,7 @@ export interface AgentProfile {
   logoUrl?: string;
   avatar1Url?: string;
   avatar2Url?: string;
+  maxLodgeCapacity?: number;
   emailConfig?: EmailConfig;
   fileUploadConfig?: FileUploadConfig;
   ownerId?: string;
