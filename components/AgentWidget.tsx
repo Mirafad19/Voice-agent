@@ -375,6 +375,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     
     CRITICAL OPERATIONAL RULES:
     - Today's date is ${new Date().toISOString().split('T')[0]}.
+    - VOICE RESPONSE: If PSSDC-related information is requested, respond directly.
     - FALLBACK: If you cannot answer a question about PSSDC, say: "For more details, please contact PSSDC via email at info@pssdc.ng".
     - FACILITY BOOKING (GUEST LODGE): 
         - ALWAYS check availability using 'check_facility_availability' BEFORE starting the booking flow.
@@ -430,20 +431,20 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     setIsChatTyping(true);
 
     try {
-        let result = await chatSessionRef.current.sendMessageStream({ message: text });
+        let currentResult = await chatSessionRef.current.sendMessageStream({ message: text });
         
         let fullResponse = "";
         
         // Handle tool calls in a loop
         while (true) {
-            let chunkResponse;
+            let hasFunctionCalls = false;
+            let toolResponses: any[] = [];
+            
             try {
-                // We need to consume the stream or get the final response for tool calls
-                // For simplicity with streaming and tool calls, we'll check candidates
-                // Actually sendMessageStream works well. Let's iterate.
-                for await (const chunk of result) {
+                for await (const chunk of currentResult) {
                     if (chunk.functionCalls) {
-                        const responses = await Promise.all(chunk.functionCalls.map(async (call) => {
+                        hasFunctionCalls = true;
+                        toolResponses = await Promise.all(chunk.functionCalls.map(async (call) => {
                             let toolResult;
                             try {
                                 if (call.name === 'check_facility_availability') {
@@ -467,11 +468,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                             }
                             return { id: call.id, response: { result: toolResult } };
                         }));
-
-                        result = await chatSessionRef.current.sendMessageStream({
-                            functionResponses: responses
-                        });
-                        continue; // Re-check for more tool calls or text
+                        break; // Step out of stream to send function responses
                     }
 
                     const chunkText = chunk.text;
@@ -491,9 +488,17 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                         });
                     }
                 }
-                break; // Exit while loop when no more tool calls
+                
+                if (hasFunctionCalls && toolResponses.length > 0) {
+                    currentResult = await chatSessionRef.current.sendMessageStream({
+                        functionResponses: toolResponses
+                    });
+                    continue; // Re-enter while loop with new stream
+                } else {
+                    break; // No more tool calls, exit
+                }
             } catch (streamError) {
-                console.error("Stream error:", streamError);
+                console.error("Stream error in loop:", streamError);
                 throw streamError;
             }
         }
