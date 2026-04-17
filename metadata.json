@@ -1,5 +1,5 @@
 {
-  "name": "AI Assistant",
+  "name": "BienSanté AI Assistant",
   "description": "A professional AI assistant for BienSante Hospital, providing medical information and support.",
   "requestFramePermissions": [
     "microphone"

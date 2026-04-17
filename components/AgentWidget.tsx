@@ -166,6 +166,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const [messages, setMessages] = useState<Message[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [isChatTyping, setIsChatTyping] = useState(false);
+  const [chatStarted, setChatStarted] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const [errorMessage, setErrorMessage] = useState('');
@@ -337,6 +338,11 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
 
   const initChat = async (initialMessage?: string) => {
+    if (chatStarted && !initialMessage) {
+        setView('chat');
+        return;
+    }
+
     const config = agentProfile as AgentConfig;
     const effectiveApiKey = apiKey || process.env.GEMINI_API_KEY || 'dummy';
     const ai = new GoogleGenAI({ 
@@ -345,7 +351,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     
     const checkAvailabilityTool: FunctionDeclaration = {
       name: 'check_facility_availability',
-      description: 'Check if a specific date is available for the PSSDC Guest Lodge.',
+      description: 'Check if a specific date is available for the facility (Guest Lodge or Hospital).',
       parameters: {
         type: Type.OBJECT,
         properties: {
@@ -357,14 +363,14 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
     const bookFacilityTool: FunctionDeclaration = {
       name: 'book_facility',
-      description: 'Request a booking for the PSSDC Guest Lodge on a specific date.',
+      description: 'Record a booking or appointment request.',
       parameters: {
         type: Type.OBJECT,
         properties: {
           userName: { type: Type.STRING, description: 'The full name of the user.' },
           userPhone: { type: Type.STRING, description: 'The 11-digit phone number of the user.' },
           bookingDate: { type: Type.STRING, description: 'The date in YYYY-MM-DD format.' },
-          purpose: { type: Type.STRING, description: 'The purpose of the visit.' }
+          purpose: { type: Type.STRING, description: 'The purpose of the visit or appointment.' }
         },
         required: ['userName', 'userPhone', 'bookingDate', 'purpose']
       }
@@ -375,17 +381,33 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     
     CRITICAL OPERATIONAL RULES:
     - Today's date is ${new Date().toISOString().split('T')[0]}.
-    - VOICE RESPONSE: If PSSDC-related information is requested, respond directly.
-    - FALLBACK: If you cannot answer a question about PSSDC, say: "For more details, please contact PSSDC via email at info@pssdc.ng".
-    - FACILITY BOOKING (GUEST LODGE): 
-        - ALWAYS check availability using 'check_facility_availability' BEFORE starting the booking flow.
-        - If a date is taken (unavailable), inform the user: "I'm sorry, that date is already fully booked. Would you like to check another day?"
-        - If the date is available, proceed with the BOOOKING FLOW:
-            a. Ask for full name.
-            b. Ask for phone number (Must be 11 digits).
-            c. Ask for purpose of visit.
-        - Once all info is collected, use 'book_facility' to record the request.
-        - Final confirmation: Tell the user the request is PENDING and that the Facility Manager will contact them for final confirmation.
+    - VOICE RESPONSE: If appointment or hospital related information is requested, respond directly.
+    - HOSPITAL CONTACT: If asked for phone numbers, say: "You can reach BienSanté Hospital on **0802 233 3285** or **0902 391 6337**. Would you like me to help you schedule an appointment now?"
+    
+    🗓️ APPOINTMENT BOOKING FLOW:
+    YOU MUST ASK ONLY ONE QUESTION AT A TIME. Wait for the user to answer before moving to the next step.
+    
+    1. Ask for full name:
+    “May I have your full name, please?”
+    
+    2. Ask for phone number:
+    “Please provide your phone number. It should be exactly 11 digits.”
+    If wrong length:
+    “That number seems incomplete. Kindly provide the full 11-digit phone number.”
+    
+    3. Ask for preferred date:
+    “What date would you prefer for your appointment?”
+    
+    4. Ask for purpose:
+    "What is the reason or purpose for your booking?"
+    
+    5. Data Collection & Processing:
+    When you have the Name, 11-digit Phone, Date, and Purpose, you must FIRST notify the user:
+    "Thank you for that information. I'm now processing your request, please give me just a moment while I get everything settled for you..."
+    Then immediately call 'book_facility'.
+    
+    6. Final Confirmation:
+    Once the tool returns success, say EXACTLY: “Thank you. Our management team will review availability for that date and contact you shortly to confirm a suitable time and provide further instructions.”
     `;
     
     chatSessionRef.current = ai.chats.create({
@@ -396,6 +418,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         }
     });
 
+    setChatStarted(true);
     const welcomeText = config.initialGreetingText || config.initialGreeting;
     
     if (initialMessage) {
@@ -432,88 +455,88 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
     try {
         let currentResult = await chatSessionRef.current.sendMessageStream({ message: text });
-        
         let fullResponse = "";
         
-        // Handle tool calls in a loop
-        while (true) {
-            let hasFunctionCalls = false;
+        const processStream = async (stream: any) => {
             let toolResponses: any[] = [];
-            
-            try {
-                for await (const chunk of currentResult) {
-                    if (chunk.functionCalls) {
-                        hasFunctionCalls = true;
-                        toolResponses = await Promise.all(chunk.functionCalls.map(async (call) => {
-                            let toolResult;
-                            try {
-                                if (call.name === 'check_facility_availability') {
-                                    const { date } = call.args as any;
-                                    const isAvailable = await bookingService.checkFacilityAvailability(agentProfile.name, date);
-                                    toolResult = { isAvailable, message: isAvailable ? "This date is available." : "This date is already fully booked. Suggest another day." };
-                                } else if (call.name === 'book_facility') {
-                                    const { userName, userPhone, bookingDate, purpose } = call.args as any;
-                                    const bookingId = await bookingService.createBooking({
-                                        userName,
-                                        userPhone,
-                                        bookingDate,
-                                        purpose,
-                                        facility: 'Guest Lodge',
-                                        agentId: agentProfile.name
-                                    });
-                                    toolResult = { success: true, bookingId, message: `Booking request recorded for ${bookingDate}. Inform the user it is PENDING manager confirmation.` };
-                                }
-                            } catch (error) {
-                                toolResult = { success: false, error: error instanceof Error ? error.message : "Unknown error" };
-                            }
-                            return { id: call.id, response: { result: toolResult } };
-                        }));
-                        break; // Step out of stream to send function responses
-                    }
+            let hasFunctionCalls = false;
 
-                    const chunkText = chunk.text;
-                    if (chunkText) {
-                        if (fullResponse === "") {
-                            setMessages(prev => [...prev, { role: 'model', text: "", timestamp: new Date() }]);
-                        }
-                        fullResponse += chunkText;
-                        
-                        setMessages(prev => {
-                            const updatedHistory = [...prev];
-                            const lastIndex = updatedHistory.length - 1;
-                            if (lastIndex >= 0 && updatedHistory[lastIndex].role === 'model') {
-                                updatedHistory[lastIndex] = { ...updatedHistory[lastIndex], text: fullResponse };
+            for await (const chunk of stream) {
+                if (chunk.functionCalls) {
+                    hasFunctionCalls = true;
+                    const calls = chunk.functionCalls;
+                    toolResponses = await Promise.all(calls.map(async (call) => {
+                        let toolResult;
+                        try {
+                            if (call.name === 'check_facility_availability') {
+                                const { date } = call.args as any;
+                                const isAvailable = await bookingService.checkFacilityAvailability(agentProfile.name, date);
+                                toolResult = { isAvailable, message: isAvailable ? "Available" : "Booked" };
+                            } else if (call.name === 'book_facility') {
+                                const { userName, userPhone, bookingDate, purpose } = call.args as any;
+                                const bookingId = await bookingService.createBooking({
+                                    userName,
+                                    userPhone,
+                                    bookingDate,
+                                    purpose,
+                                    facility: 'Hospital Appointment',
+                                    agentId: agentProfile.name
+                                });
+                                toolResult = { success: true, bookingId, message: "Recorded as PENDING" };
                             }
-                            return updatedHistory;
-                        });
+                        } catch (error) {
+                            toolResult = { success: false, error: error instanceof Error ? error.message : "Unknown error" };
+                        }
+                        return { id: call.id, response: { result: toolResult } };
+                    }));
+                    // Break current stream iteration to handle function responses
+                    break;
+                }
+
+                const chunkText = chunk.text;
+                if (chunkText) {
+                    if (fullResponse === "") {
+                        setMessages(prev => [...prev, { role: 'model', text: "", timestamp: new Date() }]);
                     }
-                }
-                
-                if (hasFunctionCalls && toolResponses.length > 0) {
-                    currentResult = await chatSessionRef.current.sendMessageStream({
-                        functionResponses: toolResponses
+                    fullResponse += chunkText;
+                    setMessages(prev => {
+                        const updated = [...prev];
+                        const lastIndex = updated.length - 1;
+                        if (lastIndex >= 0 && updated[lastIndex].role === 'model') {
+                            updated[lastIndex] = { ...updated[lastIndex], text: fullResponse };
+                        }
+                        return updated;
                     });
-                    continue; // Re-enter while loop with new stream
-                } else {
-                    break; // No more tool calls, exit
                 }
-            } catch (streamError) {
-                console.error("Stream error in loop:", streamError);
-                throw streamError;
             }
-        }
+
+            if (hasFunctionCalls) {
+                const nextResult = await chatSessionRef.current!.sendMessageStream({
+                    functionResponses: toolResponses
+                });
+                await processStream(nextResult);
+            }
+        };
+
+        await processStream(currentResult);
     } catch (e) {
-        console.error("Chat error:", e);
-        setMessages(prev => [...prev, { role: 'model', text: "I'm having trouble connecting right now. Please try again.", timestamp: new Date() }]);
+        console.error("Chat Error:", e);
+        setMessages(prev => [...prev, { role: 'model', text: "I'm having a technical issue. Please try again or contact support if it persists.", timestamp: new Date() }]);
     } finally {
         setIsChatTyping(false);
     }
   };
 
-  const endChatSession = useCallback(() => {
+  const endChatSession = useCallback((force: boolean = false) => {
+    if (!force) {
+        setView('home');
+        return;
+    }
+
     if (messages.length <= 1) {
         setView('home');
         setMessages([]);
+        setChatStarted(false);
         return;
     }
 
@@ -532,6 +555,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     analyzeAndSendReport(newRecording);
     
     setMessages([]);
+    setChatStarted(false);
     chatSessionRef.current = null;
     setView('home');
     
@@ -847,12 +871,14 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
   const toggleWidget = () => {
     if (isOpen) {
-      if (view === 'chat' && messages.length > 1) {
-          endChatSession();
+      if (view === 'chat') {
+          setView('home');
       } else if (view === 'voice' && widgetState !== WidgetState.Idle && widgetState !== WidgetState.Ended) {
           endVoiceSession();
+          setView('home');
+      } else {
+          setView('home');
       }
-      setTimeout(() => setView('home'), 300);
     } else {
       setShowCallout(false);
     }
@@ -860,14 +886,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   };
 
   const handleBack = () => {
-      if (view === 'chat') {
-          endChatSession();
-      } else if (view === 'voice') {
-          if (widgetState !== WidgetState.Idle && widgetState !== WidgetState.Ended) {
-              endVoiceSession();
-          }
-          setView('home');
-      }
+      setView('home');
   };
 
   const handleHomeFormSubmit = (e: React.FormEvent) => {
@@ -887,6 +906,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const handleDismissCallout = (e: React.MouseEvent) => {
       e.stopPropagation();
       setShowCallout(false);
+      localStorage.setItem(`callout-dismissed-${agentProfile.id}`, 'true');
   };
 
   // Send resize messages to parent iframe if in widget mode
@@ -902,16 +922,17 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   }, [isOpen, isWidgetMode, showCallout, agentProfile.calloutMessage]);
   
     useEffect(() => {
-      if (!isOpen && agentProfile.calloutMessage) {
+      const isDismissed = localStorage.getItem(`callout-dismissed-${agentProfile.id}`) === 'true';
+      if (!isOpen && agentProfile.calloutMessage && !isDismissed) {
         setShowCallout(true);
         const timer = setTimeout(() => {
           setShowCallout(false);
-        }, 5000);
+        }, 8000);
         return () => clearTimeout(timer);
       } else {
         setShowCallout(false);
       }
-    }, [isOpen, agentProfile.calloutMessage]);
+    }, [isOpen, agentProfile.calloutMessage, agentProfile.id]);
 
   const themeClass = agentProfile.theme === 'dark' ? 'dark' : '';
 

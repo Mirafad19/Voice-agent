@@ -69,7 +69,7 @@ export class GeminiLiveService {
 
       const checkAvailabilityTool: FunctionDeclaration = {
         name: 'check_facility_availability',
-        description: 'Check if a specific date is available for the PSSDC Guest Lodge.',
+        description: 'Check if a specific date is available for the facility (Guest Lodge or Hospital).',
         parameters: {
           type: Type.OBJECT,
           properties: {
@@ -78,24 +78,24 @@ export class GeminiLiveService {
           required: ['date']
         }
       };
-
+ 
       const bookFacilityTool: FunctionDeclaration = {
         name: 'book_facility',
-        description: 'Request a booking for the PSSDC Guest Lodge on a specific date.',
+        description: 'Record a booking or appointment request.',
         parameters: {
           type: Type.OBJECT,
           properties: {
             userName: { type: Type.STRING, description: 'The full name of the user.' },
             userPhone: { type: Type.STRING, description: 'The 11-digit phone number of the user.' },
             bookingDate: { type: Type.STRING, description: 'The date in YYYY-MM-DD format.' },
-            purpose: { type: Type.STRING, description: 'The purpose of the visit.' }
+            purpose: { type: Type.STRING, description: 'The purpose of the visit or appointment.' }
           },
           required: ['userName', 'userPhone', 'bookingDate', 'purpose']
         }
       };
 
       this.sessionPromise = this.ai.live.connect({
-        model: 'gemini-2.5-flash-native-audio-preview-12-2025',
+        model: 'gemini-3.1-flash-live-preview',
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: {
@@ -110,17 +110,34 @@ export class GeminiLiveService {
           4. AGGRESSIVE SILENCE: If the user starts talking while you are speaking, STOP IMMEDIATELY. Prioritize the user's voice above your own.
           5. SOURCE OF TRUTH: Use the provided knowledge base accurately.
           6. SILENCE HANDLING: If you receive "[[SILENCE_DETECTED]]", ask "Are you still there?".
-          7. FALLBACK: If you cannot answer a question about PSSDC, say: "For more details, please contact PSSDC via email at info@pssdc.ng".
-          8. FACILITY BOOKING (GUEST LODGE): 
-             - ALWAYS check availability using 'check_facility_availability' BEFORE starting the booking flow.
-             - If a date is taken (unavailable), inform the user: "I'm sorry, that date is already fully booked. Would you like to check another day?"
-             - If the date is available, proceed with the BOOOKING FLOW:
-               a. Ask for full name.
-               b. Ask for phone number (Must be 11 digits).
-               c. Ask for purpose of visit.
-             - Once all info is collected, use 'book_facility' to record the request.
-             - Final confirmation: Tell the user the request is PENDING and that the Facility Manager will contact them for final confirmation.
-             - Today's date is ${new Date().toISOString().split('T')[0]}.
+          7. HOSPITAL CONTACT: If asked for phone numbers, say: "You can reach BienSanté Hospital on **0802 233 3285** or **0902 391 6337**. Would you like me to help you schedule an appointment now?"
+          
+          🗓️ APPOINTMENT BOOKING FLOW:
+          YOU MUST ASK ONLY ONE QUESTION AT A TIME. Wait for the user to answer before moving to the next step.
+          
+          1. Ask for full name:
+          “May I have your full name, please?”
+          
+          2. Ask for phone number:
+          “Please provide your phone number. It should be exactly 11 digits.”
+          If wrong length:
+          “That number seems incomplete. Kindly provide the full 11-digit phone number.”
+          
+          3. Ask for preferred date:
+          “What date would you prefer for your appointment?”
+          
+          4. Ask for purpose:
+          "What is the reason or purpose for your booking?"
+          
+          5. Data Collection & Processing:
+          When you have the Name, 11-digit Phone, Date, and Purpose, you must FIRST notify the user:
+          "Thank you for that information. I'm now processing your request, please give me just a moment while I get everything settled for you..."
+          Then immediately call 'book_facility'.
+          
+          6. Final Confirmation:
+          Once the tool returns success, say EXACTLY: “Thank you. Our management team will review availability for that date and contact you shortly to confirm a suitable time and provide further instructions.”
+          
+          Today's date is ${new Date().toISOString().split('T')[0]}.
           
           KNOWLEDGE BASE:
           ${this.config.knowledgeBase}`,
@@ -214,7 +231,18 @@ export class GeminiLiveService {
 
         if (this.sessionPromise) {
             this.sessionPromise.then((session) => {
-                session.sendRealtimeInput({ media: pcmBlob });
+                // Using raw send to ensure we use the 'audio' field instead of deprecated 'media_chunks'
+                // Some SDK versions might still be using the deprecated field in sendRealtimeInput
+                try {
+                    (session as any).send({
+                        realtimeInput: {
+                            audio: pcmBlob
+                        }
+                    });
+                } catch (e) {
+                    // Fallback to sendRealtimeInput if raw send fails
+                    session.sendRealtimeInput({ audio: pcmBlob });
+                }
             });
         }
       };
@@ -235,6 +263,7 @@ export class GeminiLiveService {
 
     if (message.toolCall) {
         const toolCalls = message.toolCall.functionCalls;
+        console.log('Gemini Tool Calls:', toolCalls);
         if (toolCalls) {
             const responses = await Promise.all(toolCalls.map(async (call) => {
                 let result;
@@ -250,10 +279,10 @@ export class GeminiLiveService {
                             userPhone,
                             bookingDate,
                             purpose,
-                            facility: 'Guest Lodge',
+                            facility: 'Hospital Appointment',
                             agentId: this.config.name
                         });
-                        result = { success: true, bookingId, message: `Booking request recorded for ${bookingDate}. Inform the user it is PENDING manager confirmation.` };
+                        result = { success: true, bookingId, message: `Appointment request recorded for ${bookingDate}. Management will review and confirm.` };
                     }
                 } catch (error) {
                     result = { success: false, error: error instanceof Error ? error.message : "Unknown error" };
@@ -266,7 +295,7 @@ export class GeminiLiveService {
 
             if (this.sessionPromise) {
                 this.sessionPromise.then(session => {
-                    session.sendToolResponse({ functionResponses: responses });
+                    (session as any).sendToolResponse({ functionResponses: responses });
                 });
             }
         }

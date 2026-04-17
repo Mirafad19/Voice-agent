@@ -46,7 +46,7 @@
         "userPhone": { "type": "string", "description": "11-digit phone number" },
         "bookingDate": { "type": "string", "description": "YYYY-MM-DD" },
         "purpose": { "type": "string" },
-        "facility": { "type": "string", "enum": ["Guest Lodge"] },
+        "facility": { "type": "string", "enum": ["Guest Lodge", "Hospital Appointment"] },
         "status": { "type": "string", "enum": ["Pending", "Confirmed", "Rejected"] },
         "agentId": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" }

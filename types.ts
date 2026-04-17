@@ -65,7 +65,7 @@ export interface Booking {
   userPhone: string;
   bookingDate: string; // YYYY-MM-DD
   purpose: string;
-  facility: 'Guest Lodge';
+  facility: 'Guest Lodge' | 'Hospital Appointment';
   status: 'Pending' | 'Confirmed' | 'Rejected';
   agentId: string;
   createdAt: any;

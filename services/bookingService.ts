@@ -32,12 +32,9 @@ export const checkFacilityAvailability = async (agentId: string, date: string): 
 
 export const createBooking = async (booking: Omit<Booking, 'id' | 'createdAt' | 'status'>): Promise<string> => {
   try {
-    const isAvailable = await checkFacilityAvailability(booking.agentId, booking.bookingDate);
+    // Skip availability check for now to allow all visitor requests.
+    // Management will review and confirm availability later as per instructions.
     
-    if (!isAvailable) {
-      throw new Error("This date is already booked or full.");
-    }
-
     const docRef = await addDoc(collection(db, BOOKINGS_COLLECTION), {
       ...booking,
       status: 'Pending',
