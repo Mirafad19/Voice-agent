@@ -14,6 +14,7 @@ interface Callbacks {
   onInterruption: () => void;
   onLocalInterruption?: () => void; 
   onError: (error: string) => void;
+  onToolProcessing?: (isProcessing: boolean) => void;
 }
 
 function encode(bytes: Uint8Array): string {
@@ -265,6 +266,7 @@ export class GeminiLiveService {
         const toolCalls = message.toolCall.functionCalls;
         console.log('Gemini Tool Calls:', toolCalls);
         if (toolCalls) {
+            this.callbacks.onToolProcessing?.(true);
             const responses = await Promise.all(toolCalls.map(async (call) => {
                 let result;
                 try {
@@ -293,9 +295,19 @@ export class GeminiLiveService {
                 };
             }));
 
+            this.callbacks.onToolProcessing?.(false);
+
             if (this.sessionPromise) {
                 this.sessionPromise.then(session => {
                     (session as any).sendToolResponse({ functionResponses: responses });
+                    
+                    // Safety: if the model doesn't respond with audio/text in 4 seconds, nudge it
+                    setTimeout(() => {
+                        if (this.currentOutputTranscription === '' && this.session) {
+                            console.log("Nudging model after tool silence...");
+                            this.sendText("The professional booking tool has finished. Please confirm the result to the user clearly.");
+                        }
+                    }, 4000);
                 });
             }
         }

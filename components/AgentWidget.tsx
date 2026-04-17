@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { AgentProfile, AgentConfig, WidgetTheme, WidgetState, Recording, ReportingStatus } from '../types';
+import { AgentProfile, AgentConfig, WidgetTheme, WidgetState, Recording, ReportingStatus, Booking } from '../types';
 import { GeminiLiveService } from '../services/geminiLiveService';
 import { RecordingService } from '../services/recordingService';
 import { Spinner } from './ui/Spinner';
@@ -22,7 +22,7 @@ interface Message {
     timestamp: Date;
 }
 
-type ViewState = 'home' | 'voice' | 'chat';
+type ViewState = 'home' | 'voice' | 'chat' | 'status';
 
 async function getCloudinaryShareableLink(cloudName: string, uploadPreset: string, recording: Omit<Recording, 'id' | 'url'>): Promise<string> {
     if (!recording.blob || recording.blob.size === 0) return 'N/A (Text Chat)';
@@ -170,6 +170,10 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const [errorMessage, setErrorMessage] = useState('');
+  const [isToolProcessing, setIsToolProcessing] = useState(false);
+  const [statusPhone, setStatusPhone] = useState('');
+  const [checkedBookings, setCheckedBookings] = useState<Booking[]>([]);
+  const [isCheckingStatus, setIsCheckingStatus] = useState(false);
 
   const geminiServiceRef = useRef<GeminiLiveService | null>(null);
   const recordingServiceRef = useRef<RecordingService | null>(null);
@@ -467,6 +471,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                     const calls = chunk.functionCalls;
                     toolResponses = await Promise.all(calls.map(async (call) => {
                         let toolResult;
+                        setIsToolProcessing(true);
                         try {
                             if (call.name === 'check_facility_availability') {
                                 const { date } = call.args as any;
@@ -486,6 +491,8 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                             }
                         } catch (error) {
                             toolResult = { success: false, error: error instanceof Error ? error.message : "Unknown error" };
+                        } finally {
+                            setIsToolProcessing(false);
                         }
                         return { id: call.id, response: { result: toolResult } };
                     }));
@@ -569,6 +576,25 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
        }
     }
   }, [messages, analyzeAndSendReport, isWidgetMode, onSessionEnd]);
+
+  const handleCheckStatus = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (statusPhone.length < 5) return;
+    setIsCheckingStatus(true);
+    try {
+        const bookings = await bookingService.getBookingsForAgent(agentProfile.name);
+        const myBookings = bookings.filter(b => b.userPhone === statusPhone).sort((a,b) => {
+             const da = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(0);
+             const db = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(0);
+             return db.getTime() - da.getTime();
+        });
+        setCheckedBookings(myBookings);
+    } catch (err) {
+        console.error("Status check failed:", err);
+    } finally {
+        setIsCheckingStatus(false);
+    }
+  };
 
   
   const resetSilenceTimer = useCallback(() => {
@@ -753,6 +779,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
       },
       onInterruption: handleInterruption,
       onLocalInterruption: handleInterruption,
+      onToolProcessing: (isProcessing) => setIsToolProcessing(isProcessing),
       onError: (error) => {
         if (!navigator.onLine) {
             setIsOnline(false);
@@ -986,27 +1013,117 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                   </form>
               </div>
 
-              <button
-                  onClick={startVoiceSession}
-                  disabled={!isOnline}
-                  className={`w-full bg-gradient-to-r from-accent-${accentColorClass} to-gray-800 rounded-2xl p-1 shadow-xl hover:scale-[1.03] transition-transform group text-left disabled:opacity-50 disabled:grayscale`}
-              >
-                  <div className="bg-white/10 backdrop-blur-md rounded-xl p-5 flex items-center gap-5 h-full">
-                      <div className="p-4 bg-white/20 rounded-2xl shadow-inner animate-pulse">
-                          <MicrophoneIcon state={WidgetState.Idle} />
+                  <button
+                      onClick={startVoiceSession}
+                      disabled={!isOnline}
+                      className={`w-full bg-gradient-to-r from-accent-${accentColorClass} to-gray-800 rounded-2xl p-1 shadow-xl hover:scale-[1.03] transition-transform group text-left disabled:opacity-50 disabled:grayscale`}
+                  >
+                      <div className="bg-white/10 backdrop-blur-md rounded-xl p-5 flex items-center gap-5 h-full">
+                          <div className="p-4 bg-white/20 rounded-2xl shadow-inner animate-pulse">
+                              <MicrophoneIcon state={WidgetState.Idle} />
+                          </div>
+                          <div className="text-left text-white">
+                              <h3 className="font-black text-xl tracking-tighter uppercase leading-none">Talk to AI Assistant</h3>
+                              <p className="text-xs font-bold opacity-80 mt-1 uppercase tracking-widest">Skip typing, we're listening.</p>
+                          </div>
                       </div>
-                      <div className="text-left text-white">
-                          <h3 className="font-black text-xl tracking-tighter uppercase leading-none">Talk to AI Assistant</h3>
-                          <p className="text-xs font-bold opacity-80 mt-1 uppercase tracking-widest">Skip typing, we're listening.</p>
+                  </button>
+
+                  <button
+                      onClick={() => setView('status')}
+                      className="w-full bg-white dark:bg-gray-800 border-2 border-gray-100 dark:border-gray-700 rounded-2xl p-5 flex items-center gap-4 hover:border-accent-cyan transition-all group"
+                  >
+                      <div className={`p-3 bg-accent-${accentColorClass}/10 rounded-xl group-hover:bg-accent-${accentColorClass}/20 transition-colors`}>
+                          <svg xmlns="http://www.w3.org/2000/svg" className={`h-6 w-6 text-accent-${accentColorClass}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                          </svg>
                       </div>
-                  </div>
+                      <div className="text-left">
+                          <h3 className="font-bold text-gray-800 dark:text-white">Check Appointment Status</h3>
+                          <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider">Follow up on your requests</p>
+                      </div>
+                  </button>
+          </div>
+      </div>
+  );
+
+  const renderStatusView = () => (
+      <div className="flex flex-col h-full w-full bg-white dark:bg-gray-900 animate-fade-in-up">
+          <div className={`flex items-center gap-4 p-5 flex-shrink-0 z-20 bg-accent-${accentColorClass} text-white shadow-xl`}>
+              <button onClick={handleBack} className="p-1 rounded-full hover:bg-white/20 transition-all active:scale-90" title="Back">
+                  <ChevronLeftIcon />
               </button>
+              <h3 className="font-black text-lg uppercase tracking-tight">Appointment Status</h3>
+          </div>
+
+          <div className="flex-grow overflow-y-auto p-6 bg-gray-50 dark:bg-gray-900">
+              <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 mb-6">
+                  <form onSubmit={handleCheckStatus} className="space-y-4">
+                      <div>
+                          <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Phone Number</label>
+                          <input 
+                              type="tel" 
+                              placeholder="Enter your registered phone number" 
+                              value={statusPhone}
+                              onChange={(e) => setStatusPhone(e.target.value)}
+                              className="w-full px-5 py-4 rounded-xl border-2 border-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-white focus:outline-none focus:border-accent-cyan transition-all font-bold"
+                          />
+                      </div>
+                      <button 
+                          type="submit" 
+                          disabled={isCheckingStatus || statusPhone.length < 5}
+                          className={`w-full py-4 rounded-xl bg-accent-${accentColorClass} text-white font-black uppercase tracking-widest shadow-lg hover:brightness-110 active:scale-95 transition-all disabled:opacity-50`}
+                      >
+                          {isCheckingStatus ? "Checking..." : "Search Appointments"}
+                      </button>
+                  </form>
+              </div>
+
+              <div className="space-y-4">
+                  {checkedBookings.length > 0 ? (
+                      checkedBookings.map((b) => (
+                          <div key={b.id} className="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-sm border-l-4 border-gray-100 dark:border-gray-700 flex flex-col gap-3 relative overflow-hidden" 
+                               style={{ borderLeftColor: b.status === 'Confirmed' ? '#10b981' : b.status === 'Rejected' ? '#ef4444' : '#f59e0b' }}>
+                              <div className="flex justify-between items-start">
+                                  <div>
+                                      <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">{b.bookingDate}</p>
+                                      <h4 className="font-bold text-gray-900 dark:text-white">{b.facility}</h4>
+                                  </div>
+                                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
+                                      b.status === 'Confirmed' ? 'bg-emerald-100 text-emerald-700' : 
+                                      b.status === 'Rejected' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+                                  }`}>
+                                      {b.status}
+                                  </span>
+                              </div>
+                              <p className="text-sm text-gray-500 dark:text-gray-400 font-medium line-clamp-2 italic">"{b.purpose}"</p>
+                              {b.status === 'Confirmed' && (
+                                  <div className="bg-emerald-50 dark:bg-emerald-900/20 p-3 rounded-xl border border-emerald-100 dark:border-emerald-800 mt-1">
+                                      <p className="text-xs text-emerald-700 dark:text-emerald-400 font-bold">Your visit is confirmed! Please bring a valid ID.</p>
+                                  </div>
+                              )}
+                          </div>
+                      ))
+                  ) : statusPhone && !isCheckingStatus ? (
+                      <div className="text-center py-10 opacity-50">
+                          <p className="font-bold text-gray-500">No appointments found for this number.</p>
+                      </div>
+                  ) : null}
+              </div>
           </div>
       </div>
   );
 
   const renderChatView = () => (
-      <div className="flex flex-col h-full w-full bg-white dark:bg-gray-900 animate-fade-in-up">
+      <div className="flex flex-col h-full w-full bg-white dark:bg-gray-900 animate-fade-in-up relative">
+          {isToolProcessing && (
+              <div className="absolute inset-0 z-[60] flex items-center justify-center bg-white/60 dark:bg-black/40 backdrop-blur-[2px]">
+                  <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl shadow-2xl flex flex-col items-center gap-4 border border-gray-100 dark:border-gray-700 scale-110 animate-fade-in">
+                      <Spinner className={`w-12 h-12 text-accent-${accentColorClass}`} />
+                      <p className="font-black text-xs uppercase tracking-widest animate-pulse">Processing Booking...</p>
+                  </div>
+              </div>
+          )}
           <div className={`flex items-center justify-between p-5 pr-14 flex-shrink-0 z-20 bg-accent-${accentColorClass} text-white shadow-xl transition-colors duration-300`}>
               <div className="flex items-center gap-4 min-w-0">
                   <button onClick={handleBack} className="p-1 rounded-full hover:bg-white/20 transition-all active:scale-90 flex-shrink-0" title="Back">
@@ -1103,6 +1220,15 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
         <div className="flex-grow flex flex-col items-center justify-center relative overflow-hidden bg-white dark:bg-gray-900">
             {!isOnline && <OfflineBanner />}
+            
+            {isToolProcessing && (
+                <div className="absolute inset-0 z-[60] flex flex-col items-center justify-center bg-white/60 dark:bg-black/40 backdrop-blur-[2px]">
+                    <div className="bg-white dark:bg-gray-800 p-8 rounded-full shadow-2xl flex flex-col items-center gap-4 border-4 border-accent-cyan animate-pulse">
+                        <Spinner className={`w-16 h-16 text-accent-${accentColorClass}`} />
+                        <p className="font-black text-sm uppercase tracking-tighter text-gray-900 dark:text-white">Setting things up...</p>
+                    </div>
+                </div>
+            )}
             
             <div className="relative w-full flex items-center justify-center mb-10 min-h-[220px]">
                 
@@ -1244,6 +1370,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
               {view === 'home' && renderHomeView()}
               {view === 'chat' && renderChatView()}
               {view === 'voice' && renderVoiceView()}
+              {view === 'status' && renderStatusView()}
           </div>
       </div>
       {!isWidgetMode && (

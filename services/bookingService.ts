@@ -32,9 +32,35 @@ export const checkFacilityAvailability = async (agentId: string, date: string): 
 
 export const createBooking = async (booking: Omit<Booking, 'id' | 'createdAt' | 'status'>): Promise<string> => {
   try {
-    // Skip availability check for now to allow all visitor requests.
-    // Management will review and confirm availability later as per instructions.
+    // Check for duplicate pending requests within the last 5 minutes to prevent spam/retries from network issues
+    const fiveMinutesAgo = new Date();
+    fiveMinutesAgo.setMinutes(fiveMinutesAgo.getMinutes() - 5);
     
+    const q = query(
+      collection(db, BOOKINGS_COLLECTION),
+      where('agentId', '==', booking.agentId),
+      where('userPhone', '==', booking.userPhone),
+      where('bookingDate', '==', booking.bookingDate),
+      where('status', '==', 'Pending')
+      // Note: we can't easily filter by date in Firestore without a complex index for this specific query, 
+      // but matching phone+date+agent is usually enough to catch duplicates in a session.
+    );
+    
+    const existing = await getDocs(q);
+    if (!existing.empty) {
+      // Check if any of these were recent
+      const recent = existing.docs.find(doc => {
+        const data = doc.data();
+        const createdAt = data.createdAt?.toDate ? data.createdAt.toDate() : null;
+        return createdAt && createdAt > fiveMinutesAgo;
+      });
+      
+      if (recent) {
+        console.log("Found recent duplicate booking, returning existing ID:", recent.id);
+        return recent.id;
+      }
+    }
+
     const docRef = await addDoc(collection(db, BOOKINGS_COLLECTION), {
       ...booking,
       status: 'Pending',
