@@ -89,9 +89,10 @@ export class GeminiLiveService {
             userName: { type: Type.STRING, description: 'The full name of the user.' },
             userPhone: { type: Type.STRING, description: 'The 11-digit phone number of the user.' },
             bookingDate: { type: Type.STRING, description: 'The date in YYYY-MM-DD format.' },
-            purpose: { type: Type.STRING, description: 'The purpose of the visit or appointment.' }
+            purpose: { type: Type.STRING, description: 'The purpose of the visit or appointment.' },
+            facilityName: { type: Type.STRING, description: 'The name of the facility (e.g., PSSDC Guest Lodge or BienSanté Hospital).' }
           },
-          required: ['userName', 'userPhone', 'bookingDate', 'purpose']
+          required: ['userName', 'userPhone', 'bookingDate', 'purpose', 'facilityName']
         }
       };
 
@@ -133,7 +134,7 @@ export class GeminiLiveService {
           5. Data Collection & Processing:
           When you have the Name, 11-digit Phone, Date, and Purpose, you must FIRST notify the user:
           "Thank you for that information. I'm now processing your request, please give me just a moment while I get everything settled for you..."
-          Then immediately call 'book_facility'.
+          Then call 'book_facility'. Use 'PSSDC Guest Lodge' for lodge bookings and 'BienSanté Hospital Appointment' for medical appointments as the facilityName parameter.
           
           6. Final Confirmation:
           Once the tool returns success, say EXACTLY: “Thank you. Our management team will review availability for that date and contact you shortly to confirm a suitable time and provide further instructions.”
@@ -267,7 +268,10 @@ export class GeminiLiveService {
         console.log('Gemini Tool Calls:', toolCalls);
         if (toolCalls) {
             this.callbacks.onToolProcessing?.(true);
-            const responses = await Promise.all(toolCalls.map(async (call) => {
+            const responses = [];
+            
+            // Sequential processing to prevent parallel race conditions (duplicates)
+            for (const call of toolCalls) {
                 let result;
                 try {
                     if (call.name === 'check_facility_availability') {
@@ -275,25 +279,26 @@ export class GeminiLiveService {
                         const isAvailable = await bookingService.checkFacilityAvailability(this.config.name, date);
                         result = { isAvailable, message: isAvailable ? "This date is available." : "This date is already fully booked. Suggest another day." };
                     } else if (call.name === 'book_facility') {
-                        const { userName, userPhone, bookingDate, purpose } = call.args as any;
+                        const { userName, userPhone, bookingDate, purpose, facilityName } = call.args as any;
                         const bookingId = await bookingService.createBooking({
                             userName,
                             userPhone,
                             bookingDate,
                             purpose,
-                            facility: 'Hospital Appointment',
+                            facility: facilityName || 'General Appointment',
                             agentId: this.config.name
                         });
                         result = { success: true, bookingId, message: `Appointment request recorded for ${bookingDate}. Management will review and confirm.` };
                     }
                 } catch (error) {
+                    console.error(`Tool execution error [${call.name}]:`, error);
                     result = { success: false, error: error instanceof Error ? error.message : "Unknown error" };
                 }
-                return {
+                responses.push({
                     id: call.id,
                     response: { result }
-                };
-            }));
+                });
+            }
 
             this.callbacks.onToolProcessing?.(false);
 

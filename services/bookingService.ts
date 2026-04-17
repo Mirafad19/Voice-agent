@@ -48,15 +48,15 @@ export const createBooking = async (booking: Omit<Booking, 'id' | 'createdAt' | 
     
     const existing = await getDocs(q);
     if (!existing.empty) {
-      // Check if any of these were recent
       const recent = existing.docs.find(doc => {
         const data = doc.data();
         const createdAt = data.createdAt?.toDate ? data.createdAt.toDate() : null;
-        return createdAt && createdAt > fiveMinutesAgo;
+        // If it was created within the last 10 minutes, consider it a duplicate
+        return !createdAt || createdAt.getTime() > (Date.now() - 600000);
       });
       
       if (recent) {
-        console.log("Found recent duplicate booking, returning existing ID:", recent.id);
+        console.log("Blocking duplicate booking request. Returning existing ID:", recent.id);
         return recent.id;
       }
     }

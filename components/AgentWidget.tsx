@@ -374,9 +374,10 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
           userName: { type: Type.STRING, description: 'The full name of the user.' },
           userPhone: { type: Type.STRING, description: 'The 11-digit phone number of the user.' },
           bookingDate: { type: Type.STRING, description: 'The date in YYYY-MM-DD format.' },
-          purpose: { type: Type.STRING, description: 'The purpose of the visit or appointment.' }
+          purpose: { type: Type.STRING, description: 'The purpose of the visit or appointment.' },
+          facilityName: { type: Type.STRING, description: 'The name of the facility (e.g., PSSDC Guest Lodge or BienSanté Hospital Appointment).' }
         },
-        required: ['userName', 'userPhone', 'bookingDate', 'purpose']
+        required: ['userName', 'userPhone', 'bookingDate', 'purpose', 'facilityName']
       }
     };
 
@@ -408,7 +409,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     5. Data Collection & Processing:
     When you have the Name, 11-digit Phone, Date, and Purpose, you must FIRST notify the user:
     "Thank you for that information. I'm now processing your request, please give me just a moment while I get everything settled for you..."
-    Then immediately call 'book_facility'.
+    Then call 'book_facility'. Use 'PSSDC Guest Lodge' for lodge bookings and 'BienSanté Hospital Appointment' for medical appointments as the facilityName parameter.
     
     6. Final Confirmation:
     Once the tool returns success, say EXACTLY: “Thank you. Our management team will review availability for that date and contact you shortly to confirm a suitable time and provide further instructions.”
@@ -466,39 +467,43 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             let hasFunctionCalls = false;
 
             for await (const chunk of stream) {
-                if (chunk.functionCalls) {
-                    hasFunctionCalls = true;
-                    const calls = chunk.functionCalls;
-                    toolResponses = await Promise.all(calls.map(async (call) => {
-                        let toolResult;
+                    if (chunk.functionCalls) {
+                        hasFunctionCalls = true;
+                        const calls = chunk.functionCalls;
                         setIsToolProcessing(true);
-                        try {
-                            if (call.name === 'check_facility_availability') {
-                                const { date } = call.args as any;
-                                const isAvailable = await bookingService.checkFacilityAvailability(agentProfile.name, date);
-                                toolResult = { isAvailable, message: isAvailable ? "Available" : "Booked" };
-                            } else if (call.name === 'book_facility') {
-                                const { userName, userPhone, bookingDate, purpose } = call.args as any;
-                                const bookingId = await bookingService.createBooking({
-                                    userName,
-                                    userPhone,
-                                    bookingDate,
-                                    purpose,
-                                    facility: 'Hospital Appointment',
-                                    agentId: agentProfile.name
-                                });
-                                toolResult = { success: true, bookingId, message: "Recorded as PENDING" };
+                        const results = [];
+                        
+                        // Sequential tool call processing to avoid parallel race conditions
+                        for (const call of calls) {
+                            let toolResult;
+                            try {
+                                if (call.name === 'check_facility_availability') {
+                                    const { date } = call.args as any;
+                                    const isAvailable = await bookingService.checkFacilityAvailability(agentProfile.name, date);
+                                    toolResult = { isAvailable, message: isAvailable ? "Available" : "Booked" };
+                                } else if (call.name === 'book_facility') {
+                                    const { userName, userPhone, bookingDate, purpose, facilityName } = call.args as any;
+                                    const bookingId = await bookingService.createBooking({
+                                        userName,
+                                        userPhone,
+                                        bookingDate,
+                                        purpose,
+                                        facility: facilityName || 'Hospital Appointment',
+                                        agentId: agentProfile.name
+                                    });
+                                    toolResult = { success: true, bookingId, message: "Recorded as PENDING" };
+                                }
+                            } catch (error) {
+                                console.error(`Chat Tool Error [${call.name}]:`, error);
+                                toolResult = { success: false, error: error instanceof Error ? error.message : "Unknown error" };
                             }
-                        } catch (error) {
-                            toolResult = { success: false, error: error instanceof Error ? error.message : "Unknown error" };
-                        } finally {
-                            setIsToolProcessing(false);
+                            results.push({ id: call.id, response: { result: toolResult } });
                         }
-                        return { id: call.id, response: { result: toolResult } };
-                    }));
-                    // Break current stream iteration to handle function responses
-                    break;
-                }
+                        
+                        toolResponses = results;
+                        setIsToolProcessing(false);
+                        break;
+                    }
 
                 const chunkText = chunk.text;
                 if (chunkText) {
@@ -518,10 +523,19 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             }
 
             if (hasFunctionCalls) {
-                const nextResult = await chatSessionRef.current!.sendMessageStream({
-                    functionResponses: toolResponses
-                });
-                await processStream(nextResult);
+                try {
+                    const nextResult = await chatSessionRef.current!.sendMessageStream({
+                        functionResponses: toolResponses
+                    });
+                    await processStream(nextResult);
+                } catch (toolError) {
+                    console.error("Error after tool response:", toolError);
+                    setMessages(prev => [...prev, { 
+                        role: 'model', 
+                        text: "I've successfully recorded your request in our system, but I'm having trouble finishing our conversation. Our team will review your booking and get back to you! Is there anything else I can help with?", 
+                        timestamp: new Date() 
+                    }]);
+                }
             }
         };
 
