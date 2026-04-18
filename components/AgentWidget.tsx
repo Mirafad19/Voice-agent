@@ -22,7 +22,8 @@ interface Message {
     timestamp: Date;
 }
 
-type ViewState = 'home' | 'voice' | 'chat' | 'status';
+type Dialect = 'nigerian-english' | 'pidgin' | 'abroad-english';
+type ViewState = 'home' | 'voice' | 'chat' | 'status' | 'dialect';
 
 async function getCloudinaryShareableLink(cloudName: string, uploadPreset: string, recording: Omit<Recording, 'id' | 'url'>): Promise<string> {
     if (!recording.blob || recording.blob.size === 0) return 'N/A (Text Chat)';
@@ -169,6 +170,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const [chatStarted, setChatStarted] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  const [selectedDialect, setSelectedDialect] = useState<Dialect | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
   const [isToolProcessing, setIsToolProcessing] = useState(false);
   const [statusPhone, setStatusPhone] = useState('');
@@ -392,8 +394,16 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
       }
     };
 
+    const dialectInstruction = selectedDialect === 'pidgin' 
+        ? "LANGUAGE: Speak primarily in Nigerian Pidgin. Use phrases like 'Abeg', 'How far', 'Wetin', 'I wan', and 'No Wahala'. Be professional but relatable."
+        : selectedDialect === 'nigerian-english'
+        ? "LANGUAGE: Use Nigerian Standard English. Be professional and polite, using 'Sir' or 'Ma' as appropriate in a Nigerian professional context."
+        : "LANGUAGE: Use a standard international English tone.";
+
     const systemInstruction = `
     ${config.chatKnowledgeBase || config.knowledgeBase}
+    
+    ${dialectInstruction}
     
     CRITICAL OPERATIONAL RULES:
     - Today's date is ${new Date().toISOString().split('T')[0]}.
@@ -655,8 +665,14 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     }
   }, [resetSilenceTimer]);
 
-  const startVoiceSession = useCallback(async () => {
+  const startVoiceSession = useCallback(async (dialect?: Dialect) => {
     if (!isOnline) return;
+
+    const activeDialect = dialect || selectedDialect;
+    if (!activeDialect) {
+        setView('dialect');
+        return;
+    }
 
     if (!apiKey || apiKey === 'dummy') {
         setWidgetState(WidgetState.Error);
@@ -815,9 +831,9 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         setWidgetState(WidgetState.Error);
         cleanupServices();
       },
-    });
+    }, activeDialect);
     geminiServiceRef.current.connect(stream);
-  }, [apiKey, agentProfile, resetSilenceTimer, handleInterruption, isOnline]);
+  }, [apiKey, agentProfile, resetSilenceTimer, handleInterruption, isOnline, selectedDialect]);
 
   const endVoiceSession = useCallback(() => {
     cleanupServices();
@@ -1070,6 +1086,68 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                       </div>
                   </button>
           </div>
+      </div>
+  );
+
+  const renderDialectView = () => (
+      <div className="flex flex-col h-full w-full bg-white dark:bg-gray-900 animate-fade-in-up">
+        <div className={`flex items-center gap-4 p-5 flex-shrink-0 z-20 bg-accent-${accentColorClass} text-white shadow-xl`}>
+            <button onClick={() => setView('home')} className="p-1 rounded-full hover:bg-white/20 transition-all active:scale-90" title="Back">
+                <ChevronLeftIcon />
+            </button>
+            <h3 className="font-black text-lg uppercase tracking-tight leading-tight">Select Voice Style</h3>
+        </div>
+
+        <div className="flex-grow flex flex-col justify-center p-8 gap-6 bg-gray-50 dark:bg-gray-900">
+            <div className="text-center mb-4">
+                <div className="w-20 h-20 bg-accent-cyan/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-accent-cyan" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5h12M9 3v2m1.048 9.5a10.001 10.001 0 01-14.282-4.048M1 18l1.048-1.048M12 18H5.166" />
+                    </svg>
+                </div>
+                <h4 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">Choose Your Preferred Dialect</h4>
+                <p className="text-sm text-gray-500 font-bold mt-1">Please select how you want the AI to speak to you.</p>
+            </div>
+
+            <button
+                onClick={() => { setSelectedDialect('nigerian-english'); startVoiceSession('nigerian-english'); }}
+                className="w-full bg-white dark:bg-gray-800 border-2 border-gray-100 dark:border-gray-700 rounded-2xl p-5 flex items-center gap-5 hover:border-accent-emerald hover:bg-emerald-50/10 transition-all group relative overflow-hidden active:scale-[0.98]"
+            >
+                <div className="p-3 bg-emerald-100 dark:bg-emerald-900/30 rounded-xl">
+                    <span className="text-2xl">🇳🇬</span>
+                </div>
+                <div className="text-left">
+                    <h3 className="font-black text-gray-900 dark:text-white uppercase tracking-tighter">Nigerian Standard English</h3>
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-0.5">Professional • Respectful • Local</p>
+                </div>
+            </button>
+
+            <button
+                onClick={() => { setSelectedDialect('pidgin'); startVoiceSession('pidgin'); }}
+                className="w-full bg-white dark:bg-gray-800 border-2 border-gray-100 dark:border-gray-700 rounded-2xl p-5 flex items-center gap-5 hover:border-accent-amber hover:bg-amber-50/10 transition-all group relative overflow-hidden active:scale-[0.98]"
+            >
+                <div className="p-3 bg-amber-100 dark:bg-amber-900/30 rounded-xl">
+                    <span className="text-2xl">🗣️</span>
+                </div>
+                <div className="text-left">
+                    <h3 className="font-black text-gray-900 dark:text-white uppercase tracking-tighter">Nigerian Pidgin</h3>
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-0.5">Relatable • Friendly • Natural</p>
+                </div>
+            </button>
+
+            <button
+                onClick={() => { setSelectedDialect('abroad-english'); startVoiceSession('abroad-english'); }}
+                className="w-full bg-white dark:bg-gray-800 border-2 border-gray-100 dark:border-gray-700 rounded-2xl p-5 flex items-center gap-5 hover:border-accent-sky hover:bg-sky-50/10 transition-all group relative overflow-hidden active:scale-[0.98]"
+            >
+                <div className="p-3 bg-sky-100 dark:bg-sky-900/30 rounded-xl">
+                    <span className="text-2xl">🌐</span>
+                </div>
+                <div className="text-left">
+                    <h3 className="font-black text-gray-900 dark:text-white uppercase tracking-tighter">Abroad Standard English</h3>
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-0.5">International • Formal • Neutral</p>
+                </div>
+            </button>
+        </div>
       </div>
   );
 
@@ -1397,6 +1475,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
               {view === 'chat' && renderChatView()}
               {view === 'voice' && renderVoiceView()}
               {view === 'status' && renderStatusView()}
+              {view === 'dialect' && renderDialectView()}
           </div>
       </div>
       {!isWidgetMode && (

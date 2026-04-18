@@ -26,10 +26,13 @@ function encode(bytes: Uint8Array): string {
     return btoa(binary);
 }
 
+export type Dialect = 'nigerian-english' | 'pidgin' | 'abroad-english';
+
 export class GeminiLiveService {
   private ai: GoogleGenAI;
   private config: AgentConfig;
   private callbacks: Callbacks;
+  private dialect: Dialect;
   
   private session: LiveSession | null = null;
   private sessionPromise: Promise<LiveSession> | null = null;
@@ -47,12 +50,13 @@ export class GeminiLiveService {
   private readonly SPEECH_DETECTION_THRESHOLD = 0.01; 
   private readonly FRAMES_FOR_INTERRUPTION = 3; // ~75ms of sustained speech
 
-  constructor(apiKey: string, config: AgentConfig, callbacks: Callbacks) {
+  constructor(apiKey: string, config: AgentConfig, callbacks: Callbacks, dialect: Dialect = 'abroad-english') {
     this.ai = new GoogleGenAI({ 
       apiKey: apiKey || 'dummy'
     });
     this.config = config;
     this.callbacks = callbacks;
+    this.dialect = dialect;
   }
   
   private setState(state: ServiceState) {
@@ -96,6 +100,12 @@ export class GeminiLiveService {
         }
       };
 
+      const dialectInstruction = this.dialect === 'pidgin'
+        ? "LANGUAGE & STYLE: You are now speaking in Nigerian Pidgin. Always use common phrases like 'Abeg', 'How far', 'Wetin', 'I wan', 'No Wahala', 'E don happen', 'Wetin dey sup'. Maintain a friendly yet professional business tone suitable for a PSSDC/BienSanté representative."
+        : this.dialect === 'nigerian-english'
+        ? "LANGUAGE & STYLE: You are now using Nigerian Standard English. Be professional and highly respectful. Always use 'Sir' or 'Ma' when addressing the user (e.g., 'How can I help you today, Sir?'). Use local professional phrasing common in Nigerian corporate environments."
+        : "LANGUAGE & STYLE: Use a standard international professional English tone.";
+
       this.sessionPromise = this.ai.live.connect({
         model: 'gemini-3.1-flash-live-preview',
         config: {
@@ -106,7 +116,7 @@ export class GeminiLiveService {
           tools: [{ functionDeclarations: [checkAvailabilityTool, bookFacilityTool] }],
           systemInstruction: `
           CRITICAL OPERATIONAL RULES:
-          1. LANGUAGE ENFORCEMENT: You must speak ONLY in English. 
+          1. ${dialectInstruction}
           2. ${greetingContext}
           3. RESPONSIVE PROTOCOL: You are an active, helpful listener. Respond naturally and promptly as soon as the user finishes their thought.
           4. AGGRESSIVE SILENCE: If the user starts talking while you are speaking, STOP IMMEDIATELY. Prioritize the user's voice above your own.
@@ -275,22 +285,22 @@ export class GeminiLiveService {
             for (const call of toolCalls) {
                 let result;
                 try {
-                    if (call.name === 'check_facility_availability') {
-                        const { date } = call.args as any;
-                        const isAvailable = await bookingService.checkFacilityAvailability(this.config.id || this.config.name, date);
-                        result = { isAvailable, message: isAvailable ? "This date is available." : "This date is already fully booked. Suggest another day." };
-                    } else if (call.name === 'book_facility') {
-                        const { userName, userPhone, bookingDate, purpose, facilityName } = call.args as any;
-                        const bookingId = await bookingService.createBooking({
-                            userName,
-                            userPhone,
-                            bookingDate,
-                            purpose,
-                            facility: facilityName || 'General Appointment',
-                            agentId: this.config.id || this.config.name
-                        });
-                        result = { success: true, bookingId, message: `Appointment request recorded for ${bookingDate}. Management will review and confirm.` };
-                    }
+                        if (call.name === 'check_facility_availability') {
+                                    const { date } = call.args as any;
+                                    const isAvailable = await bookingService.checkFacilityAvailability((this.config as any).id || this.config.name, date);
+                                    result = { isAvailable, message: isAvailable ? "This date is available." : "This date is already fully booked. Suggest another day." };
+                                } else if (call.name === 'book_facility') {
+                                    const { userName, userPhone, bookingDate, purpose, facilityName } = call.args as any;
+                                    const bookingId = await bookingService.createBooking({
+                                        userName,
+                                        userPhone,
+                                        bookingDate,
+                                        purpose,
+                                        facility: facilityName || 'General Appointment',
+                                        agentId: (this.config as any).id || this.config.name
+                                    });
+                                    result = { success: true, bookingId, message: `Appointment request recorded for ${bookingDate}. Management will review and confirm.` };
+                                }
                 } catch (error) {
                     console.error(`Tool execution error [${call.name}]:`, error);
                     result = { success: false, error: error instanceof Error ? error.message : "Unknown error" };

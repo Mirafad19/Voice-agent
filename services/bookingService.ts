@@ -61,15 +61,17 @@ export const createBooking = async (booking: Omit<Booking, 'id' | 'createdAt' | 
       }
     }
 
+    console.log(`[BOOKING_ATTEMPT] agentId: ${booking.agentId}, userPhone: ${booking.userPhone}, date: ${booking.bookingDate}`);
     const docRef = await addDoc(collection(db, BOOKINGS_COLLECTION), {
       ...booking,
       status: 'Pending',
       createdAt: serverTimestamp()
     });
     
+    console.log(`[BOOKING_SUCCESS] Created booking ${docRef.id} for agentId: ${booking.agentId}`);
     return docRef.id;
   } catch (error) {
-    console.error("Error creating booking:", error);
+    console.error("[BOOKING_ERROR] Failed to create booking:", error);
     throw error;
   }
 };
