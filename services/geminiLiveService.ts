@@ -111,7 +111,11 @@ export class GeminiLiveService {
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: {
-            voiceConfig: { prebuiltVoiceConfig: { voiceName: this.config.voice } },
+            voiceConfig: { 
+              prebuiltVoiceConfig: { 
+                voiceName: (this.dialect === 'pidgin' || this.dialect === 'nigerian-english') ? 'Kore' : this.config.voice 
+              } 
+            },
           },
           tools: [{ functionDeclarations: [checkAvailabilityTool, bookFacilityTool] }],
           systemInstruction: `
@@ -296,7 +300,7 @@ export class GeminiLiveService {
                                         userPhone,
                                         bookingDate,
                                         purpose,
-                                        facility: facilityName || 'General Appointment',
+                                        facility: facilityName || 'Hospital Appointment',
                                         agentId: (this.config as any).id || this.config.name
                                     });
                                     result = { success: true, bookingId, message: `Appointment request recorded for ${bookingDate}. Management will review and confirm.` };

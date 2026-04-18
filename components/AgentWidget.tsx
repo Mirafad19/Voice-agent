@@ -171,6 +171,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const [selectedDialect, setSelectedDialect] = useState<Dialect | null>(null);
+  const [chatDialectRequestPending, setChatDialectRequestPending] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [isToolProcessing, setIsToolProcessing] = useState(false);
   const [statusPhone, setStatusPhone] = useState('');
@@ -354,9 +355,122 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   }, [agentProfile, apiKey, view]);
 
 
+  const handleSelectDialectInChat = async (dialect: Dialect) => {
+    setSelectedDialect(dialect);
+    setChatDialectRequestPending(false);
+    
+    // If there's already a message, we need to initialize the session and respond to it
+    if (messages.length > 0) {
+        const lastMsg = messages[messages.length - 1];
+        if (lastMsg.role === 'user') {
+            // We need to initialize chat session first
+            const config = agentProfile as AgentConfig;
+            const effectiveApiKey = apiKey || process.env.GEMINI_API_KEY || 'dummy';
+            const ai = new GoogleGenAI({ 
+                apiKey: effectiveApiKey
+            });
+            
+            // Re-using logic from initChat but we need it here immediately
+            const checkAvailabilityTool: FunctionDeclaration = {
+              name: 'check_facility_availability',
+              description: 'Check if a specific date is available for the facility (Guest Lodge or Hospital).',
+              parameters: {
+                type: Type.OBJECT,
+                properties: {
+                  date: { type: Type.STRING, description: 'The date in YYYY-MM-DD format.' }
+                },
+                required: ['date']
+              }
+            };
+
+            const bookFacilityTool: FunctionDeclaration = {
+              name: 'book_facility',
+              description: 'Record a booking or appointment request.',
+              parameters: {
+                type: Type.OBJECT,
+                properties: {
+                  userName: { type: Type.STRING, description: 'The full name of the user.' },
+                  userPhone: { type: Type.STRING, description: 'The 11-digit phone number of the user.' },
+                  bookingDate: { type: Type.STRING, description: 'The date in YYYY-MM-DD format.' },
+                  purpose: { type: Type.STRING, description: 'The purpose of the visit or appointment.' },
+                  facilityName: { type: Type.STRING, description: 'The name of the facility (e.g., PSSDC Guest Lodge or BienSanté Hospital Appointment).' }
+                },
+                required: ['userName', 'userPhone', 'bookingDate', 'purpose', 'facilityName']
+              }
+            };
+
+            const dialectInstruction = dialect === 'pidgin' 
+                ? "LANGUAGE: Speak primarily in Nigerian Pidgin. Use phrases like 'Abeg', 'How far', 'Wetin', 'I wan', and 'No Wahala'. Be professional but relatable."
+                : dialect === 'nigerian-english'
+                ? "LANGUAGE: Use Nigerian Standard English. Be professional and polite, using 'Sir' or 'Ma' as appropriate in a Nigerian professional context."
+                : "LANGUAGE: Use a standard international English tone.";
+
+            const systemInstruction = `
+            ${config.chatKnowledgeBase || config.knowledgeBase}
+            
+            ${dialectInstruction}
+            
+            CRITICAL OPERATIONAL RULES:
+            - Today's date is ${new Date().toISOString().split('T')[0]}.
+            - VOICE RESPONSE: If appointment or hospital related information is requested, respond directly.
+            - HOSPITAL CONTACT: If asked for phone numbers, say: "You can reach BienSanté Hospital on **0802 233 3285** or **0902 391 6337**. Would you like me to help you schedule an appointment now?"
+            
+            🗓️ APPOINTMENT BOOKING FLOW:
+            YOU MUST ASK ONLY ONE QUESTION AT A TIME. Wait for the user to answer before moving to the next step.
+            
+            1. Ask for full name:
+            “May I have your full name, please?”
+            
+            2. Ask for phone number:
+            “Please provide your phone number. It should be exactly 11 digits.”
+            If wrong length:
+            “That number seems incomplete. Kindly provide the full 11-digit phone number.”
+            
+            3. Ask for preferred date:
+            “What date would you prefer for your appointment?”
+            
+            4. Ask for purpose:
+            "What is the reason or purpose for your booking?"
+            
+            5. Data Collection & Processing:
+            When you have the Name, 11-digit Phone, Date, and Purpose, you must FIRST notify the user:
+            "Thank you for that information. I'm now processing your request, please give me just a moment while I get everything settled for you..."
+            Then call 'book_facility'. Use 'PSSDC Guest Lodge' for lodge bookings and 'BienSanté Hospital Appointment' for medical appointments as the facilityName parameter.
+            
+            6. Final Confirmation & Snappy Ending:
+            Once the tool returns success, IMMEDIATELY say: “Thank you. Since we've recorded your details, our management team will review availability and get back to you. You can also check your appointment status anytime on this widget by entering your phone number. Have a wonderful day!”
+            DO NOT ASK ANY MORE QUESTIONS. End the conversation definitively.
+            `;
+            
+            chatSessionRef.current = ai.chats.create({
+                model: 'gemini-3-flash-preview',
+                config: { 
+                    systemInstruction,
+                    tools: [{ functionDeclarations: [checkAvailabilityTool, bookFacilityTool] }]
+                }
+            });
+            setChatStarted(true);
+            
+            // Now handle the actual message
+            await handleChatMessage(lastMsg.text, true);
+        }
+    } else {
+        await initChat();
+    }
+  };
+
   const initChat = async (initialMessage?: string) => {
     if (chatStarted && !initialMessage) {
         setView('chat');
+        return;
+    }
+
+    if (!selectedDialect) {
+        setChatDialectRequestPending(true);
+        setView('chat');
+        if (initialMessage) {
+            setMessages([{ role: 'user', text: initialMessage, timestamp: new Date() }]);
+        }
         return;
     }
 
@@ -464,8 +578,21 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     }
   };
 
-  const handleChatMessage = async (text: string) => {
-    if (!text.trim() || !chatSessionRef.current || !isOnline) return;
+  const handleChatMessage = async (text: string, skipMessageAdd: boolean = false) => {
+    if (!text.trim() || !isOnline) return;
+
+    if (!selectedDialect) {
+        setMessages(prev => [...prev, { role: 'user', text, timestamp: new Date() }]);
+        setChatDialectRequestPending(true);
+        setChatInput('');
+        return;
+    }
+
+    if (!chatSessionRef.current) {
+        await initChat();
+    }
+
+    if (!chatSessionRef.current) return;
 
     const effectiveApiKey = apiKey || process.env.GEMINI_API_KEY;
 
@@ -474,9 +601,11 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         return;
     }
 
-    const userMsg: Message = { role: 'user', text, timestamp: new Date() };
+    if (!skipMessageAdd) {
+        const userMsg: Message = { role: 'user', text, timestamp: new Date() };
+        setMessages(prev => [...prev, userMsg]);
+    }
     
-    setMessages(prev => [...prev, userMsg]);
     setChatInput('');
     setIsChatTyping(true);
 
@@ -576,6 +705,9 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         return;
     }
 
+    setSelectedDialect(null);
+    setChatDialectRequestPending(false);
+
     if (messages.length <= 1) {
         setView('home');
         setMessages([]);
@@ -665,10 +797,18 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     }
   }, [resetSilenceTimer]);
 
-  const startVoiceSession = useCallback(async (dialect?: Dialect) => {
+  const startVoiceSession = useCallback(async (dialectInput?: Dialect | React.MouseEvent | React.FormEvent) => {
     if (!isOnline) return;
 
-    const activeDialect = dialect || selectedDialect;
+    const dialect = (typeof dialectInput === 'string') ? dialectInput : undefined;
+    
+    if (!dialect) {
+        setSelectedDialect(null);
+        setView('dialect');
+        return;
+    }
+
+    const activeDialect = dialect;
     if (!activeDialect) {
         setView('dialect');
         return;
@@ -729,6 +869,8 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     const greeting = (agentProfile as AgentConfig).initialGreeting;
     const effectiveApiKey = apiKey || process.env.GEMINI_API_KEY || 'dummy';
 
+    const voiceToUse = (activeDialect === 'pidgin' || activeDialect === 'nigerian-english') ? 'Kore' : (agentProfile as AgentConfig).voice;
+
     if (greeting) {
         isGreetingProtectedRef.current = true;
         fullTranscriptRef.current = `Agent: ${greeting}\n`;
@@ -744,7 +886,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                     responseModalities: [Modality.AUDIO],
                     speechConfig: {
                         voiceConfig: {
-                            prebuiltVoiceConfig: { voiceName: (agentProfile as AgentConfig).voice },
+                            prebuiltVoiceConfig: { voiceName: voiceToUse },
                         },
                     },
                 },
@@ -831,12 +973,13 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         setWidgetState(WidgetState.Error);
         cleanupServices();
       },
-    }, activeDialect);
+    }, activeDialect as Dialect);
     geminiServiceRef.current.connect(stream);
   }, [apiKey, agentProfile, resetSilenceTimer, handleInterruption, isOnline, selectedDialect]);
 
   const endVoiceSession = useCallback(() => {
     cleanupServices();
+    setSelectedDialect(null);
     setWidgetState(WidgetState.Ended);
   }, []);
 
@@ -1259,6 +1402,35 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                     </div>
                   );
               })}
+              
+              {chatDialectRequestPending && (
+                  <div className="flex justify-start">
+                      <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl rounded-bl-none p-5 shadow-lg flex flex-col gap-4 max-w-[90%] animate-fade-in">
+                          <p className="text-sm font-bold text-gray-700 dark:text-gray-200">How would you like me to respond?</p>
+                          <div className="flex flex-col gap-2">
+                              <button 
+                                onClick={() => handleSelectDialectInChat('nigerian-english')}
+                                className="flex items-center gap-3 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 transition-colors text-sm font-black uppercase tracking-tighter"
+                              >
+                                  <span>🇳🇬</span> Nigerian English
+                              </button>
+                              <button 
+                                onClick={() => handleSelectDialectInChat('pidgin')}
+                                className="flex items-center gap-3 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800 text-amber-700 dark:text-amber-400 hover:bg-amber-100 transition-colors text-sm font-black uppercase tracking-tighter"
+                              >
+                                  <span>🗣️</span> Nigerian Pidgin
+                              </button>
+                              <button 
+                                onClick={() => handleSelectDialectInChat('abroad-english')}
+                                className="flex items-center gap-3 p-3 rounded-xl bg-sky-50 dark:bg-sky-900/20 border border-sky-100 dark:border-sky-800 text-sky-700 dark:text-sky-400 hover:bg-sky-100 transition-colors text-sm font-black uppercase tracking-tighter"
+                              >
+                                  <span>🌐</span> Abroad English
+                              </button>
+                          </div>
+                      </div>
+                  </div>
+              )}
+
               {isChatTyping && (
                    <div className="flex justify-start">
                       <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl rounded-bl-none p-4 shadow-sm flex gap-2 items-center">
