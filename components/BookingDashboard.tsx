@@ -30,9 +30,10 @@ export const BookingDashboard: React.FC<BookingDashboardProps> = ({ agentProfile
   const [view, setView] = useState<'list' | 'calendar'>('calendar');
 
   useEffect(() => {
+    // We query by agentId matching the profile ID or name (for backward compatibility)
     const q = query(
       collection(db, 'bookings'),
-      where('agentId', '==', agentProfile.name)
+      where('agentId', 'in', [agentProfile.id, agentProfile.name])
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {

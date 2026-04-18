@@ -136,8 +136,9 @@ export class GeminiLiveService {
           "Thank you for that information. I'm now processing your request, please give me just a moment while I get everything settled for you..."
           Then call 'book_facility'. Use 'PSSDC Guest Lodge' for lodge bookings and 'BienSanté Hospital Appointment' for medical appointments as the facilityName parameter.
           
-          6. Final Confirmation:
-          Once the tool returns success, say EXACTLY: “Thank you. Our management team will review availability for that date and contact you shortly to confirm a suitable time and provide further instructions.”
+          6. Final Confirmation & Snappy Ending:
+          Once the tool returns success, IMMEDIATELY say: “Thank you. Since we've recorded your details, our management team will review availability and get back to you. You can also check your appointment status anytime on this widget by entering your phone number. Have a wonderful day!”
+          DO NOT ASK ANY MORE QUESTIONS. End the conversation definitively.
           
           Today's date is ${new Date().toISOString().split('T')[0]}.
           
@@ -276,7 +277,7 @@ export class GeminiLiveService {
                 try {
                     if (call.name === 'check_facility_availability') {
                         const { date } = call.args as any;
-                        const isAvailable = await bookingService.checkFacilityAvailability(this.config.name, date);
+                        const isAvailable = await bookingService.checkFacilityAvailability(this.config.id || this.config.name, date);
                         result = { isAvailable, message: isAvailable ? "This date is available." : "This date is already fully booked. Suggest another day." };
                     } else if (call.name === 'book_facility') {
                         const { userName, userPhone, bookingDate, purpose, facilityName } = call.args as any;
@@ -286,7 +287,7 @@ export class GeminiLiveService {
                             bookingDate,
                             purpose,
                             facility: facilityName || 'General Appointment',
-                            agentId: this.config.name
+                            agentId: this.config.id || this.config.name
                         });
                         result = { success: true, bookingId, message: `Appointment request recorded for ${bookingDate}. Management will review and confirm.` };
                     }
@@ -306,13 +307,13 @@ export class GeminiLiveService {
                 this.sessionPromise.then(session => {
                     (session as any).sendToolResponse({ functionResponses: responses });
                     
-                    // Safety: if the model doesn't respond with audio/text in 4 seconds, nudge it
+                    // Safety: if the model doesn't respond with audio/text in 3 seconds, nudge it
                     setTimeout(() => {
                         if (this.currentOutputTranscription === '' && this.session) {
                             console.log("Nudging model after tool silence...");
-                            this.sendText("The professional booking tool has finished. Please confirm the result to the user clearly.");
+                            this.sendText("The professional booking tool has finished. Please confirm the result to the user clearly with a definitive goodbye as per instructions.");
                         }
-                    }, 4000);
+                    }, 3000);
                 });
             }
         }

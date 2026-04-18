@@ -208,19 +208,30 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
     const conn = (navigator as any).connection;
     const checkNetwork = () => {
-      if (!conn) return;
-      // High RTT (>600ms) or slow connection types (2g/3g) trigger the warning
-      const isSlow = conn.effectiveType === '2g' || 
-                     conn.effectiveType === '3g' || 
-                     (conn.rtt && conn.rtt > 600) || 
-                     (conn.downlink && conn.downlink < 1.0);
-      setIsNetworkSlow(isSlow);
+      if (conn) {
+        // High RTT (>600ms) or slow connection types (2g/3g) trigger the warning
+        const isSlow = conn.effectiveType === '2g' || 
+                       conn.effectiveType === '3g' || 
+                       (conn.rtt && conn.rtt > 600) || 
+                       (conn.downlink && conn.downlink < 1.0);
+        setIsNetworkSlow(isSlow);
+      } else {
+        // Fallback for Safari/iOS: Measure actual latency of a small fetch
+        const start = Date.now();
+        fetch('/favicon.ico', { mode: 'no-cors', cache: 'no-store' })
+          .then(() => {
+            const rtt = Date.now() - start;
+            setIsNetworkSlow(rtt > 800);
+          })
+          .catch(() => {
+            // If fetch fails, we might be offline or extremely slow
+            if (navigator.onLine) setIsNetworkSlow(true);
+          });
+      }
     };
 
-    if (conn) {
-      conn.addEventListener('change', checkNetwork);
-      checkNetwork();
-    }
+    const interval = setInterval(checkNetwork, 10000); // Check every 10s
+    checkNetwork();
 
     return () => {
       window.removeEventListener('online', handleOnline);
@@ -411,8 +422,9 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     "Thank you for that information. I'm now processing your request, please give me just a moment while I get everything settled for you..."
     Then call 'book_facility'. Use 'PSSDC Guest Lodge' for lodge bookings and 'BienSanté Hospital Appointment' for medical appointments as the facilityName parameter.
     
-    6. Final Confirmation:
-    Once the tool returns success, say EXACTLY: “Thank you. Our management team will review availability for that date and contact you shortly to confirm a suitable time and provide further instructions.”
+    6. Final Confirmation & Snappy Ending:
+    Once the tool returns success, IMMEDIATELY say: “Thank you. Since we've recorded your details, our management team will review availability and get back to you. You can also check your appointment status anytime on this widget by entering your phone number. Have a wonderful day!”
+    DO NOT ASK ANY MORE QUESTIONS. End the conversation definitively.
     `;
     
     chatSessionRef.current = ai.chats.create({
@@ -479,7 +491,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                             try {
                                 if (call.name === 'check_facility_availability') {
                                     const { date } = call.args as any;
-                                    const isAvailable = await bookingService.checkFacilityAvailability(agentProfile.name, date);
+                                    const isAvailable = await bookingService.checkFacilityAvailability(agentProfile.id || agentProfile.name, date);
                                     toolResult = { isAvailable, message: isAvailable ? "Available" : "Booked" };
                                 } else if (call.name === 'book_facility') {
                                     const { userName, userPhone, bookingDate, purpose, facilityName } = call.args as any;
@@ -489,7 +501,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                                         bookingDate,
                                         purpose,
                                         facility: facilityName || 'Hospital Appointment',
-                                        agentId: agentProfile.name
+                                        agentId: agentProfile.id || agentProfile.name
                                     });
                                     toolResult = { success: true, bookingId, message: "Recorded as PENDING" };
                                 }

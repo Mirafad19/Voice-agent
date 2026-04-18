@@ -26,9 +26,10 @@ export const EmbedCodeModal: React.FC<EmbedCodeModalProps> = ({
   const { embedCode, directLink } = useMemo(() => {
     if (!agentProfile) return { embedCode: "", directLink: "" };
 
-    const { id, ...config }: any = agentProfile;
-
-    const encodedConfig = safeBtoa(JSON.stringify(config));
+    const { id, name, ...config }: any = agentProfile;
+    // We include ID and Name in the config to ensure bookings are tied to the right profile even if renamed
+    const configToEncode = { ...config, id, name };
+    const encodedConfig = safeBtoa(JSON.stringify(configToEncode));
     const baseUrl = publicUrl || "YOUR_HOSTED_URL";
     const finalUrl = `${baseUrl}?config=${encodedConfig}`;
     const iframeId = `ai-agent-iframe-${Date.now()}`;
