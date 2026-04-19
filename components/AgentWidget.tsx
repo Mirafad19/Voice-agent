@@ -400,10 +400,10 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             };
 
             const dialectInstruction = dialect === 'pidgin' 
-                ? "LANGUAGE: Speak strictly in hardcore Nigerian Pidgin. Be authentic and raw. Use deep Pidgin phrases like 'Wetin de sup?', 'Abeg', 'I de for you', 'No be small thing', 'E don cast', 'Gbege', 'Gbas gbos', 'Wahala no dey'. Avoid sounding like a school teacher; sound like a relatable person on the street but keep it helpful."
+                ? "LANGUAGE & STYLE: Speak strictly in hardcore Nigerian Pidgin. Be authentic and raw. Use deep Pidgin phrases like 'Wetin de sup?', 'Abeg', 'I de for you', 'No be small thing', 'E don cast', 'Gbege', 'Gbas gbos', 'Wahala no dey', 'How far now?', 'Wetin you wan do?', 'Oya, talk your own'. Avoid sounding like a school teacher; sound like a relatable person on the street but keep it helpful."
                 : dialect === 'nigerian-english'
-                ? "LANGUAGE: Use Nigerian Standard English. Be professional, warm, and polite. Do NOT use 'Sir' or 'Ma'. Use typical Nigerian professional phrasing like 'You're welcome', 'How may I assist you today?'."
-                : "LANGUAGE: Use a standard international English tone.";
+                ? "LANGUAGE & STYLE: Use Nigerian Standard English. Be professional, warm, and polite. Do NOT use 'Sir' or 'Ma'. Use typical Nigerian professional phrasing like 'You're welcome', 'How may I assist you today?', 'Please hold on while I check that for you'."
+                : "LANGUAGE & STYLE: Use a standard international professional English tone.";
 
             const systemInstruction = `
             ${config.chatKnowledgeBase || config.knowledgeBase}
@@ -508,10 +508,10 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     };
 
     const dialectInstruction = selectedDialect === 'pidgin' 
-        ? "LANGUAGE: Speak strictly in hardcore Nigerian Pidgin. Be authentic and raw. Use deep Pidgin phrases like 'Wetin de sup?', 'Abeg', 'I de for you', 'No be small thing', 'E don cast', 'Gbege', 'Gbas gbos', 'Wahala no dey'. Avoid sounding like a school teacher; sound like a relatable person on the street but keep it helpful."
+        ? "LANGUAGE & STYLE: Speak strictly in hardcore Nigerian Pidgin. Be authentic and raw. Use deep Pidgin phrases like 'Wetin de sup?', 'Abeg', 'I de for you', 'No be small thing', 'E don cast', 'Gbege', 'Gbas gbos', 'Wahala no dey', 'How far now?', 'Wetin you wan do?', 'Oya, talk your own'. Avoid sounding like a school teacher; sound like a relatable person on the street but keep it helpful."
         : selectedDialect === 'nigerian-english' 
-        ? "LANGUAGE: Use Nigerian Standard English. Be professional, warm, and polite. Do NOT use 'Sir' or 'Ma'. Use typical Nigerian professional phrasing like 'You're welcome', 'How may I assist you today?'."
-        : "LANGUAGE: Use a standard international English tone.";
+        ? "LANGUAGE & STYLE: Use Nigerian Standard English. Be professional, warm, and polite. Do NOT use 'Sir' or 'Ma'. Use typical Nigerian professional phrasing like 'You're welcome', 'How may I assist you today?', 'Please hold on while I check that for you'."
+        : "LANGUAGE & STYLE: Use a standard international professional English tone.";
 
     const systemInstruction = `
     ${config.chatKnowledgeBase || config.knowledgeBase}
@@ -873,18 +873,23 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     if (greeting && (activeDialect === 'pidgin' || activeDialect === 'nigerian-english')) {
         try {
             const ai = new GoogleGenAI({ apiKey: effectiveApiKey });
-            const result = await ai.models.generateContent({
-                model: 'gemini-1.5-flash',
-                config: {
-                    systemInstruction: activeDialect === 'pidgin' 
-                        ? "Translate the following short greeting into hardcore Nigerian Pidgin. Be authentic and relatable. Only return the translated text."
-                        : "Translate the following short greeting into professional Nigerian English. DO NOT use Sir or Ma. Only return the translated text."
-                },
-                contents: [{ parts: [{ text: greeting }] }]
-            });
-            greetingToSpeak = result.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || greeting;
+            const model = (ai as any).getGenerativeModel({ model: 'gemini-1.5-flash' });
+            
+            const prompt = activeDialect === 'pidgin' 
+                ? `Translate the following short greeting into hardcore, deep Nigerian Pidgin. Be real and authentic, don't sound formal. Use phrases like 'Wetin de sup', 'How far now'. Only return the translated text: "${greeting}"`
+                : `Translate the following short greeting into warm Nigerian Standard English. DO NOT use "Sir" or "Ma". Keep it professional but local. Only return the translated text: "${greeting}"`;
+
+            const result = await model.generateContent(prompt);
+            const translated = result.response.text().trim();
+            if (translated && translated.length > 2) {
+                greetingToSpeak = translated;
+            }
         } catch (e) {
             console.error("Dialect greeting translation failed:", e);
+            // Fallback for Pidgin if model fails
+            if (activeDialect === 'pidgin') {
+                greetingToSpeak = "Wetin de sup? How I fit help you today?";
+            }
         }
     }
 
