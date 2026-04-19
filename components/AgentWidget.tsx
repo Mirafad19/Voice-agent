@@ -393,16 +393,16 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                   userPhone: { type: Type.STRING, description: 'The 11-digit phone number of the user.' },
                   bookingDate: { type: Type.STRING, description: 'The date in YYYY-MM-DD format.' },
                   purpose: { type: Type.STRING, description: 'The purpose of the visit or appointment.' },
-                  facilityName: { type: Type.STRING, description: 'The name of the facility (e.g., PSSDC Guest Lodge or BienSanté Hospital Appointment).' }
+                  facilityName: { type: Type.STRING, description: 'The name of the facility for the booking.' }
                 },
                 required: ['userName', 'userPhone', 'bookingDate', 'purpose', 'facilityName']
               }
             };
 
             const dialectInstruction = dialect === 'pidgin' 
-                ? "LANGUAGE: Speak primarily in Nigerian Pidgin. Use phrases like 'Abeg', 'How far', 'Wetin', 'I wan', and 'No Wahala'. Be professional but relatable."
+                ? "LANGUAGE: Speak strictly in hardcore Nigerian Pidgin. Be authentic and raw. Use deep Pidgin phrases like 'Wetin de sup?', 'Abeg', 'I de for you', 'No be small thing', 'E don cast', 'Gbege', 'Gbas gbos', 'Wahala no dey'. Avoid sounding like a school teacher; sound like a relatable person on the street but keep it helpful."
                 : dialect === 'nigerian-english'
-                ? "LANGUAGE: Use Nigerian Standard English. Be professional and polite, using 'Sir' or 'Ma' as appropriate in a Nigerian professional context."
+                ? "LANGUAGE: Use Nigerian Standard English. Be professional, warm, and polite. Do NOT use 'Sir' or 'Ma'. Use typical Nigerian professional phrasing like 'You're welcome', 'How may I assist you today?'."
                 : "LANGUAGE: Use a standard international English tone.";
 
             const systemInstruction = `
@@ -412,8 +412,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             
             CRITICAL OPERATIONAL RULES:
             - Today's date is ${new Date().toISOString().split('T')[0]}.
-            - VOICE RESPONSE: If appointment or hospital related information is requested, respond directly.
-            - HOSPITAL CONTACT: If asked for phone numbers, say: "You can reach BienSanté Hospital on **0802 233 3285** or **0902 391 6337**. Would you like me to help you schedule an appointment now?"
+            - INFORMATION RETRIEVAL: If asked for contact details, phone numbers, or specific facility information, consult your knowledge base. Do not use external or hardcoded numbers.
             
             🗓️ APPOINTMENT BOOKING FLOW:
             YOU MUST ASK ONLY ONE QUESTION AT A TIME. Wait for the user to answer before moving to the next step.
@@ -435,7 +434,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             5. Data Collection & Processing:
             When you have the Name, 11-digit Phone, Date, and Purpose, you must FIRST notify the user:
             "Thank you for that information. I'm now processing your request, please give me just a moment while I get everything settled for you..."
-            Then call 'book_facility'. Use 'PSSDC Guest Lodge' for lodge bookings and 'BienSanté Hospital Appointment' for medical appointments as the facilityName parameter.
+            Then call 'book_facility'. Ensure the facilityName parameter accurately reflects the booking destination.
             
             6. Final Confirmation & Snappy Ending:
             Once the tool returns success, IMMEDIATELY say: “Thank you. Since we've recorded your details, our management team will review availability and get back to you. You can also check your appointment status anytime on this widget by entering your phone number. Have a wonderful day!”
@@ -452,7 +451,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             setChatStarted(true);
             
             // Now handle the actual message
-            await handleChatMessage(lastMsg.text, true);
+            await handleChatMessage(lastMsg.text, true, dialect);
         }
     } else {
         await initChat();
@@ -502,16 +501,16 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
           userPhone: { type: Type.STRING, description: 'The 11-digit phone number of the user.' },
           bookingDate: { type: Type.STRING, description: 'The date in YYYY-MM-DD format.' },
           purpose: { type: Type.STRING, description: 'The purpose of the visit or appointment.' },
-          facilityName: { type: Type.STRING, description: 'The name of the facility (e.g., PSSDC Guest Lodge or BienSanté Hospital Appointment).' }
+          facilityName: { type: Type.STRING, description: 'The name of the facility for the booking.' }
         },
         required: ['userName', 'userPhone', 'bookingDate', 'purpose', 'facilityName']
       }
     };
 
     const dialectInstruction = selectedDialect === 'pidgin' 
-        ? "LANGUAGE: Speak primarily in Nigerian Pidgin. Use phrases like 'Abeg', 'How far', 'Wetin', 'I wan', and 'No Wahala'. Be professional but relatable."
-        : selectedDialect === 'nigerian-english'
-        ? "LANGUAGE: Use Nigerian Standard English. Be professional and polite, using 'Sir' or 'Ma' as appropriate in a Nigerian professional context."
+        ? "LANGUAGE: Speak strictly in hardcore Nigerian Pidgin. Be authentic and raw. Use deep Pidgin phrases like 'Wetin de sup?', 'Abeg', 'I de for you', 'No be small thing', 'E don cast', 'Gbege', 'Gbas gbos', 'Wahala no dey'. Avoid sounding like a school teacher; sound like a relatable person on the street but keep it helpful."
+        : selectedDialect === 'nigerian-english' 
+        ? "LANGUAGE: Use Nigerian Standard English. Be professional, warm, and polite. Do NOT use 'Sir' or 'Ma'. Use typical Nigerian professional phrasing like 'You're welcome', 'How may I assist you today?'."
         : "LANGUAGE: Use a standard international English tone.";
 
     const systemInstruction = `
@@ -521,8 +520,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     
     CRITICAL OPERATIONAL RULES:
     - Today's date is ${new Date().toISOString().split('T')[0]}.
-    - VOICE RESPONSE: If appointment or hospital related information is requested, respond directly.
-    - HOSPITAL CONTACT: If asked for phone numbers, say: "You can reach BienSanté Hospital on **0802 233 3285** or **0902 391 6337**. Would you like me to help you schedule an appointment now?"
+    - INFORMATION RETRIEVAL: If asked for contact details, phone numbers, or specific facility information, consult your knowledge base. Do not use external or hardcoded numbers.
     
     🗓️ APPOINTMENT BOOKING FLOW:
     YOU MUST ASK ONLY ONE QUESTION AT A TIME. Wait for the user to answer before moving to the next step.
@@ -544,7 +542,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     5. Data Collection & Processing:
     When you have the Name, 11-digit Phone, Date, and Purpose, you must FIRST notify the user:
     "Thank you for that information. I'm now processing your request, please give me just a moment while I get everything settled for you..."
-    Then call 'book_facility'. Use 'PSSDC Guest Lodge' for lodge bookings and 'BienSanté Hospital Appointment' for medical appointments as the facilityName parameter.
+    Then call 'book_facility'. Ensure the facilityName parameter accurately reflects the booking destination.
     
     6. Final Confirmation & Snappy Ending:
     Once the tool returns success, IMMEDIATELY say: “Thank you. Since we've recorded your details, our management team will review availability and get back to you. You can also check your appointment status anytime on this widget by entering your phone number. Have a wonderful day!”
@@ -578,10 +576,12 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     }
   };
 
-  const handleChatMessage = async (text: string, skipMessageAdd: boolean = false) => {
+  const handleChatMessage = async (text: string, skipMessageAdd: boolean = false, dialectOverride?: Dialect) => {
     if (!text.trim() || !isOnline) return;
 
-    if (!selectedDialect) {
+    const activeDialect = dialectOverride || selectedDialect;
+
+    if (!activeDialect) {
         setMessages(prev => [...prev, { role: 'user', text, timestamp: new Date() }]);
         setChatDialectRequestPending(true);
         setChatInput('');
@@ -869,11 +869,30 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     const greeting = (agentProfile as AgentConfig).initialGreeting;
     const effectiveApiKey = apiKey || process.env.GEMINI_API_KEY || 'dummy';
 
+    let greetingToSpeak = greeting;
+    if (greeting && (activeDialect === 'pidgin' || activeDialect === 'nigerian-english')) {
+        try {
+            const ai = new GoogleGenAI({ apiKey: effectiveApiKey });
+            const result = await ai.models.generateContent({
+                model: 'gemini-1.5-flash',
+                config: {
+                    systemInstruction: activeDialect === 'pidgin' 
+                        ? "Translate the following short greeting into hardcore Nigerian Pidgin. Be authentic and relatable. Only return the translated text."
+                        : "Translate the following short greeting into professional Nigerian English. DO NOT use Sir or Ma. Only return the translated text."
+                },
+                contents: [{ parts: [{ text: greeting }] }]
+            });
+            greetingToSpeak = result.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || greeting;
+        } catch (e) {
+            console.error("Dialect greeting translation failed:", e);
+        }
+    }
+
     const voiceToUse = (activeDialect === 'pidgin' || activeDialect === 'nigerian-english') ? 'Kore' : (agentProfile as AgentConfig).voice;
 
-    if (greeting) {
+    if (greetingToSpeak) {
         isGreetingProtectedRef.current = true;
-        fullTranscriptRef.current = `Agent: ${greeting}\n`;
+        fullTranscriptRef.current = `Agent: ${greetingToSpeak}\n`;
         
         try {
             const ai = new GoogleGenAI({ 
@@ -881,7 +900,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             });
             const response = await ai.models.generateContent({
                 model: "gemini-2.5-flash-preview-tts",
-                contents: [{ parts: [{ text: greeting }] }],
+                contents: [{ parts: [{ text: greetingToSpeak }] }],
                 config: {
                     responseModalities: [Modality.AUDIO],
                     speechConfig: {

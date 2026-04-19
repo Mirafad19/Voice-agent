@@ -94,16 +94,16 @@ export class GeminiLiveService {
             userPhone: { type: Type.STRING, description: 'The 11-digit phone number of the user.' },
             bookingDate: { type: Type.STRING, description: 'The date in YYYY-MM-DD format.' },
             purpose: { type: Type.STRING, description: 'The purpose of the visit or appointment.' },
-            facilityName: { type: Type.STRING, description: 'The name of the facility (e.g., PSSDC Guest Lodge or BienSanté Hospital).' }
+            facilityName: { type: Type.STRING, description: 'The name of the facility for the booking.' }
           },
           required: ['userName', 'userPhone', 'bookingDate', 'purpose', 'facilityName']
         }
       };
 
       const dialectInstruction = this.dialect === 'pidgin'
-        ? "LANGUAGE & STYLE: You are now speaking in Nigerian Pidgin. Always use common phrases like 'Abeg', 'How far', 'Wetin', 'I wan', 'No Wahala', 'E don happen', 'Wetin dey sup'. Maintain a friendly yet professional business tone suitable for a PSSDC/BienSanté representative."
+        ? "LANGUAGE & STYLE: Speak strictly in hardcore Nigerian Pidgin. Be authentic and raw. Use deep Pidgin phrases like 'Wetin de sup?', 'Abeg', 'I de for you', 'No be small thing', 'E don cast', 'Gbege', 'Gbas gbos', 'Wahala no dey', 'How far now?', 'Wetin you wan do?', 'Oya, talk your own'. Avoid sounding like a school teacher; sound like a relatable person on the street but keep it helpful."
         : this.dialect === 'nigerian-english'
-        ? "LANGUAGE & STYLE: You are now using Nigerian Standard English. Be professional and highly respectful. Always use 'Sir' or 'Ma' when addressing the user (e.g., 'How can I help you today, Sir?'). Use local professional phrasing common in Nigerian corporate environments."
+        ? "LANGUAGE & STYLE: Use Nigerian Standard English. Be professional, warm, and polite. Do NOT use 'Sir' or 'Ma'. Use typical Nigerian professional phrasing like 'You're welcome', 'How may I assist you today?', 'Please hold on while I check that for you'."
         : "LANGUAGE & STYLE: Use a standard international professional English tone.";
 
       this.sessionPromise = this.ai.live.connect({
@@ -124,9 +124,9 @@ export class GeminiLiveService {
           2. ${greetingContext}
           3. RESPONSIVE PROTOCOL: You are an active, helpful listener. Respond naturally and promptly as soon as the user finishes their thought.
           4. AGGRESSIVE SILENCE: If the user starts talking while you are speaking, STOP IMMEDIATELY. Prioritize the user's voice above your own.
-          5. SOURCE OF TRUTH: Use the provided knowledge base accurately.
+          5. SOURCE OF TRUTH: Use the provided knowledge base accurately for all facility names and contact information.
           6. SILENCE HANDLING: If you receive "[[SILENCE_DETECTED]]", ask "Are you still there?".
-          7. HOSPITAL CONTACT: If asked for phone numbers, say: "You can reach BienSanté Hospital on **0802 233 3285** or **0902 391 6337**. Would you like me to help you schedule an appointment now?"
+          7. INFORMATION RETRIEVAL: If asked for phone numbers or specific details, consult your knowledge base. Do not use external or hardcoded numbers.
           
           🗓️ APPOINTMENT BOOKING FLOW:
           YOU MUST ASK ONLY ONE QUESTION AT A TIME. Wait for the user to answer before moving to the next step.
@@ -148,7 +148,7 @@ export class GeminiLiveService {
           5. Data Collection & Processing:
           When you have the Name, 11-digit Phone, Date, and Purpose, you must FIRST notify the user:
           "Thank you for that information. I'm now processing your request, please give me just a moment while I get everything settled for you..."
-          Then call 'book_facility'. Use 'PSSDC Guest Lodge' for lodge bookings and 'BienSanté Hospital Appointment' for medical appointments as the facilityName parameter.
+          Then call 'book_facility'. Ensure the facilityName parameter correctly matches the organization relevant to the context.
           
           6. Final Confirmation & Snappy Ending:
           Once the tool returns success, IMMEDIATELY say: “Thank you. Since we've recorded your details, our management team will review availability and get back to you. You can also check your appointment status anytime on this widget by entering your phone number. Have a wonderful day!”

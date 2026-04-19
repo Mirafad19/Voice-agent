@@ -1,6 +1,6 @@
 {
-  "name": "BienSanté AI Assistant",
-  "description": "A professional AI assistant for BienSante Hospital, providing medical information and support.",
+  "name": "Elite AI Assistant",
+  "description": "A versatile multilingual AI assistant for professional organizations.",
   "requestFramePermissions": [
     "microphone"
   ]
