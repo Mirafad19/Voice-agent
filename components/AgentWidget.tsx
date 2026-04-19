@@ -877,7 +877,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             
             const prompt = activeDialect === 'pidgin' 
                 ? `Translate the following short greeting into hardcore, deep Nigerian Pidgin. Be real and authentic, don't sound formal. Use phrases like 'Wetin de sup', 'How far now'. Only return the translated text: "${greeting}"`
-                : `Translate the following short greeting into warm Nigerian Standard English. DO NOT use "Sir" or "Ma". Keep it professional but local. Only return the translated text: "${greeting}"`;
+                : `Translate the following greeting into warm and professional Nigerian English. Use local professional phrasing like "You're welcome", "How may I assist you today?". DO NOT use "Sir" or "Ma". Only return the translated text: "${greeting}"`;
 
             const result = await model.generateContent(prompt);
             const translated = result.response.text().trim();
@@ -886,9 +886,11 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             }
         } catch (e) {
             console.error("Dialect greeting translation failed:", e);
-            // Fallback for Pidgin if model fails
+            // Fallbacks if model fails
             if (activeDialect === 'pidgin') {
                 greetingToSpeak = "Wetin de sup? How I fit help you today?";
+            } else if (activeDialect === 'nigerian-english') {
+                greetingToSpeak = "You're welcome! How may I assist you today?";
             }
         }
     }
