@@ -12,52 +12,35 @@ import { Booking } from '../types';
 const BOOKINGS_COLLECTION = 'bookings';
 
 export const checkFacilityAvailability = async (agentId: string, date: string): Promise<boolean> => {
-  try {
-    const q = query(
-      collection(db, BOOKINGS_COLLECTION),
-      where('agentId', '==', agentId),
-      where('bookingDate', '==', date),
-      where('status', 'in', ['Pending', 'Confirmed'])
-    );
-    
-    const querySnapshot = await getDocs(q);
-    // For now, as per user request: "make it red when it is booked or multiple booked it"
-    // We'll return false (unavailable) if there's any pending or confirmed booking on that date.
-    return querySnapshot.empty;
-  } catch (error) {
-    console.error("Error checking availability:", error);
-    throw error;
-  }
+  // User requested to allow multiple bookings per day as management handles the review.
+  // We return true (available) for any booking request to keep the AI flow smooth.
+  return true;
 };
 
 export const createBooking = async (booking: Omit<Booking, 'id' | 'createdAt' | 'status'>): Promise<string> => {
   try {
-    // Check for duplicate pending requests within the last 5 minutes to prevent spam/retries from network issues
-    const fiveMinutesAgo = new Date();
-    fiveMinutesAgo.setMinutes(fiveMinutesAgo.getMinutes() - 5);
-    
+    // Basic guard to prevent accidental double-clicks (within 10 seconds)
     const q = query(
       collection(db, BOOKINGS_COLLECTION),
       where('agentId', '==', booking.agentId),
       where('userPhone', '==', booking.userPhone),
       where('bookingDate', '==', booking.bookingDate),
+      where('purpose', '==', booking.purpose),
       where('status', '==', 'Pending')
-      // Note: we can't easily filter by date in Firestore without a complex index for this specific query, 
-      // but matching phone+date+agent is usually enough to catch duplicates in a session.
     );
     
     const existing = await getDocs(q);
     if (!existing.empty) {
-      const recent = existing.docs.find(doc => {
+      const veryRecent = existing.docs.find(doc => {
         const data = doc.data();
         const createdAt = data.createdAt?.toDate ? data.createdAt.toDate() : null;
-        // If it was created within the last 10 minutes, consider it a duplicate
-        return !createdAt || createdAt.getTime() > (Date.now() - 600000);
+        // If it was created within the last 10 seconds, consider it a double-click
+        return createdAt && createdAt.getTime() > (Date.now() - 10000);
       });
       
-      if (recent) {
-        console.log("Blocking duplicate booking request. Returning existing ID:", recent.id);
-        return recent.id;
+      if (veryRecent) {
+        console.log("Blocking accidental double-click. Returning existing ID:", veryRecent.id);
+        return veryRecent.id;
       }
     }
 

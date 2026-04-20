@@ -152,7 +152,7 @@ export class GeminiLiveService {
           
           6. Final Confirmation & Snappy Ending:
           Once the tool returns success, IMMEDIATELY say: “Thank you. Since we've recorded your details, our management team will review availability and get back to you. You can also check your appointment status anytime on this widget by entering your phone number. Have a wonderful day!”
-          DO NOT ASK ANY MORE QUESTIONS. End the conversation definitively.
+          DO NOT ASK ANY MORE QUESTIONS. YOU MUST END THE CONVERSATION DEFINITIVELY.
           
           Today's date is ${new Date().toISOString().split('T')[0]}.
           
@@ -321,13 +321,16 @@ export class GeminiLiveService {
                 this.sessionPromise.then(session => {
                     (session as any).sendToolResponse({ functionResponses: responses });
                     
-                    // Safety: if the model doesn't respond with audio/text in 3 seconds, nudge it
+                    // CRITICAL: Force the model to speak the confirmation immediately
+                    this.sendText("Tool execution complete. Now, IMMEDIATELY confirm the success to the user using the exact farewell script from your instructions and end the conversation.");
+                    
+                    // Safety nudge if silence persists
                     setTimeout(() => {
                         if (this.currentOutputTranscription === '' && this.session) {
                             console.log("Nudging model after tool silence...");
-                            this.sendText("The professional booking tool has finished. Please confirm the result to the user clearly with a definitive goodbye as per instructions.");
+                            this.sendText("Please confirm the booking result to the user now and end the call.");
                         }
-                    }, 3000);
+                    }, 1500);
                 });
             }
         }

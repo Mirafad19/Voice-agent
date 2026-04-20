@@ -438,7 +438,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             
             6. Final Confirmation & Snappy Ending:
             Once the tool returns success, IMMEDIATELY say: “Thank you. Since we've recorded your details, our management team will review availability and get back to you. You can also check your appointment status anytime on this widget by entering your phone number. Have a wonderful day!”
-            DO NOT ASK ANY MORE QUESTIONS. End the conversation definitively.
+            DO NOT ASK ANY MORE QUESTIONS. YOU MUST END THE CONVERSATION DEFINITIVELY.
             `;
             
             chatSessionRef.current = ai.chats.create({
@@ -546,7 +546,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     
     6. Final Confirmation & Snappy Ending:
     Once the tool returns success, IMMEDIATELY say: “Thank you. Since we've recorded your details, our management team will review availability and get back to you. You can also check your appointment status anytime on this widget by entering your phone number. Have a wonderful day!”
-    DO NOT ASK ANY MORE QUESTIONS. End the conversation definitively.
+    DO NOT ASK ANY MORE QUESTIONS. YOU MUST END THE CONVERSATION DEFINITIVELY.
     `;
     
     chatSessionRef.current = ai.chats.create({
@@ -678,9 +678,14 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                     const nextResult = await chatSessionRef.current!.sendMessageStream({
                         functionResponses: toolResponses
                     });
+                    
+                    // Immediately transition out of processing mode
+                    setIsToolProcessing(false);
+                    
                     await processStream(nextResult);
                 } catch (toolError) {
                     console.error("Error after tool response:", toolError);
+                    setIsToolProcessing(false);
                     setMessages(prev => [...prev, { 
                         role: 'model', 
                         text: "I've successfully recorded your request in our system, but I'm having trouble finishing our conversation. Our team will review your booking and get back to you! Is there anything else I can help with?", 
