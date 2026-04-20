@@ -438,7 +438,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             
             6. Final Confirmation & Snappy Ending:
             Once the tool returns success, IMMEDIATELY say: “Thank you. Since we've recorded your details, our management team will review availability and get back to you. You can also check your appointment status anytime on this widget by entering your phone number. Have a wonderful day!”
-            DO NOT ASK ANY MORE QUESTIONS. YOU MUST END THE CONVERSATION DEFINITIVELY.
+            YOUR RESPONSE MUST BE FINAL. DO NOT ASK ANY MORE QUESTIONS.
             `;
             
             chatSessionRef.current = ai.chats.create({
@@ -546,7 +546,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     
     6. Final Confirmation & Snappy Ending:
     Once the tool returns success, IMMEDIATELY say: “Thank you. Since we've recorded your details, our management team will review availability and get back to you. You can also check your appointment status anytime on this widget by entering your phone number. Have a wonderful day!”
-    DO NOT ASK ANY MORE QUESTIONS. YOU MUST END THE CONVERSATION DEFINITIVELY.
+    YOUR RESPONSE MUST BE FINAL. DO NOT ASK ANY MORE QUESTIONS.
     `;
     
     chatSessionRef.current = ai.chats.create({
@@ -648,11 +648,11 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                                 console.error(`Chat Tool Error [${call.name}]:`, error);
                                 toolResult = { success: false, error: error instanceof Error ? error.message : "Unknown error" };
                             }
-                            results.push({ id: call.id, response: { result: toolResult } });
+                            results.push({ id: call.id, name: call.name, response: { result: toolResult } });
                         }
                         
                         toolResponses = results;
-                        setIsToolProcessing(false);
+                        // Keep setIsToolProcessing(true) while we send the responses back
                         break;
                     }
 
@@ -675,14 +675,23 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
             if (hasFunctionCalls) {
                 try {
-                    const nextResult = await chatSessionRef.current!.sendMessageStream({
-                        functionResponses: toolResponses
-                    });
+                    // Update state to show we are still processing the response from the tool
+                    setIsToolProcessing(true);
                     
-                    // Immediately transition out of processing mode
+                    // Correct mapping for Part-based function responses in v1.34.0
+                    const nextResult = await chatSessionRef.current!.sendMessageStream(
+                        toolResponses.map(tr => ({
+                            functionResponse: {
+                                name: tr.name, // We'll add this to the toolResponses object
+                                response: tr.response
+                            }
+                        }))
+                    );
+                    
+                    // Immediately transition out of processing mode once the stream starts
                     setIsToolProcessing(false);
                     
-                    await processStream(nextResult);
+                    await processStream(nextResult.stream);
                 } catch (toolError) {
                     console.error("Error after tool response:", toolError);
                     setIsToolProcessing(false);

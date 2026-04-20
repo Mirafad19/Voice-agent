@@ -127,6 +127,7 @@ export class GeminiLiveService {
           5. SOURCE OF TRUTH: Use the provided knowledge base accurately for all facility names and contact information.
           6. SILENCE HANDLING: If you receive "[[SILENCE_DETECTED]]", ask "Are you still there?".
           7. INFORMATION RETRIEVAL: If asked for phone numbers or specific details, consult your knowledge base. Do not use external or hardcoded numbers.
+          8. BOOKING TERMINATION: If you have just called 'book_facility' and received the tool result, YOUR ABSOLUTE AND FINAL TASK IS TO CONFIRM THE BOOKING TO THE USER AND SAY GOODBYE IMMEDIATELY. DO NOT ASK ANY MORE QUESTIONS. Do not pause. Speak your confirmation message now.
           
           🗓️ APPOINTMENT BOOKING FLOW:
           YOU MUST ASK ONLY ONE QUESTION AT A TIME. Wait for the user to answer before moving to the next step.
@@ -319,18 +320,20 @@ export class GeminiLiveService {
 
             if (this.sessionPromise) {
                 this.sessionPromise.then(session => {
-                    (session as any).sendToolResponse({ functionResponses: responses });
+                    // Correct format for the Live API Tool Response
+                    (session as any).send({
+                        toolResponse: {
+                            functionResponses: responses
+                        }
+                    });
                     
-                    // CRITICAL: Force the model to speak the confirmation immediately
-                    this.sendText("Tool execution complete. Now, IMMEDIATELY confirm the success to the user using the exact farewell script from your instructions and end the conversation.");
-                    
-                    // Safety nudge if silence persists
+                    // Safety nudge: Forces the model to acknowledge the tool results and finish its turn
                     setTimeout(() => {
                         if (this.currentOutputTranscription === '' && this.session) {
                             console.log("Nudging model after tool silence...");
-                            this.sendText("Please confirm the booking result to the user now and end the call.");
+                            this.sendText("The booking has been successfully recorded. Please confirm this to the user using your farewell script and end the call.");
                         }
-                    }, 1500);
+                    }, 1000);
                 });
             }
         }
