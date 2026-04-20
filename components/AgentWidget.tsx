@@ -982,7 +982,9 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
           const lowerCaseText = text.toLowerCase();
           const endKeywords = [
             'goodbye', 'farewell', 'take care', 'talk to you later', 
-            'bye bye', 'bye', 'o dabo', 'oda bo', 'ese pupo'
+            'bye bye', 'bye', 'o dabo', 'oda bo', 'ese pupo',
+            'management will review', 'get back to you', 'check your appointment',
+            'have a wonderful day', 'have a great day'
           ];
           if (endKeywords.some(keyword => lowerCaseText.includes(keyword))) {
             shouldEndAfterSpeakingRef.current = true;
@@ -1003,7 +1005,14 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
       },
       onInterruption: handleInterruption,
       onLocalInterruption: handleInterruption,
-      onToolProcessing: (isProcessing) => setIsToolProcessing(isProcessing),
+      onToolProcessing: (isProcessing: boolean) => {
+        setIsToolProcessing(isProcessing);
+        if (isProcessing) {
+            setTimeout(() => {
+                setIsToolProcessing(prev => prev ? false : false);
+            }, 7000);
+        }
+      },
       onError: (error) => {
         if (!navigator.onLine) {
             setIsOnline(false);

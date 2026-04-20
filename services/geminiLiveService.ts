@@ -304,7 +304,7 @@ export class GeminiLiveService {
                                         facility: facilityName || 'Hospital Appointment',
                                         agentId: (this.config as any).id || this.config.name
                                     });
-                                    result = { success: true, bookingId, message: `Appointment request recorded for ${bookingDate}. Management will review and confirm.` };
+                                    result = { success: true, bookingId, message: "OK. Appointment recorded successfully. Please confirm to user and say goodbye." };
                                 }
                 } catch (error) {
                     console.error(`Tool execution error [${call.name}]:`, error);
@@ -312,28 +312,24 @@ export class GeminiLiveService {
                 }
                 responses.push({
                     id: call.id,
+                    name: call.name, // Crucial: Gemini expects name in response
                     response: { result }
                 });
             }
 
-            this.callbacks.onToolProcessing?.(false);
-
             if (this.sessionPromise) {
                 this.sessionPromise.then(session => {
-                    // Correct format for the Live API Tool Response
+                    // Using raw tool_response structure for maximum reliability
                     (session as any).send({
-                        toolResponse: {
-                            functionResponses: responses
+                        tool_response: {
+                           function_responses: responses
                         }
                     });
                     
-                    // Safety nudge: Forces the model to acknowledge the tool results and finish its turn
+                    // Delay setting state to false to ensure UI transition feels natural with the model's new turn
                     setTimeout(() => {
-                        if (this.currentOutputTranscription === '' && this.session) {
-                            console.log("Nudging model after tool silence...");
-                            this.sendText("The booking has been successfully recorded. Please confirm this to the user using your farewell script and end the call.");
-                        }
-                    }, 1000);
+                        this.callbacks.onToolProcessing?.(false);
+                    }, 500);
                 });
             }
         }
