@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../firebase';
-import { collection, query, where, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { Booking, AgentProfile } from '../types';
 import { Button } from './ui/Button';
 import { 
@@ -48,10 +48,15 @@ export const BookingDashboard: React.FC<BookingDashboardProps> = ({ agentProfile
         id: doc.id,
         ...doc.data()
       })) as Booking[];
-      
-      bookingsData.sort((a, b) => new Date(b.bookingDate).getTime() - new Date(a.bookingDate).getTime());
-      
-      // Play sound if new booking arrived
+      bookingsData.sort((a, b) => {
+        const dateA = new Date(a.bookingDate).getTime();
+        const dateB = new Date(b.bookingDate).getTime();
+        if (dateB !== dateA) return dateB - dateA;
+        
+        const createA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
+        const createB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
+        return createB - createA;
+      });
       if (!loading && bookingsData.length > prevBookingsCountRef.current) {
         audioRef.current?.play().catch(e => console.log('Audio play failed:', e));
       }
@@ -65,12 +70,13 @@ export const BookingDashboard: React.FC<BookingDashboardProps> = ({ agentProfile
     });
 
     return () => unsubscribe();
-  }, [agentProfile.name, loading]);
+  }, [agentProfile.id, agentProfile.name, loading]);
 
   const handleUpdateStatus = async (id: string, newStatus: 'Confirmed' | 'Rejected' | 'Pending') => {
     try {
       await updateDoc(doc(db, 'bookings', id), {
-        status: newStatus
+        status: newStatus,
+        updatedAt: serverTimestamp()
       });
     } catch (error) {
       console.error("Error updating status:", error);
@@ -233,10 +239,10 @@ export const BookingDashboard: React.FC<BookingDashboardProps> = ({ agentProfile
                   <tr key={booking.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
                     <td className="p-4">
                       <div className="font-bold flex items-center gap-2">
-                        <Clock className="h-4 w-4 text-gray-400" />
+                        <Clock className="h-4 w-4 text-indigo-500" />
                         {booking.bookingDate}
                       </div>
-                      <div className="text-[10px] text-gray-500 uppercase font-black tracking-widest mt-1">
+                      <div className="text-[10px] text-gray-500 uppercase font-black tracking-widest mt-1 text-indigo-600/70">
                         {format(new Date(booking.bookingDate), 'EEEE')}
                       </div>
                     </td>
@@ -251,13 +257,21 @@ export const BookingDashboard: React.FC<BookingDashboardProps> = ({ agentProfile
                       </div>
                     </td>
                     <td className="p-4">
-                      <span className={`px-2 py-1 rounded-sm text-[10px] font-black uppercase tracking-widest ${
-                        booking.status === 'Confirmed' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30' :
-                        booking.status === 'Rejected' ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/30' :
-                        'bg-amber-100 text-amber-700 dark:bg-amber-900/30'
-                      }`}>
-                        {booking.status}
-                      </span>
+                      <div className="flex flex-col gap-1.5">
+                        <span className={`px-2 py-1 rounded-sm text-[10px] font-black uppercase tracking-widest w-fit ${
+                          booking.status === 'Confirmed' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30' :
+                          booking.status === 'Rejected' ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/30' :
+                          'bg-amber-100 text-amber-700 dark:bg-amber-900/30'
+                        }`}>
+                          {booking.status}
+                        </span>
+                        {booking.status !== 'Pending' && booking.updatedAt && (
+                          <div className="text-[9px] text-gray-400 font-bold uppercase tracking-tight flex items-center gap-1">
+                            <Clock className="h-2.5 w-2.5" />
+                            {booking.updatedAt?.toDate ? format(booking.updatedAt.toDate(), 'HH:mm (MMM dd)') : 'Just now'}
+                          </div>
+                        )}
+                      </div>
                     </td>
                     <td className="p-4 text-right">
                       <div className="flex justify-end gap-2 items-center">

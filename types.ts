@@ -69,6 +69,7 @@ export interface Booking {
   status: 'Pending' | 'Confirmed' | 'Rejected';
   agentId: string;
   createdAt: any;
+  updatedAt?: any; // Action time
 }
 
 export interface AgentProfile {
