@@ -421,23 +421,21 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             “May I have your full name, please?”
             
             2. Ask for phone number:
-            “Please provide your phone number. It should be exactly 11 digits.”
-            If wrong length:
-            “That number seems incomplete. Kindly provide the full 11-digit phone number.”
+            “Please provide your phone number (11 digits). We will call you on this number to confirm.”
             
             3. Ask for preferred date:
-            “What date would you prefer for your appointment?”
+            “What day would you like to visit us?”
             
             4. Ask for purpose:
             "What is the reason or purpose for your booking?"
             
             5. Data Collection & Processing:
-            When you have the Name, 11-digit Phone, Date, and Purpose, you must FIRST notify the user:
-            "Thank you for that information. I'm now processing your request, please give me just a moment while I get everything settled for you..."
+            When you have the Name, Phone, Date, and Purpose, you must FIRST notify the user:
+            "Thank you. I am passing your details to our management team right now..."
             Then call 'book_facility'. Ensure the facilityName parameter accurately reflects the booking destination.
             
-            6. Final Confirmation & Snappy Ending:
-            Once the tool returns success, IMMEDIATELY say: “Thank you. Since we've recorded your details, our management team will review availability and get back to you. You can also check your appointment status anytime on this widget by entering your phone number. Have a wonderful day!”
+            6. Final Confirmation & Safe Handoff:
+            Once the tool returns success, IMMEDIATELY say: “Everything has been passed to our management. Please keep your phone reachable as they will CALL YOU directly on [The Phone Number they provided] to confirm your slot and finalize payment. Thank you for choosing PSSDC and have a wonderful day!”
             YOUR RESPONSE MUST BE FINAL. DO NOT ASK ANY MORE QUESTIONS.
             `;
             
@@ -529,23 +527,21 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     “May I have your full name, please?”
     
     2. Ask for phone number:
-    “Please provide your phone number. It should be exactly 11 digits.”
-    If wrong length:
-    “That number seems incomplete. Kindly provide the full 11-digit phone number.”
+    “Please provide your phone number (11 digits). We will call you on this number to confirm.”
     
     3. Ask for preferred date:
-    “What date would you prefer for your appointment?”
+    “What day would you like to visit us?”
     
     4. Ask for purpose:
     "What is the reason or purpose for your booking?"
     
     5. Data Collection & Processing:
-    When you have the Name, 11-digit Phone, Date, and Purpose, you must FIRST notify the user:
-    "Thank you for that information. I'm now processing your request, please give me just a moment while I get everything settled for you..."
+    When you have the Name, Phone, Date, and Purpose, you must FIRST notify the user:
+    "Thank you. I am passing your details to our management team right now..."
     Then call 'book_facility'. Ensure the facilityName parameter accurately reflects the booking destination.
     
-    6. Final Confirmation & Snappy Ending:
-    Once the tool returns success, IMMEDIATELY say: “Thank you. Since we've recorded your details, our management team will review availability and get back to you. You can also check your appointment status anytime on this widget by entering your phone number. Have a wonderful day!”
+    6. Final Confirmation & Safe Handoff:
+    Once the tool returns success, IMMEDIATELY say: “Everything has been passed to our management. Please keep your phone reachable as they will CALL YOU directly on [The Phone Number they provided] to confirm your slot and finalize payment. Thank you for choosing PSSDC and have a wonderful day!”
     YOUR RESPONSE MUST BE FINAL. DO NOT ASK ANY MORE QUESTIONS.
     `;
     
@@ -1262,21 +1258,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                           </div>
                       </div>
                   </button>
-
-                  <button
-                      onClick={() => setView('status')}
-                      className="w-full bg-white dark:bg-gray-800 border-2 border-gray-100 dark:border-gray-700 rounded-2xl p-5 flex items-center gap-4 hover:border-accent-cyan transition-all group"
-                  >
-                      <div className={`p-3 bg-accent-${accentColorClass}/10 rounded-xl group-hover:bg-accent-${accentColorClass}/20 transition-colors`}>
-                          <svg xmlns="http://www.w3.org/2000/svg" className={`h-6 w-6 text-accent-${accentColorClass}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                          </svg>
-                      </div>
-                      <div className="text-left">
-                          <h3 className="font-bold text-gray-800 dark:text-white">Check Appointment Status</h3>
-                          <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider">Follow up on your requests</p>
-                      </div>
-                  </button>
           </div>
       </div>
   );
@@ -1416,7 +1397,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
               <div className="absolute inset-0 z-[60] flex items-center justify-center bg-white/60 dark:bg-black/40 backdrop-blur-[2px]">
                   <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl shadow-2xl flex flex-col items-center gap-4 border border-gray-100 dark:border-gray-700 scale-110 animate-fade-in">
                       <Spinner className={`w-12 h-12 text-accent-${accentColorClass}`} />
-                      <p className="font-black text-xs uppercase tracking-widest animate-pulse">Processing Booking...</p>
+                      <p className="font-black text-xs uppercase tracking-widest animate-pulse">Passing to Management...</p>
                   </div>
               </div>
           )}
@@ -1550,7 +1531,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                 <div className="absolute inset-0 z-[60] flex flex-col items-center justify-center bg-white/60 dark:bg-black/40 backdrop-blur-[2px]">
                     <div className="bg-white dark:bg-gray-800 p-8 rounded-full shadow-2xl flex flex-col items-center gap-4 border-4 border-accent-cyan animate-pulse">
                         <Spinner className={`w-16 h-16 text-accent-${accentColorClass}`} />
-                        <p className="font-black text-sm uppercase tracking-tighter text-gray-900 dark:text-white">Setting things up...</p>
+                        <p className="font-black text-sm uppercase tracking-tighter text-gray-900 dark:text-white">Passing to Management...</p>
                     </div>
                 </div>
             )}

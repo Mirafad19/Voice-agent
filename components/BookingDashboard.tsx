@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../firebase';
 import { collection, query, where, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { Booking, AgentProfile } from '../types';
@@ -17,7 +17,7 @@ import {
   subMonths,
   isToday
 } from 'date-fns';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Users, Clock, CheckCircle, XCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Users, Clock, CheckCircle, XCircle, Phone } from 'lucide-react';
 
 interface BookingDashboardProps {
   agentProfile: AgentProfile;
@@ -28,6 +28,13 @@ export const BookingDashboard: React.FC<BookingDashboardProps> = ({ agentProfile
   const [loading, setLoading] = useState(true);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [view, setView] = useState<'list' | 'calendar'>('calendar');
+  const prevBookingsCountRef = useRef<number>(0);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    // Audio for notification
+    audioRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+  }, []);
 
   useEffect(() => {
     // We query by agentId matching the profile ID or name (for backward compatibility)
@@ -44,6 +51,12 @@ export const BookingDashboard: React.FC<BookingDashboardProps> = ({ agentProfile
       
       bookingsData.sort((a, b) => new Date(b.bookingDate).getTime() - new Date(a.bookingDate).getTime());
       
+      // Play sound if new booking arrived
+      if (!loading && bookingsData.length > prevBookingsCountRef.current) {
+        audioRef.current?.play().catch(e => console.log('Audio play failed:', e));
+      }
+      
+      prevBookingsCountRef.current = bookingsData.length;
       setBookings(bookingsData);
       setLoading(false);
     }, (error) => {
@@ -52,7 +65,7 @@ export const BookingDashboard: React.FC<BookingDashboardProps> = ({ agentProfile
     });
 
     return () => unsubscribe();
-  }, [agentProfile.name]);
+  }, [agentProfile.name, loading]);
 
   const handleUpdateStatus = async (id: string, newStatus: 'Confirmed' | 'Rejected' | 'Pending') => {
     try {
@@ -72,6 +85,10 @@ export const BookingDashboard: React.FC<BookingDashboardProps> = ({ agentProfile
         console.error("Error deleting booking:", error);
       }
     }
+  };
+
+  const handleCallGuest = (phone: string) => {
+    window.location.href = `tel:${phone}`;
   };
 
   const renderCalendar = () => {
@@ -243,17 +260,26 @@ export const BookingDashboard: React.FC<BookingDashboardProps> = ({ agentProfile
                       </span>
                     </td>
                     <td className="p-4 text-right">
-                      <div className="flex justify-end gap-2">
+                      <div className="flex justify-end gap-2 items-center">
+                        <Button 
+                          onClick={() => handleCallGuest(booking.userPhone)}
+                          variant="secondary"
+                          className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white border-0 py-2 px-3 h-9 transition-all active:scale-95 shadow-md flex-shrink-0"
+                        >
+                          <Phone className="h-4 w-4" />
+                          <span className="text-[10px] font-black uppercase tracking-widest">CALL GUEST</span>
+                        </Button>
+                        <div className="h-8 w-px bg-gray-200 dark:bg-gray-700 mx-1"></div>
                         {booking.status === 'Pending' && (
                           <>
-                            <Button size="sm" variant="secondary" onClick={() => handleUpdateStatus(booking.id, 'Confirmed')} className="text-[10px] h-8">Approve</Button>
-                            <Button size="sm" variant="danger" onClick={() => handleUpdateStatus(booking.id, 'Rejected')} className="text-[10px] h-8">Reject</Button>
+                            <Button size="sm" variant="secondary" onClick={() => handleUpdateStatus(booking.id, 'Confirmed')} className="text-[10px] h-9">Approve</Button>
+                            <Button size="sm" variant="danger" onClick={() => handleUpdateStatus(booking.id, 'Rejected')} className="text-[10px] h-9">Reject</Button>
                           </>
                         )}
                         {(booking.status === 'Confirmed' || booking.status === 'Rejected') && (
-                          <Button size="sm" variant="secondary" onClick={() => handleUpdateStatus(booking.id, 'Pending')} className="text-[10px] h-8">Reopen</Button>
+                          <Button size="sm" variant="secondary" onClick={() => handleUpdateStatus(booking.id, 'Pending')} className="text-[10px] h-9">Reopen</Button>
                         )}
-                        <button onClick={() => handleDeleteBooking(booking.id)} className="p-2 text-gray-400 hover:text-rose-500">
+                        <button onClick={() => handleDeleteBooking(booking.id)} className="p-2 text-gray-400 hover:text-rose-500 ml-1">
                           <XCircle className="h-5 w-5" />
                         </button>
                       </div>
