@@ -65,7 +65,7 @@ export interface Booking {
   userPhone: string;
   bookingDate: string; // YYYY-MM-DD
   purpose: string;
-  facility: 'Guest Lodge' | 'Hospital Appointment';
+  facility: string; // Made dynamic for all organizations
   status: 'Pending' | 'Confirmed' | 'Rejected';
   agentId: string;
   createdAt: any;
@@ -90,6 +90,8 @@ export interface AgentProfile {
   emailConfig?: EmailConfig;
   fileUploadConfig?: FileUploadConfig;
   ownerId?: string;
+  calendarConnected?: boolean;
+  googleCalendarTokens?: any;
 }
 
 export type AgentConfig = Omit<AgentProfile, 'id'>;

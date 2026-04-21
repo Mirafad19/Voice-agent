@@ -400,9 +400,9 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             };
 
             const dialectInstruction = dialect === 'pidgin' 
-                ? "LANGUAGE & STYLE: Speak strictly in hardcore Nigerian Pidgin. Be authentic and raw. Use deep Pidgin phrases like 'Wetin de sup?', 'Abeg', 'I de for you', 'No be small thing', 'E don cast', 'Gbege', 'Gbas gbos', 'Wahala no dey', 'How far now?', 'Wetin you wan do?', 'Oya, talk your own'. Avoid sounding like a school teacher; sound like a relatable person on the street but keep it helpful."
+                ? "LANGUAGE & STYLE: Speak strictly in hardcore Nigerian Pidgin. Be authentic and raw. PROUNCIATION HINTS: Use raw Lagos slang. Say 'Wetin de sup?' for greetings. Say 'Oya' to start instructions. Say 'Abeg' for requests. Say 'No wahala' for no problem. Say 'E don set' or 'E don cast' when things are ready. Use 'Gbas gbos' to describe actions. Say 'How far now?' often. Speak with the rhythm of a Lagos street hustler—fast, energetic, and street-smart. Do NOT sound like a robot; sound like someone from Oshodi or Obalende."
                 : dialect === 'nigerian-english'
-                ? "LANGUAGE & STYLE: Use Nigerian Standard English. Be professional, warm, and polite. Do NOT use 'Sir' or 'Ma'. Use typical Nigerian professional phrasing like 'You're welcome', 'How may I assist you today?', 'Please hold on while I check that for you'."
+                ? "LANGUAGE & STYLE: Use Nigerian Standard English. Be professional, warm, and polite. Do NOT use 'Sir' or 'Ma'. Use typical Nigerian professional phrasing like 'You're welcome', 'How may I assist you today?', 'Please hold on while I check that for you'. Use a warm, rhythmic West African melodic tone."
                 : "LANGUAGE & STYLE: Use a standard international professional English tone.";
 
             const systemInstruction = `
@@ -506,9 +506,9 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     };
 
     const dialectInstruction = selectedDialect === 'pidgin' 
-        ? "LANGUAGE & STYLE: Speak strictly in hardcore Nigerian Pidgin. Be authentic and raw. Use deep Pidgin phrases like 'Wetin de sup?', 'Abeg', 'I de for you', 'No be small thing', 'E don cast', 'Gbege', 'Gbas gbos', 'Wahala no dey', 'How far now?', 'Wetin you wan do?', 'Oya, talk your own'. Avoid sounding like a school teacher; sound like a relatable person on the street but keep it helpful."
+        ? "LANGUAGE & STYLE: Speak strictly in hardcore Nigerian Pidgin. Be authentic and raw. PROUNCIATION HINTS: Use raw Lagos slang. Say 'Wetin de sup?' for greetings. Say 'Oya' to start instructions. Say 'Abeg' for requests. Say 'No wahala' for no problem. Say 'E don set' or 'E don cast' when things are ready. Use 'Gbas gbos' to describe actions. Say 'How far now?' often. Speak with the rhythm of a Lagos street hustler—fast, energetic, and street-smart. Do NOT sound like a robot; sound like someone from Oshodi or Obalende."
         : selectedDialect === 'nigerian-english' 
-        ? "LANGUAGE & STYLE: Use Nigerian Standard English. Be professional, warm, and polite. Do NOT use 'Sir' or 'Ma'. Use typical Nigerian professional phrasing like 'You're welcome', 'How may I assist you today?', 'Please hold on while I check that for you'."
+        ? "LANGUAGE & STYLE: Use Nigerian Standard English. Be professional, warm, and polite. Do NOT use 'Sir' or 'Ma'. Use typical Nigerian professional phrasing like 'You're welcome', 'How may I assist you today?', 'Please hold on while I check that for you'. Use a warm, rhythmic West African melodic tone."
         : "LANGUAGE & STYLE: Use a standard international professional English tone.";
 
     const systemInstruction = `
@@ -638,7 +638,24 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                                         facility: facilityName || 'Hospital Appointment',
                                         agentId: agentProfile.id || agentProfile.name
                                     });
-                                    toolResult = { success: true, bookingId, message: "Recorded as PENDING" };
+
+                                    // Create Google Calendar event via backend
+                                    try {
+                                        await fetch('/api/calendar/create', {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({
+                                                agentId: agentProfile.id || agentProfile.name,
+                                                title: `PSSDC Booking: ${userName}`,
+                                                description: `Purpose: ${purpose}\nPhone: ${userPhone}\nFacility: ${facilityName || 'PSSDC'}`,
+                                                date: bookingDate
+                                            })
+                                        });
+                                    } catch (calError) {
+                                        console.error('Failed to create calendar event:', calError);
+                                    }
+
+                                    toolResult = { success: true, bookingId, message: "OK. Appointment recorded successfully and synced to Google Calendar. Say goodbye and end the conversation." };
                                 }
                             } catch (error) {
                                 console.error(`Chat Tool Error [${call.name}]:`, error);
