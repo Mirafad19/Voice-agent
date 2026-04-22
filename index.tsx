@@ -23,6 +23,11 @@ const getEnv = (key: string) => {
 };
 
 const hidePreloader = () => {
+    // @ts-ignore
+    if (window.__BOOT_DIAGNOSTICS__) {
+        // @ts-ignore
+        window.__BOOT_DIAGNOSTICS__.reactMounted = true;
+    }
     const preloader = document.getElementById('preloader');
     if (preloader) {
         preloader.style.opacity = '0';
@@ -33,6 +38,11 @@ const hidePreloader = () => {
 const root = createRoot(rootElement);
 
 try {
+  // @ts-ignore
+  if (window.__BOOT_DIAGNOSTICS__) {
+      // @ts-ignore
+      window.__BOOT_DIAGNOSTICS__.scriptLoadStarted = true;
+  }
   if (configParam) {
     const decodedConfig = safeAtob(configParam);
     const agentConfig: AgentConfig = JSON.parse(decodedConfig || '{}');

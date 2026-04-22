@@ -302,6 +302,12 @@ async function startServer() {
     console.log(`[Production] Index path mapped to: ${indexPath}`);
     console.log(`[Production] Index exists: ${fs.existsSync(indexPath)}`);
     
+    app.use((req, res, next) => {
+        if (req.path.startsWith('/assets/')) {
+            console.log(`[Production] Serving asset: ${req.path}`);
+        }
+        next();
+    });
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
       if (fs.existsSync(indexPath)) {
