@@ -15,8 +15,16 @@ const root = ReactDOM.createRoot(rootElement);
 const urlParams = new URLSearchParams(window.location.search);
 const configParam = urlParams.get('config');
 
-if (configParam) {
+// Safe environment variable access for Vite
+const getEnv = (key: string) => {
   try {
+    // @ts-ignore
+    return (typeof process !== 'undefined' && process.env && process.env[key]) || '';
+  } catch (e) { return ''; }
+};
+
+try {
+  if (configParam) {
     const decodedConfig = safeAtob(configParam);
     const agentConfig: AgentConfig = JSON.parse(decodedConfig);
     const apiKeyParam = urlParams.get('apiKey');
@@ -28,14 +36,6 @@ if (configParam) {
     document.body.style.overflow = 'hidden';
     rootElement.style.height = '100vh';
     
-    // Safe environment variable access for Vite
-    const getEnv = (key: string) => {
-      try {
-        // @ts-ignore
-        return (typeof process !== 'undefined' && process.env && process.env[key]) || '';
-      } catch (e) { return ''; }
-    };
-
     root.render(
       <React.StrictMode>
         <AgentWidget
@@ -45,19 +45,25 @@ if (configParam) {
         />
       </React.StrictMode>
     );
-  } catch (error) {
-    console.error("Failed to parse widget config:", error);
+  } else {
     root.render(
-      <div style={{ padding: '1rem', color: 'red', fontFamily: 'sans-serif' }}>
-        <h2>Error</h2>
-        <p>Invalid configuration provided in URL.</p>
-      </div>
+      <React.StrictMode>
+        <App />
+      </React.StrictMode>
     );
   }
-} else {
+} catch (globalError) {
+  console.error("CRITICAL INITIALIZATION ERROR:", globalError);
   root.render(
-    <React.StrictMode>
-      <App />
-    </React.StrictMode>
+    <div style={{ padding: '2rem', color: '#721c24', backgroundColor: '#f8d7da', border: '1px solid #f5c6cb', borderRadius: '0.5rem', margin: '1rem', fontFamily: 'system-ui' }}>
+      <h1 style={{ marginTop: 0 }}>Application Error</h1>
+      <p>The application failed to start. This is usually due to an environment configuration issue.</p>
+      <pre style={{ fontSize: '0.75rem', marginTop: '1rem', overflowX: 'auto' }}>
+        {globalError instanceof Error ? globalError.message : String(globalError)}
+      </pre>
+      <button onClick={() => window.location.reload()} style={{ marginTop: '1rem', padding: '0.5rem 1rem', cursor: 'pointer' }}>
+        Try Refreshing
+      </button>
+    </div>
   );
 }

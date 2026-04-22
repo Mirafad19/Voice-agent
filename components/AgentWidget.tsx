@@ -365,7 +365,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         if (lastMsg.role === 'user') {
             // We need to initialize chat session first
             const config = agentProfile as AgentConfig;
-            const effectiveApiKey = apiKey || process.env.GEMINI_API_KEY || 'dummy';
+            const effectiveApiKey = apiKey || (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : '') || 'dummy';
             const ai = new GoogleGenAI({ 
                 apiKey: effectiveApiKey
             });
@@ -472,7 +472,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     }
 
     const config = agentProfile as AgentConfig;
-    const effectiveApiKey = apiKey || process.env.GEMINI_API_KEY || 'dummy';
+    const effectiveApiKey = apiKey || (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : '') || 'dummy';
     const ai = new GoogleGenAI({ 
         apiKey: effectiveApiKey
     });
@@ -590,7 +590,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
     if (!chatSessionRef.current) return;
 
-    const effectiveApiKey = apiKey || process.env.GEMINI_API_KEY;
+    const effectiveApiKey = apiKey || (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : '');
 
     if (!effectiveApiKey || effectiveApiKey === 'dummy') {
         setMessages(prev => [...prev, { role: 'model', text: "API Key is missing. Please connect your Gemini API key in the dashboard.", timestamp: new Date() }]);
@@ -894,7 +894,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     await recordingServiceRef.current.start(stream);
 
     const greeting = (agentProfile as AgentConfig).initialGreeting;
-    const effectiveApiKey = apiKey || process.env.GEMINI_API_KEY || 'dummy';
+    const effectiveApiKey = apiKey || (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : '') || 'dummy';
 
     let greetingToSpeak = greeting;
     if (greeting && (activeDialect === 'pidgin' || activeDialect === 'nigerian-english')) {

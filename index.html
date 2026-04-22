@@ -4,6 +4,17 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      window.addEventListener('error', function(event) {
+        var root = document.getElementById('root');
+        if (root && root.innerHTML === '') {
+            var div = document.createElement('div');
+            div.style.cssText = 'position:fixed;top:0;left:0;right:0;padding:20px;background:#fee;color:#900;border:2px solid #900;z-index:99999;font-family:sans-serif';
+            div.innerHTML = '<h1>Boot Error</h1><p>' + event.message + '</p><pre>' + (event.error ? event.error.stack : '') + '</pre>';
+            document.body.appendChild(div);
+        }
+      });
+    </script>
     <title>Elite AI Assistant</title>
     <!-- Favicon -->
     <link rel="icon" href="https://image2url.com/r2/default/images/1773703333770-c9e20d08-1933-459c-a8c7-d7c78bf2bc22.png?v=5" type="image/png">
