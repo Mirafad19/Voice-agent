@@ -287,8 +287,10 @@ async function startServer() {
 
   app.use(geminiProxy);
 
-  // Vite middleware for development
-  if (process.env.NODE_ENV === 'development') {
+  // Vite middleware for development - Default to production mode especially on Vercel
+  const isDev = process.env.NODE_ENV === 'development' && !process.env.VERCEL;
+  
+  if (isDev) {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
