@@ -1,5 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
+import { db } from '../firebase';
+import { collection, query, where, onSnapshot, doc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { Booking, AgentProfile } from '../types';
 import { Button } from './ui/Button';
 import { 
@@ -24,46 +26,10 @@ interface BookingDashboardProps {
 export const BookingDashboard: React.FC<BookingDashboardProps> = ({ agentProfile }) => {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isConnectingCalendar, setIsConnectingCalendar] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [view, setView] = useState<'list' | 'calendar'>('calendar');
   const prevBookingsCountRef = useRef<number>(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-
-  useEffect(() => {
-    const handleOAuthMessage = (event: MessageEvent) => {
-      if (event.data?.type === 'OAUTH_AUTH_SUCCESS' && event.data?.agentId === (agentProfile as any).id) {
-        alert('Google Calendar connected successfully!');
-      }
-    };
-    window.addEventListener('message', handleOAuthMessage);
-    return () => window.removeEventListener('message', handleOAuthMessage);
-  }, [agentProfile]);
-
-  const handleConnectCalendar = async () => {
-    setIsConnectingCalendar(true);
-    try {
-      const agentId = (agentProfile as any).id || (agentProfile as any).name;
-      const response = await fetch(`/api/auth/google/url?agentId=${agentId}`);
-      const { url } = await response.json();
-      
-      const width = 600;
-      const height = 700;
-      const left = window.screenX + (window.outerWidth - width) / 2;
-      const top = window.screenY + (window.outerHeight - height) / 2;
-      
-      window.open(
-        url,
-        'google-calendar-auth',
-        `width=${width},height=${height},left=${left},top=${top},status=no,menubar=no,toolbar=no`
-      );
-    } catch (error) {
-      console.error('Failed to get auth URL:', error);
-      alert('Failed to connect to Google Calendar. Please try again.');
-    } finally {
-      setIsConnectingCalendar(false);
-    }
-  };
 
   useEffect(() => {
     // Audio for notification
@@ -71,48 +37,47 @@ export const BookingDashboard: React.FC<BookingDashboardProps> = ({ agentProfile
   }, []);
 
   useEffect(() => {
-    const fetchBookings = async () => {
-      try {
-        const agentId = (agentProfile as any).id || (agentProfile as any).name;
-        const response = await fetch(`/api/bookings?agentId=${agentId}`);
-        const bookingsData = await response.json();
-        
-        bookingsData.sort((a: any, b: any) => {
-          const dateA = new Date(a.bookingDate).getTime();
-          const dateB = new Date(b.bookingDate).getTime();
-          if (dateB !== dateA) return dateB - dateA;
-          const createA = new Date(a.createdAt).getTime();
-          const createB = new Date(b.createdAt).getTime();
-          return createB - createA;
-        });
+    // We query by agentId matching the profile ID or name (for backward compatibility)
+    const q = query(
+      collection(db, 'bookings'),
+      where('agentId', 'in', [agentProfile.id, agentProfile.name])
+    );
 
-        if (!loading && bookingsData.length > prevBookingsCountRef.current) {
-          audioRef.current?.play().catch(e => console.log('Audio play failed:', e));
-        }
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const bookingsData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Booking[];
+      bookingsData.sort((a, b) => {
+        const dateA = new Date(a.bookingDate).getTime();
+        const dateB = new Date(b.bookingDate).getTime();
+        if (dateB !== dateA) return dateB - dateA;
         
-        prevBookingsCountRef.current = bookingsData.length;
-        setBookings(bookingsData);
-        setLoading(false);
-      } catch (error) {
-        console.error("Error fetching bookings:", error);
-        setLoading(false);
+        const createA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
+        const createB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
+        return createB - createA;
+      });
+      if (!loading && bookingsData.length > prevBookingsCountRef.current) {
+        audioRef.current?.play().catch(e => console.log('Audio play failed:', e));
       }
-    };
+      
+      prevBookingsCountRef.current = bookingsData.length;
+      setBookings(bookingsData);
+      setLoading(false);
+    }, (error) => {
+      console.error("Error listening to bookings:", error);
+      setLoading(false);
+    });
 
-    fetchBookings();
-    const interval = setInterval(fetchBookings, 5000); // Poll every 5s since no real-time
-    return () => clearInterval(interval);
-  }, [agentProfile, loading]);
+    return () => unsubscribe();
+  }, [agentProfile.id, agentProfile.name, loading]);
 
   const handleUpdateStatus = async (id: string, newStatus: 'Confirmed' | 'Rejected' | 'Pending') => {
     try {
-      await fetch(`/api/bookings/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus })
+      await updateDoc(doc(db, 'bookings', id), {
+        status: newStatus,
+        updatedAt: serverTimestamp()
       });
-      // Refresh local state
-      setBookings(prev => prev.map(b => b.id === id ? { ...b, status: newStatus, updatedAt: new Date().toISOString() } : b));
     } catch (error) {
       console.error("Error updating status:", error);
     }
@@ -121,8 +86,7 @@ export const BookingDashboard: React.FC<BookingDashboardProps> = ({ agentProfile
   const handleDeleteBooking = async (id: string) => {
     if (window.confirm("Are you sure you want to delete this booking request?")) {
       try {
-        await fetch(`/api/bookings/${id}`, { method: 'DELETE' });
-        setBookings(prev => prev.filter(b => b.id !== id));
+        await deleteDoc(doc(db, 'bookings', id));
       } catch (error) {
         console.error("Error deleting booking:", error);
       }
@@ -230,28 +194,10 @@ export const BookingDashboard: React.FC<BookingDashboardProps> = ({ agentProfile
   return (
     <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
       <div className="p-6 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-        <div className="flex items-center gap-4">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-            <CalendarIcon className="h-6 w-6 text-indigo-500" />
-            PSSDC Booking Manager
-          </h2>
-          {(agentProfile as any).calendarConnected ? (
-            <div className="flex items-center gap-2 px-3 py-1 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-full">
-              <CheckCircle className="h-4 w-4 text-emerald-500" />
-              <span className="text-[10px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-widest">Google Calendar Linked</span>
-            </div>
-          ) : (
-            <Button 
-              onClick={handleConnectCalendar}
-              disabled={isConnectingCalendar}
-              variant="secondary"
-              className="h-8 py-0 px-3 text-[10px] font-black uppercase tracking-widest bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600"
-            >
-              <CalendarIcon className="h-3 w-3 mr-2" />
-              {isConnectingCalendar ? 'Connecting...' : 'Connect Google Calendar'}
-            </Button>
-          )}
-        </div>
+        <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+          <CalendarIcon className="h-6 w-6 text-indigo-500" />
+          PSSDC Booking Manager
+        </h2>
         <div className="flex bg-gray-100 dark:bg-gray-900 p-1 rounded-lg">
           <button
             onClick={() => setView('calendar')}
@@ -319,12 +265,12 @@ export const BookingDashboard: React.FC<BookingDashboardProps> = ({ agentProfile
                         }`}>
                           {booking.status}
                         </span>
-                            {booking.status !== 'Pending' && booking.updatedAt && (
-                              <div className="text-[9px] text-gray-400 font-bold uppercase tracking-tight flex items-center gap-1">
-                                <Clock className="h-2.5 w-2.5" />
-                                {typeof booking.updatedAt === 'string' ? format(new Date(booking.updatedAt), 'HH:mm (MMM dd)') : (booking.updatedAt?.toDate ? format(booking.updatedAt.toDate(), 'HH:mm (MMM dd)') : 'Just now')}
-                              </div>
-                            )}
+                        {booking.status !== 'Pending' && booking.updatedAt && (
+                          <div className="text-[9px] text-gray-400 font-bold uppercase tracking-tight flex items-center gap-1">
+                            <Clock className="h-2.5 w-2.5" />
+                            {booking.updatedAt?.toDate ? format(booking.updatedAt.toDate(), 'HH:mm (MMM dd)') : 'Just now'}
+                          </div>
+                        )}
                       </div>
                     </td>
                     <td className="p-4 text-right">

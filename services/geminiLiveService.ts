@@ -101,9 +101,9 @@ export class GeminiLiveService {
       };
 
       const dialectInstruction = this.dialect === 'pidgin'
-        ? "LANGUAGE & STYLE: Speak strictly in hardcore Nigerian Pidgin. Be authentic and raw. PROUNCIATION HINTS: Use raw Lagos slang. Say 'Wetin de sup?' for greetings. Say 'Oya' to start instructions. Say 'Abeg' for requests. Say 'No wahala' for no problem. Say 'E don set' or 'E don cast' when things are ready. Use 'Gbas gbos' to describe actions. Say 'How far now?' often. Speak with the rhythm of a Lagos street hustler—fast, energetic, and street-smart. Do NOT sound like a robot; sound like someone from Oshodi or Obalende."
+        ? "LANGUAGE & STYLE: Speak strictly in hardcore Nigerian Pidgin. Be authentic and raw. Use deep Pidgin phrases like 'Wetin de sup?', 'Abeg', 'I de for you', 'No be small thing', 'E don cast', 'Gbege', 'Gbas gbos', 'Wahala no dey', 'How far now?', 'Wetin you wan do?', 'Oya, talk your own'. Avoid sounding like a school teacher; sound like a relatable person on the street but keep it helpful."
         : this.dialect === 'nigerian-english'
-        ? "LANGUAGE & STYLE: Use Nigerian Standard English. Be professional, warm, and polite. Do NOT use 'Sir' or 'Ma'. Use typical Nigerian professional phrasing like 'You're welcome', 'How may I assist you today?', 'Please hold on while I check that for you'. Use a warm, rhythmic West African melodic tone."
+        ? "LANGUAGE & STYLE: Use Nigerian Standard English. Be professional, warm, and polite. Do NOT use 'Sir' or 'Ma'. Use typical Nigerian professional phrasing like 'You're welcome', 'How may I assist you today?', 'Please hold on while I check that for you'."
         : "LANGUAGE & STYLE: Use a standard international professional English tone.";
 
       this.sessionPromise = this.ai.live.connect({
@@ -272,8 +272,6 @@ export class GeminiLiveService {
     }
   }
 
-  private pendingDisconnect = false;
-
   private async handleSessionMessage(message: LiveServerMessage): Promise<void> {
     if (message.serverContent?.interrupted) {
       this.callbacks.onInterruption();
@@ -304,25 +302,7 @@ export class GeminiLiveService {
                                         facility: facilityName || 'Hospital Appointment',
                                         agentId: (this.config as any).id || this.config.name
                                     });
-
-                                    // Create Google Calendar event via backend
-                                    try {
-                                        await fetch('/api/calendar/create', {
-                                            method: 'POST',
-                                            headers: { 'Content-Type': 'application/json' },
-                                            body: JSON.stringify({
-                                                agentId: (this.config as any).id || this.config.name,
-                                                title: `PSSDC Booking: ${userName}`,
-                                                description: `Purpose: ${purpose}\nPhone: ${userPhone}\nFacility: ${facilityName || 'PSSDC'}`,
-                                                date: bookingDate
-                                            })
-                                        });
-                                    } catch (calError) {
-                                        console.error('Failed to create calendar event:', calError);
-                                    }
-
-                                    result = { success: true, bookingId, message: "OK. Appointment recorded successfully and synced to Google Calendar. Please confirm to user and say goodbye. Then end the conversation." };
-                                    this.pendingDisconnect = true;
+                                    result = { success: true, bookingId, message: "OK. Appointment recorded successfully. Please confirm to user and say goodbye." };
                                 }
                 } catch (error) {
                     console.error(`Tool execution error [${call.name}]:`, error);
@@ -370,15 +350,6 @@ export class GeminiLiveService {
       if (this.currentOutputTranscription) {
         this.callbacks.onTranscriptUpdate(true, this.currentOutputTranscription, 'output');
       }
-
-      // Handle pending disconnect after final confirmation
-      if (this.pendingDisconnect) {
-          console.log('Booking complete, disconnecting in 5 seconds...');
-          setTimeout(() => {
-              this.disconnect();
-          }, 5000);
-      }
-
       this.currentInputTranscription = '';
       this.currentOutputTranscription = '';
     }

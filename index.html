@@ -4,56 +4,6 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <script>
-      window.process = { env: { NODE_ENV: 'production' } };
-      
-      // Global state for diagnostic reporting
-      window.__BOOT_DIAGNOSTICS__ = {
-        startTime: Date.now(),
-        scriptLoadStarted: false,
-        scriptLoadFailed: false,
-        reactMounted: false
-      };
-
-      function reportError(title, message, detail) {
-        var preloader = document.getElementById('preloader');
-        if (preloader) preloader.style.display = 'none';
-        
-        var div = document.createElement('div');
-        div.id = 'critical-error-overlay';
-        div.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;padding:40px;background:#fff5f5;color:#c53030;border:4px solid #feb2b2;z-index:999999;font-family:system-ui,sans-serif;overflow-y:auto';
-        div.innerHTML = '<h1 style="font-size:2rem;margin-bottom:1rem;color:#9b2c2c">' + title + '</h1>' +
-                        '<div style="background:#fff;padding:20px;border-radius:8px;box-shadow:0 2px 4px rgba(0,0,0,0.1)">' +
-                        '<p style="font-weight:bold;margin-bottom:1rem">' + message + '</p>' +
-                        '<pre style="background:#edf2f7;padding:15px;border-radius:4px;font-size:0.8rem;white-space:pre-wrap">' + (detail || 'No further details available.') + '</pre>' +
-                        '<button onclick="window.location.reload()" style="margin-top:20px;padding:10px 20px;background:#c53030;color:white;border:none;border-radius:4px;cursor:pointer;font-weight:bold">Try Full Refresh</button>' +
-                        '</div>';
-        document.body.appendChild(div);
-      }
-
-      window.addEventListener('error', function(event) {
-        var detail = event.error ? (event.error.stack || event.error.message) : event.message;
-        reportError('Critical Runtime Error', 'The application encountered a fatal error during execution.', detail);
-      });
-
-      window.addEventListener('unhandledrejection', function(event) {
-        reportError('Promise Rejection', 'A background task failed unexpectedly.', event.reason);
-      });
-
-      // Monitor script loading specifically
-      setTimeout(function() {
-        if (!window.__BOOT_DIAGNOSTICS__.reactMounted) {
-            var scripts = document.getElementsByTagName('script');
-            var scriptList = [];
-            for(var i=0; i<scripts.length; i++) {
-                if(scripts[i].src) scriptList.push(scripts[i].src);
-            }
-            
-            reportError('Mount Timeout', 'The application is taking too long to start.', 
-                'Possible causes:\n1. Main JavaScript bundle failed to load (Check Network tab)\n2. Initialization is blocked by a global error\n3. Environment variable mismatch\n\nActive scripts:\n' + scriptList.join('\n'));
-        }
-      }, 8000); // 8 seconds timeout for diagnostic report
-    </script>
     <title>Elite AI Assistant</title>
     <!-- Favicon -->
     <link rel="icon" href="https://image2url.com/r2/default/images/1773703333770-c9e20d08-1933-459c-a8c7-d7c78bf2bc22.png?v=5" type="image/png">
@@ -107,6 +57,17 @@
         }
       }
     </script>
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.34.0"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
     <style>
       html, body {
         background-color: transparent !important;
@@ -116,50 +77,9 @@
       #root {
         background-color: transparent !important;
       }
-      #preloader {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        background-color: #fff;
-        z-index: 1000;
-        font-family: system-ui, -apple-system, sans-serif;
-        color: #374151;
-        transition: opacity 0.5s ease-out;
-      }
-      .dark #preloader {
-        background-color: #111827;
-        color: #f3f4f6;
-      }
-      .loader-dots div {
-        width: 8px;
-        height: 8px;
-        margin: 0 4px;
-        background: currentColor;
-        border-radius: 50%;
-        display: inline-block;
-        animation: loader-dots 0.8s alternate infinite;
-      }
-      .loader-dots div:nth-child(2) { animation-delay: 0.2s; }
-      .loader-dots div:nth-child(3) { animation-delay: 0.4s; }
-      @keyframes loader-dots {
-        from { opacity: 1; transform: scale(1); }
-        to { opacity: 0.2; transform: scale(0.5); }
-      }
     </style>
 </head>
   <body>
-    <div id="preloader">
-      <div class="loader-dots">
-        <div></div><div></div><div></div>
-      </div>
-      <p style="margin-top: 1rem; font-weight: 500; font-size: 0.875rem; letter-spacing: 0.05em; text-transform: uppercase;">Booting Elite AI Assistant...</p>
-    </div>
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>

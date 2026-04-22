@@ -3,12 +3,14 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useAgentProfiles } from './hooks/useAgentProfiles';
 import { ConfigurationPanel } from './components/ConfigurationPanel';
+import { RecordingService } from './components/RecordingsPanel';
 import { EmbedCodeModal } from './components/EmbedCodeModal';
 import { SettingsModal } from './components/SettingsModal';
 import { AgentWidget } from './components/AgentWidget';
 import { BookingDashboard } from './components/BookingDashboard';
 import { Recording, AgentProfile } from './types';
 import { Button } from './components/ui/Button';
+import { AuthProvider, useAuth } from './components/AuthProvider';
 
 declare global {
   interface Window {
@@ -56,6 +58,7 @@ const Header: React.FC<{
 );
 
 const DashboardContent: React.FC = () => {
+    const { user, loading, error, login, logout } = useAuth();
     const {
         profiles,
         activeProfile,
@@ -158,12 +161,36 @@ const DashboardContent: React.FC = () => {
         }
     };
 
+    if (loading) {
+        return <div className="bg-gray-100 dark:bg-gray-900 min-h-screen flex items-center justify-center text-white">Loading...</div>;
+    }
+
+    if (!user) {
+        return (
+            <div className="bg-gray-100 dark:bg-gray-900 min-h-screen flex items-center justify-center">
+                <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-xl max-w-md w-full text-center">
+                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">AI Voice Agent Dashboard</h1>
+                    <p className="text-gray-600 dark:text-gray-400 mb-8">Please sign in to manage your agents securely.</p>
+                    
+                    {error && (
+                        <div className="mb-6 p-4 bg-red-100 border-l-4 border-red-500 text-red-700 text-sm text-left dark:bg-red-900/30 dark:text-red-300">
+                            <p className="font-bold">Login Error</p>
+                            <p>{error}</p>
+                        </div>
+                    )}
+
+                    <Button onClick={login} className="w-full py-3 text-lg">Sign in with Google</Button>
+                </div>
+            </div>
+        );
+    }
+
     if (profilesLoading || !activeProfile) {
-        return <div className="bg-gray-100 dark:bg-gray-900 min-h-screen flex items-center justify-center text-white">Loading your agent profiles...</div>;
+        return <div className="bg-gray-100 dark:bg-gray-900 min-h-screen flex items-center justify-center text-white">Loading profiles...</div>;
     }
 
     return (
-        <div className="bg-gray-100 dark:bg-gray-900 min-h-screen text-gray-900 dark:text-white transition-colors duration-300">
+        <div className="bg-gray-100 dark:bg-gray-900 min-h-screen">
             <Header
                 onEmbedClick={() => setIsEmbedModalOpen(true)}
                 onNewProfile={handleNewProfile}
@@ -172,8 +199,19 @@ const DashboardContent: React.FC = () => {
                 activeProfile={activeProfile}
                 onSelectProfile={selectProfile}
                 onOpenSettings={() => setIsSettingsOpen(true)}
-                onLogout={() => window.location.reload()}
+                onLogout={logout}
             />
+            {activeProfile?.id === 'fallback-local' && (
+              <div className="max-w-4xl mx-auto mt-4 px-8">
+                <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 dark:bg-red-900/50 dark:text-red-300" role="alert">
+                  <p className="font-bold">Database Connection Error</p>
+                  <p className="text-sm">
+                    We couldn't connect to your Firestore database. The app is running in <b>Offline Mode</b>. 
+                    Changes will not be saved. Please ensure your Firebase Security Rules are set to "Allow Read/Write" in your Firebase Console.
+                  </p>
+                </div>
+              </div>
+            )}
             {notification && (
               <div className="max-w-4xl mx-auto mt-4 px-8">
                 <div className="bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 dark:bg-blue-900/50 dark:text-blue-300" role="alert">
@@ -241,7 +279,7 @@ const DashboardContent: React.FC = () => {
             </main>
             <AgentWidget
                 agentProfile={activeProfile}
-                apiKey={apiKey || (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : '') || ''}
+                apiKey={apiKey || process.env.GEMINI_API_KEY || ''}
                 isWidgetMode={false}
                 onSessionEnd={handleSessionEnd}
             />
@@ -262,7 +300,9 @@ const DashboardContent: React.FC = () => {
 
 const App: React.FC = () => {
     return (
-        <DashboardContent />
+        <AuthProvider>
+            <DashboardContent />
+        </AuthProvider>
     );
 };
 
