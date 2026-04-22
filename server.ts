@@ -40,6 +40,23 @@ async function startServer() {
   app.use(express.json());
   app.use(cookieParser());
 
+  app.get('/api/health', (req, res) => {
+    res.json({ status: 'ok', time: new Date().toISOString() });
+  });
+
+  app.get('/api/debug-server', (req, res) => {
+    const distPath = path.resolve(process.cwd(), 'dist');
+    res.json({
+      cwd: process.cwd(),
+      dirname: __dirname,
+      distExists: fs.existsSync(distPath),
+      distContent: fs.existsSync(distPath) ? fs.readdirSync(distPath) : [],
+      env: {
+          NODE_ENV: process.env.NODE_ENV
+      }
+    });
+  });
+
   const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
 
   // Google OAuth Config
@@ -271,14 +288,14 @@ async function startServer() {
   app.use(geminiProxy);
 
   // Vite middleware for development
-  if (process.env.NODE_ENV !== 'production') {
+  if (process.env.NODE_ENV === 'development') {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(__dirname, 'dist');
+    const distPath = path.resolve(process.cwd(), 'dist');
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
