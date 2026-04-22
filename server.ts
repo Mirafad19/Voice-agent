@@ -296,9 +296,19 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.resolve(process.cwd(), 'dist');
+    const indexPath = path.join(distPath, 'index.html');
+    
+    console.log(`[Production] Serving static files from: ${distPath}`);
+    console.log(`[Production] Index path mapped to: ${indexPath}`);
+    console.log(`[Production] Index exists: ${fs.existsSync(indexPath)}`);
+    
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+      if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+      } else {
+        res.status(404).send('Application build not found. Please run "npm run build" first.');
+      }
     });
   }
 

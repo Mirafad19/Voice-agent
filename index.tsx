@@ -1,6 +1,6 @@
 
 import React from 'react';
-import ReactDOM from 'react-dom/client';
+import { createRoot } from 'react-dom/client';
 import App from './App';
 import { AgentWidget } from './components/AgentWidget';
 import { AgentConfig } from './types';
@@ -10,7 +10,6 @@ const rootElement = document.getElementById('root');
 if (!rootElement) {
   throw new Error("Could not find root element to mount to");
 }
-const root = ReactDOM.createRoot(rootElement);
 
 const urlParams = new URLSearchParams(window.location.search);
 const configParam = urlParams.get('config');
@@ -19,14 +18,24 @@ const configParam = urlParams.get('config');
 const getEnv = (key: string) => {
   try {
     // @ts-ignore
-    return (typeof process !== 'undefined' && process.env && process.env[key]) || '';
+    return (window.process?.env?.[key]) || (import.meta.env[`VITE_${key}`]) || '';
   } catch (e) { return ''; }
 };
+
+const hidePreloader = () => {
+    const preloader = document.getElementById('preloader');
+    if (preloader) {
+        preloader.style.opacity = '0';
+        setTimeout(() => preloader.remove(), 500);
+    }
+};
+
+const root = createRoot(rootElement);
 
 try {
   if (configParam) {
     const decodedConfig = safeAtob(configParam);
-    const agentConfig: AgentConfig = JSON.parse(decodedConfig);
+    const agentConfig: AgentConfig = JSON.parse(decodedConfig || '{}');
     const apiKeyParam = urlParams.get('apiKey');
     
     // Set transparent background for widget mode
@@ -45,14 +54,18 @@ try {
         />
       </React.StrictMode>
     );
+    // Use a small timeout to ensure React has started rendering
+    setTimeout(hidePreloader, 100);
   } else {
     root.render(
       <React.StrictMode>
         <App />
       </React.StrictMode>
     );
+    setTimeout(hidePreloader, 100);
   }
 } catch (globalError) {
+  hidePreloader();
   console.error("CRITICAL INITIALIZATION ERROR:", globalError);
   root.render(
     <div style={{ padding: '2rem', color: '#721c24', backgroundColor: '#f8d7da', border: '1px solid #f5c6cb', borderRadius: '0.5rem', margin: '1rem', fontFamily: 'system-ui' }}>

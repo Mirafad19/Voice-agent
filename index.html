@@ -81,9 +81,50 @@
       #root {
         background-color: transparent !important;
       }
+      #preloader {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background-color: #fff;
+        z-index: 1000;
+        font-family: system-ui, -apple-system, sans-serif;
+        color: #374151;
+        transition: opacity 0.5s ease-out;
+      }
+      .dark #preloader {
+        background-color: #111827;
+        color: #f3f4f6;
+      }
+      .loader-dots div {
+        width: 8px;
+        height: 8px;
+        margin: 0 4px;
+        background: currentColor;
+        border-radius: 50%;
+        display: inline-block;
+        animation: loader-dots 0.8s alternate infinite;
+      }
+      .loader-dots div:nth-child(2) { animation-delay: 0.2s; }
+      .loader-dots div:nth-child(3) { animation-delay: 0.4s; }
+      @keyframes loader-dots {
+        from { opacity: 1; transform: scale(1); }
+        to { opacity: 0.2; transform: scale(0.5); }
+      }
     </style>
 </head>
   <body>
+    <div id="preloader">
+      <div class="loader-dots">
+        <div></div><div></div><div></div>
+      </div>
+      <p style="margin-top: 1rem; font-weight: 500; font-size: 0.875rem; letter-spacing: 0.05em; text-transform: uppercase;">Booting Elite AI Assistant...</p>
+    </div>
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>
