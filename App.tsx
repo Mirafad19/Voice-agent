@@ -242,7 +242,7 @@ const DashboardContent: React.FC = () => {
             </main>
             <AgentWidget
                 agentProfile={activeProfile}
-                apiKey={apiKey || process.env.GEMINI_API_KEY || ''}
+                apiKey={apiKey || (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : '') || ''}
                 isWidgetMode={false}
                 onSessionEnd={handleSessionEnd}
             />

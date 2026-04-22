@@ -28,11 +28,19 @@ if (configParam) {
     document.body.style.overflow = 'hidden';
     rootElement.style.height = '100vh';
     
+    // Safe environment variable access for Vite
+    const getEnv = (key: string) => {
+      try {
+        // @ts-ignore
+        return (typeof process !== 'undefined' && process.env && process.env[key]) || '';
+      } catch (e) { return ''; }
+    };
+
     root.render(
       <React.StrictMode>
         <AgentWidget
           agentProfile={agentConfig}
-          apiKey={apiKeyParam || process.env.GEMINI_API_KEY || ''}
+          apiKey={apiKeyParam || getEnv('GEMINI_API_KEY') || ''}
           isWidgetMode={true}
         />
       </React.StrictMode>

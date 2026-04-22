@@ -10,38 +10,60 @@ export const useAgentProfiles = () => {
   const [loading, setLoading] = useState(true);
 
   const fetchProfiles = useCallback(async () => {
+    setLoading(true);
     try {
-      const response = await fetch('/api/profiles');
-      const data: AgentProfile[] = await response.json();
-      
-      const userProfiles = data;
-
-      if (userProfiles.length === 0) {
-        const defaultProfile: AgentProfile = {
-          ...DEFAULT_PROFILES[0],
-          id: `custom-${Date.now()}`,
-          name: 'My AI Assistant',
-          ownerId: 'lite-user' 
-        };
-        await fetch('/api/profiles', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(defaultProfile)
-        });
-        setProfiles([defaultProfile]);
-        setActiveProfileId(defaultProfile.id);
-      } else {
-        setProfiles(userProfiles);
-        if (userProfiles.length > 0 && !activeProfileId) {
-          setActiveProfileId(userProfiles[0].id);
-        }
+      // 1. Try to load from localStorage first for instant UI
+      const localData = localStorage.getItem('agentProfiles');
+      if (localData) {
+        setProfiles(JSON.parse(localData));
       }
+
+      // 2. Try to fetch from server as secondary (best effort)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
+
+      try {
+        const response = await fetch('/api/profiles', { signal: controller.signal });
+        clearTimeout(timeoutId);
+        
+        if (response.ok) {
+          const serverData = await response.json();
+          if (Array.isArray(serverData) && serverData.length > 0) {
+            setProfiles(serverData);
+            localStorage.setItem('agentProfiles', JSON.stringify(serverData));
+          }
+        }
+      } catch (err) {
+        console.warn("Server sync failed:", err);
+      }
+
+
+      // 3. If still empty, create default
+      setProfiles(current => {
+        if (current.length === 0) {
+          const defaultProfile: AgentProfile = {
+            ...DEFAULT_PROFILES[0],
+            id: `custom-${Date.now()}`,
+            name: 'My AI Assistant',
+            ownerId: 'lite-user' 
+          };
+          localStorage.setItem('agentProfiles', JSON.stringify([defaultProfile]));
+          // Try to sync to server if possible
+          fetch('/api/profiles', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(defaultProfile)
+          }).catch(() => {}); // Ignore if serverless/offline
+          return [defaultProfile];
+        }
+        return current;
+      });
     } catch (error) {
-      console.error("Error fetching profiles:", error);
+      console.warn("API Fetch failed, using local cache:", error);
     } finally {
       setLoading(false);
     }
-  }, [activeProfileId]);
+  }, []);
 
   useEffect(() => {
     fetchProfiles();
@@ -58,12 +80,16 @@ export const useAgentProfiles = () => {
 
   const updateProfile = useCallback(async (updatedProfile: AgentProfile) => {
     try {
+      setProfiles(prev => {
+        const next = prev.map(p => p.id === updatedProfile.id ? updatedProfile : p);
+        localStorage.setItem('agentProfiles', JSON.stringify(next));
+        return next;
+      });
       await fetch('/api/profiles', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatedProfile)
       });
-      setProfiles(prev => prev.map(p => p.id === updatedProfile.id ? updatedProfile : p));
     } catch (error) {
       console.error("Error updating profile:", error);
     }
@@ -80,13 +106,17 @@ export const useAgentProfiles = () => {
         ownerId: 'lite-user'
     };
     try {
+      setProfiles(prev => {
+        const next = [...prev, newProfile];
+        localStorage.setItem('agentProfiles', JSON.stringify(next));
+        return next;
+      });
+      setActiveProfileId(newProfile.id);
       await fetch('/api/profiles', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newProfile)
       });
-      setProfiles(prev => [...prev, newProfile]);
-      setActiveProfileId(newProfile.id);
     } catch (error) {
       console.error("Error creating profile:", error);
     }
@@ -94,8 +124,12 @@ export const useAgentProfiles = () => {
 
   const deleteProfile = useCallback(async (id: string) => {
     try {
+      setProfiles(prev => {
+        const next = prev.filter(p => p.id !== id);
+        localStorage.setItem('agentProfiles', JSON.stringify(next));
+        return next;
+      });
       await fetch(`/api/profiles/${id}`, { method: 'DELETE' });
-      setProfiles(prev => prev.filter(p => p.id !== id));
     } catch (error) {
       console.error("Error deleting profile:", error);
     }
@@ -103,19 +137,21 @@ export const useAgentProfiles = () => {
 
   const importProfiles = useCallback(async (newProfiles: AgentProfile[]) => {
       try {
+        setProfiles(newProfiles);
+        localStorage.setItem('agentProfiles', JSON.stringify(newProfiles));
+        
         for (const profile of newProfiles) {
           const profileToSave = { ...profile, ownerId: 'lite-user' };
           await fetch('/api/profiles', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(profileToSave)
-          });
+          }).catch(() => {});
         }
-        fetchProfiles();
       } catch (error) {
         console.error("Error importing profiles:", error);
       }
-  }, [fetchProfiles]);
+  }, []);
 
   return {
     profiles,
