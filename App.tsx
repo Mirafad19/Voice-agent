@@ -3,7 +3,6 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useAgentProfiles } from './hooks/useAgentProfiles';
 import { ConfigurationPanel } from './components/ConfigurationPanel';
-import { RecordingService } from './components/RecordingsPanel';
 import { EmbedCodeModal } from './components/EmbedCodeModal';
 import { SettingsModal } from './components/SettingsModal';
 import { AgentWidget } from './components/AgentWidget';
