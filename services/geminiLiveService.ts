@@ -72,63 +72,43 @@ export class GeminiLiveService {
         ? `INITIALIZATION: You have just spoken the following greeting to the user: "${this.config.initialGreeting}". The user has heard this. Do NOT repeat it. Your goal is to WAIT for the user to reply to this greeting.` 
         : `INITIALIZATION: Wait for the user to speak first.`;
 
-      const checkAvailabilityTool: FunctionDeclaration = {
-        name: 'check_facility_availability',
-        description: 'Check if a specific date is available for the facility (Guest Lodge or Hospital).',
-        parameters: {
-          type: Type.OBJECT,
-          properties: {
-            date: { type: Type.STRING, description: 'The date in YYYY-MM-DD format.' }
-          },
-          required: ['date']
-        }
-      };
- 
-      const bookFacilityTool: FunctionDeclaration = {
-        name: 'book_facility',
-        description: 'Record a booking or appointment request.',
-        parameters: {
-          type: Type.OBJECT,
-          properties: {
-            userName: { type: Type.STRING, description: 'The full name of the user.' },
-            userPhone: { type: Type.STRING, description: 'The 11-digit phone number of the user.' },
-            bookingDate: { type: Type.STRING, description: 'The date in YYYY-MM-DD format.' },
-            purpose: { type: Type.STRING, description: 'The purpose of the visit or appointment.' },
-            facilityName: { type: Type.STRING, description: 'The name of the facility for the booking.' }
-          },
-          required: ['userName', 'userPhone', 'bookingDate', 'purpose', 'facilityName']
-        }
-      };
+      const isPssdc = this.config.name.toLowerCase().includes('pssdc');
+      const hasBookingCapability = isPssdc || this.config.knowledgeBase.toLowerCase().includes('booking') || this.config.knowledgeBase.toLowerCase().includes('lodge') || this.config.knowledgeBase.toLowerCase().includes('hospital');
 
-      const dialectInstruction = this.dialect === 'pidgin'
-        ? "LANGUAGE & STYLE: Speak strictly in hardcore Nigerian Pidgin. Be authentic and raw. Use deep Pidgin phrases like 'Wetin de sup?', 'Abeg', 'I de for you', 'No be small thing', 'E don cast', 'Gbege', 'Gbas gbos', 'Wahala no dey', 'How far now?', 'Wetin you wan do?', 'Oya, talk your own'. Avoid sounding like a school teacher; sound like a relatable person on the street but keep it helpful."
-        : this.dialect === 'nigerian-english'
-        ? "LANGUAGE & STYLE: Use Nigerian Standard English. Be professional, warm, and polite. Do NOT use 'Sir' or 'Ma'. Use typical Nigerian professional phrasing like 'You're welcome', 'How may I assist you today?', 'Please hold on while I check that for you'."
-        : "LANGUAGE & STYLE: Use a standard international professional English tone.";
+      const tools: any[] = [];
 
-      this.sessionPromise = this.ai.live.connect({
-        model: 'gemini-3.1-flash-live-preview',
-        config: {
-          responseModalities: [Modality.AUDIO],
-          speechConfig: {
-            voiceConfig: { 
-              prebuiltVoiceConfig: { 
-                voiceName: (this.dialect === 'pidgin' || this.dialect === 'nigerian-english') ? 'Kore' : this.config.voice 
-              } 
+      if (hasBookingCapability) {
+        const checkAvailabilityTool: FunctionDeclaration = {
+          name: 'check_facility_availability',
+          description: 'Check if a specific date is available for the facility.',
+          parameters: {
+            type: Type.OBJECT,
+            properties: {
+              date: { type: Type.STRING, description: 'The date in YYYY-MM-DD format.' }
             },
-          },
-          tools: [{ functionDeclarations: [checkAvailabilityTool, bookFacilityTool] }],
-          systemInstruction: `
-          CRITICAL OPERATIONAL RULES:
-          1. ${dialectInstruction}
-          2. ${greetingContext}
-          3. RESPONSIVE PROTOCOL: You are an active, helpful listener. Respond naturally and promptly as soon as the user finishes their thought.
-          4. AGGRESSIVE SILENCE: If the user starts talking while you are speaking, STOP IMMEDIATELY. Prioritize the user's voice above your own.
-          5. SOURCE OF TRUTH: Use the provided knowledge base accurately for all facility names and contact information.
-          6. SILENCE HANDLING: If you receive "[[SILENCE_DETECTED]]", ask "Are you still there?".
-          7. INFORMATION RETRIEVAL: If asked for phone numbers or specific details, consult your knowledge base. Do not use external or hardcoded numbers.
-          8. BOOKING TERMINATION: If you have just called 'book_facility' and received the tool result, YOUR ABSOLUTE AND FINAL TASK IS TO CONFIRM TO THE USER THAT THEIR DETAILS HAVE BEEN PASSED TO THE MANAGEMENT AND TO SAY GOODBYE IMMEDIATELY. TELL THEM TO LOOK OUT FOR A CALL FROM MANAGEMENT ON THEIR PHONE NUMBER. DO NOT ASK ANY MORE QUESTIONS. Do not pause. Speak your confirmation message now.
-          
+            required: ['date']
+          }
+        };
+
+        const bookFacilityTool: FunctionDeclaration = {
+          name: 'book_facility',
+          description: 'Record a booking or appointment request.',
+          parameters: {
+            type: Type.OBJECT,
+            properties: {
+              userName: { type: Type.STRING, description: 'The full name of the user.' },
+              userPhone: { type: Type.STRING, description: 'The 11-digit phone number of the user.' },
+              bookingDate: { type: Type.STRING, description: 'The date in YYYY-MM-DD format.' },
+              purpose: { type: Type.STRING, description: 'The purpose of the visit or appointment.' },
+              facilityName: { type: Type.STRING, description: 'The name of the facility for the booking.' }
+            },
+            required: ['userName', 'userPhone', 'bookingDate', 'purpose', 'facilityName']
+          }
+        };
+        tools.push({ functionDeclarations: [checkAvailabilityTool, bookFacilityTool] });
+      }
+
+      const bookingFlow = hasBookingCapability ? `
           🗓️ APPOINTMENT BOOKING FLOW:
           YOU MUST ASK ONLY ONE QUESTION AT A TIME. Wait for the user to answer before moving to the next step.
           
@@ -150,13 +130,49 @@ export class GeminiLiveService {
           Then call 'book_facility'. Ensure the facilityName parameter correctly matches the organization relevant to the context.
           
           6. Final Confirmation & Safe Handoff:
-          Once the tool returns success, IMMEDIATELY say: “Everything has been passed to our management. Please keep your phone reachable as they will CALL YOU directly on the number you provided to confirm your slot and finalize payment. Thank you for choosing PSSDC and have a wonderful day!”
+          Once the tool returns success, IMMEDIATELY say: “Everything has been passed to our management. Please keep your phone reachable as they will CALL YOU directly on the number you provided to confirm your slot and finalize payment. Thank you for choosing ${this.config.name} and have a wonderful day!”
           DO NOT ASK ANY MORE QUESTIONS. YOU MUST END THE CONVERSATION DEFINITIVELY.
+      ` : `
+          CONVERSATION STYLE: Keep the conversation focused strictly on the topics provided in your knowledge base. If the user asks for things outside your scope (like booking flights or medical appointments, unless specified in the knowledge base), politely decline and redirect them to what you CAN help with.
+      `;
+
+      const dialectInstruction = this.dialect === 'pidgin'
+        ? "LANGUAGE & STYLE: Speak strictly in hardcore Nigerian Pidgin. Be authentic and raw. Use deep Pidgin phrases like 'Wetin de sup?', 'Abeg', 'I de for you', 'No be small thing', 'E don cast', 'Gbege', 'Gbas gbos', 'Wahala no dey', 'How far now?', 'Wetin you wan do?', 'Oya, talk your own'. Avoid sounding like a school teacher; sound like a relatable person on the street but keep it helpful."
+        : this.dialect === 'nigerian-english'
+        ? "LANGUAGE & STYLE: Use Nigerian Standard English. Be professional, warm, and polite. Do NOT use 'Sir' or 'Ma'. Use typical Nigerian professional phrasing like 'You're welcome', 'How may I assist you today?', 'Please hold on while I check that for you'."
+        : "LANGUAGE & STYLE: Use a standard international professional English tone.";
+
+      this.sessionPromise = this.ai.live.connect({
+        model: 'gemini-3.1-flash-live-preview',
+        config: {
+          responseModalities: [Modality.AUDIO],
+          speechConfig: {
+            voiceConfig: { 
+              prebuiltVoiceConfig: { 
+                voiceName: (this.dialect === 'pidgin' || this.dialect === 'nigerian-english') ? 'Kore' : this.config.voice 
+              } 
+            },
+          },
+          tools,
+          systemInstruction: `
+          CRITICAL OPERATIONAL RULES:
+          1. ${dialectInstruction}
+          2. ${greetingContext}
+          3. RESPONSIVE PROTOCOL: You are an active, helpful listener. Respond naturally and promptly as soon as the user finishes their thought.
+          4. AGGRESSIVE SILENCE: If the user starts talking while you are speaking, STOP IMMEDIATELY. Prioritize the user's voice above your own.
+          5. SOURCE OF TRUTH: Use the provided knowledge base accurately for all information.
+          6. SILENCE HANDLING: If you receive "[[SILENCE_DETECTED]]", ask "Are you still there?".
+          7. INFORMATION RETRIEVAL: If asked for phone numbers or specific details, consult your knowledge base. Do not use external or hardcoded numbers.
+          8. BOOKING TERMINATION: If you have just called 'book_facility' and received the tool result, YOUR ABSOLUTE AND FINAL TASK IS TO CONFIRM TO THE USER THAT THEIR DETAILS HAVE BEEN PASSED TO THE MANAGEMENT AND TO SAY GOODBYE IMMEDIATELY. TELL THEM TO LOOK OUT FOR A CALL FROM MANAGEMENT ON THEIR PHONE NUMBER. DO NOT ASK ANY MORE QUESTIONS. Do not pause. Speak your confirmation message now.
+          
+          ${bookingFlow}
           
           Today's date is ${new Date().toISOString().split('T')[0]}.
           
           KNOWLEDGE BASE:
-          ${this.config.knowledgeBase}`,
+          ${this.config.knowledgeBase}
+          
+          IDENTITY: You are ${this.config.name}. Act as a helpful and professional representative of this organization.`,
           inputAudioTranscription: {},
           outputAudioTranscription: {},
         },

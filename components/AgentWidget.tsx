@@ -370,34 +370,40 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                 apiKey: effectiveApiKey
             });
             
-            // Re-using logic from initChat but we need it here immediately
-            const checkAvailabilityTool: FunctionDeclaration = {
-              name: 'check_facility_availability',
-              description: 'Check if a specific date is available for the facility (Guest Lodge or Hospital).',
-              parameters: {
-                type: Type.OBJECT,
-                properties: {
-                  date: { type: Type.STRING, description: 'The date in YYYY-MM-DD format.' }
-                },
-                required: ['date']
-              }
-            };
+            const isPssdc = config.name.toLowerCase().includes('pssdc');
+            const hasBookingCapability = isPssdc || (config.chatKnowledgeBase || config.knowledgeBase).toLowerCase().includes('booking') || (config.chatKnowledgeBase || config.knowledgeBase).toLowerCase().includes('lodge') || (config.chatKnowledgeBase || config.knowledgeBase).toLowerCase().includes('hospital');
 
-            const bookFacilityTool: FunctionDeclaration = {
-              name: 'book_facility',
-              description: 'Record a booking or appointment request.',
-              parameters: {
-                type: Type.OBJECT,
-                properties: {
-                  userName: { type: Type.STRING, description: 'The full name of the user.' },
-                  userPhone: { type: Type.STRING, description: 'The 11-digit phone number of the user.' },
-                  bookingDate: { type: Type.STRING, description: 'The date in YYYY-MM-DD format.' },
-                  purpose: { type: Type.STRING, description: 'The purpose of the visit or appointment.' },
-                  facilityName: { type: Type.STRING, description: 'The name of the facility for the booking.' }
-                },
-                required: ['userName', 'userPhone', 'bookingDate', 'purpose', 'facilityName']
-              }
-            };
+            const tools: any[] = [];
+            if (hasBookingCapability) {
+                const checkAvailabilityTool: FunctionDeclaration = {
+                  name: 'check_facility_availability',
+                  description: 'Check if a specific date is available for the facility.',
+                  parameters: {
+                    type: Type.OBJECT,
+                    properties: {
+                      date: { type: Type.STRING, description: 'The date in YYYY-MM-DD format.' }
+                    },
+                    required: ['date']
+                  }
+                };
+
+                const bookFacilityTool: FunctionDeclaration = {
+                  name: 'book_facility',
+                  description: 'Record a booking or appointment request.',
+                  parameters: {
+                    type: Type.OBJECT,
+                    properties: {
+                      userName: { type: Type.STRING, description: 'The full name of the user.' },
+                      userPhone: { type: Type.STRING, description: 'The 11-digit phone number of the user.' },
+                      bookingDate: { type: Type.STRING, description: 'The date in YYYY-MM-DD format.' },
+                      purpose: { type: Type.STRING, description: 'The purpose of the visit or appointment.' },
+                      facilityName: { type: Type.STRING, description: 'The name of the facility for the booking.' }
+                    },
+                    required: ['userName', 'userPhone', 'bookingDate', 'purpose', 'facilityName']
+                  }
+                };
+                tools.push({ functionDeclarations: [checkAvailabilityTool, bookFacilityTool] });
+            }
 
             const dialectInstruction = dialect === 'pidgin' 
                 ? "LANGUAGE & STYLE: Speak strictly in hardcore Nigerian Pidgin. Be authentic and raw. Use deep Pidgin phrases like 'Wetin de sup?', 'Abeg', 'I de for you', 'No be small thing', 'E don cast', 'Gbege', 'Gbas gbos', 'Wahala no dey', 'How far now?', 'Wetin you wan do?', 'Oya, talk your own'. Avoid sounding like a school teacher; sound like a relatable person on the street but keep it helpful."
@@ -405,15 +411,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                 ? "LANGUAGE & STYLE: Use Nigerian Standard English. Be professional, warm, and polite. Do NOT use 'Sir' or 'Ma'. Use typical Nigerian professional phrasing like 'You're welcome', 'How may I assist you today?', 'Please hold on while I check that for you'."
                 : "LANGUAGE & STYLE: Use a standard international professional English tone.";
 
-            const systemInstruction = `
-            ${config.chatKnowledgeBase || config.knowledgeBase}
-            
-            ${dialectInstruction}
-            
-            CRITICAL OPERATIONAL RULES:
-            - Today's date is ${new Date().toISOString().split('T')[0]}.
-            - INFORMATION RETRIEVAL: If asked for contact details, phone numbers, or specific facility information, consult your knowledge base. Do not use external or hardcoded numbers.
-            
+            const bookingFlow = hasBookingCapability ? `
             🗓️ APPOINTMENT BOOKING FLOW:
             YOU MUST ASK ONLY ONE QUESTION AT A TIME. Wait for the user to answer before moving to the next step.
             
@@ -435,15 +433,32 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             Then call 'book_facility'. Ensure the facilityName parameter accurately reflects the booking destination.
             
             6. Final Confirmation & Safe Handoff:
-            Once the tool returns success, IMMEDIATELY say: “Everything has been passed to our management. Please keep your phone reachable as they will CALL YOU directly on [The Phone Number they provided] to confirm your slot and finalize payment. Thank you for choosing PSSDC and have a wonderful day!”
+            Once the tool returns success, IMMEDIATELY say: “Everything has been passed to our management. Please keep your phone reachable as they will CALL YOU directly on [The Phone Number they provided] to confirm your slot and finalize payment. Thank you for choosing ${config.name} and have a wonderful day!”
             YOUR RESPONSE MUST BE FINAL. DO NOT ASK ANY MORE QUESTIONS.
+            ` : `
+            CONVERSATION STYLE: Keep the conversation focused strictly on the topics provided in your knowledge base. If the user asks for things outside your scope (like booking flights or medical appointments, unless specified in the knowledge base), politely decline and redirect them to what you CAN help with.
+            `;
+
+            const systemInstruction = `
+            IDENTITY: You are ${config.name}.
+            
+            KNOWLEDGE BASE:
+            ${config.chatKnowledgeBase || config.knowledgeBase}
+            
+            ${dialectInstruction}
+            
+            CRITICAL OPERATIONAL RULES:
+            - Today's date is ${new Date().toISOString().split('T')[0]}.
+            - INFORMATION RETRIEVAL: If asked for contact details, phone numbers, or specific facility information, consult your knowledge base. Do not use external or hardcoded numbers.
+            
+            ${bookingFlow}
             `;
             
             chatSessionRef.current = ai.chats.create({
                 model: 'gemini-3-flash-preview',
                 config: { 
                     systemInstruction,
-                    tools: [{ functionDeclarations: [checkAvailabilityTool, bookFacilityTool] }]
+                    tools
                 }
             });
             setChatStarted(true);
@@ -477,33 +492,40 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         apiKey: effectiveApiKey
     });
     
-    const checkAvailabilityTool: FunctionDeclaration = {
-      name: 'check_facility_availability',
-      description: 'Check if a specific date is available for the facility (Guest Lodge or Hospital).',
-      parameters: {
-        type: Type.OBJECT,
-        properties: {
-          date: { type: Type.STRING, description: 'The date in YYYY-MM-DD format.' }
-        },
-        required: ['date']
-      }
-    };
+    const isPssdc = config.name.toLowerCase().includes('pssdc');
+    const hasBookingCapability = isPssdc || (config.chatKnowledgeBase || config.knowledgeBase).toLowerCase().includes('booking') || (config.chatKnowledgeBase || config.knowledgeBase).toLowerCase().includes('lodge') || (config.chatKnowledgeBase || config.knowledgeBase).toLowerCase().includes('hospital');
 
-    const bookFacilityTool: FunctionDeclaration = {
-      name: 'book_facility',
-      description: 'Record a booking or appointment request.',
-      parameters: {
-        type: Type.OBJECT,
-        properties: {
-          userName: { type: Type.STRING, description: 'The full name of the user.' },
-          userPhone: { type: Type.STRING, description: 'The 11-digit phone number of the user.' },
-          bookingDate: { type: Type.STRING, description: 'The date in YYYY-MM-DD format.' },
-          purpose: { type: Type.STRING, description: 'The purpose of the visit or appointment.' },
-          facilityName: { type: Type.STRING, description: 'The name of the facility for the booking.' }
-        },
-        required: ['userName', 'userPhone', 'bookingDate', 'purpose', 'facilityName']
-      }
-    };
+    const tools: any[] = [];
+    if (hasBookingCapability) {
+        const checkAvailabilityTool: FunctionDeclaration = {
+          name: 'check_facility_availability',
+          description: 'Check if a specific date is available for the facility.',
+          parameters: {
+            type: Type.OBJECT,
+            properties: {
+              date: { type: Type.STRING, description: 'The date in YYYY-MM-DD format.' }
+            },
+            required: ['date']
+          }
+        };
+
+        const bookFacilityTool: FunctionDeclaration = {
+          name: 'book_facility',
+          description: 'Record a booking or appointment request.',
+          parameters: {
+            type: Type.OBJECT,
+            properties: {
+              userName: { type: Type.STRING, description: 'The full name of the user.' },
+              userPhone: { type: Type.STRING, description: 'The 11-digit phone number of the user.' },
+              bookingDate: { type: Type.STRING, description: 'The date in YYYY-MM-DD format.' },
+              purpose: { type: Type.STRING, description: 'The purpose of the visit or appointment.' },
+              facilityName: { type: Type.STRING, description: 'The name of the facility for the booking.' }
+            },
+            required: ['userName', 'userPhone', 'bookingDate', 'purpose', 'facilityName']
+          }
+        };
+        tools.push({ functionDeclarations: [checkAvailabilityTool, bookFacilityTool] });
+    }
 
     const dialectInstruction = selectedDialect === 'pidgin' 
         ? "LANGUAGE & STYLE: Speak strictly in hardcore Nigerian Pidgin. Be authentic and raw. Use deep Pidgin phrases like 'Wetin de sup?', 'Abeg', 'I de for you', 'No be small thing', 'E don cast', 'Gbege', 'Gbas gbos', 'Wahala no dey', 'How far now?', 'Wetin you wan do?', 'Oya, talk your own'. Avoid sounding like a school teacher; sound like a relatable person on the street but keep it helpful."
@@ -511,15 +533,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         ? "LANGUAGE & STYLE: Use Nigerian Standard English. Be professional, warm, and polite. Do NOT use 'Sir' or 'Ma'. Use typical Nigerian professional phrasing like 'You're welcome', 'How may I assist you today?', 'Please hold on while I check that for you'."
         : "LANGUAGE & STYLE: Use a standard international professional English tone.";
 
-    const systemInstruction = `
-    ${config.chatKnowledgeBase || config.knowledgeBase}
-    
-    ${dialectInstruction}
-    
-    CRITICAL OPERATIONAL RULES:
-    - Today's date is ${new Date().toISOString().split('T')[0]}.
-    - INFORMATION RETRIEVAL: If asked for contact details, phone numbers, or specific facility information, consult your knowledge base. Do not use external or hardcoded numbers.
-    
+    const bookingFlow = hasBookingCapability ? `
     🗓️ APPOINTMENT BOOKING FLOW:
     YOU MUST ASK ONLY ONE QUESTION AT A TIME. Wait for the user to answer before moving to the next step.
     
@@ -541,15 +555,32 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     Then call 'book_facility'. Ensure the facilityName parameter accurately reflects the booking destination.
     
     6. Final Confirmation & Safe Handoff:
-    Once the tool returns success, IMMEDIATELY say: “Everything has been passed to our management. Please keep your phone reachable as they will CALL YOU directly on [The Phone Number they provided] to confirm your slot and finalize payment. Thank you for choosing PSSDC and have a wonderful day!”
+    Once the tool returns success, IMMEDIATELY say: “Everything has been passed to our management. Please keep your phone reachable as they will CALL YOU directly on [The Phone Number they provided] to confirm your slot and finalize payment. Thank you for choosing ${config.name} and have a wonderful day!”
     YOUR RESPONSE MUST BE FINAL. DO NOT ASK ANY MORE QUESTIONS.
+    ` : `
+    CONVERSATION STYLE: Keep the conversation focused strictly on the topics provided in your knowledge base. If the user asks for things outside your scope (like booking flights or medical appointments, unless specified in the knowledge base), politely decline and redirect them to what you CAN help with.
+    `;
+
+    const systemInstruction = `
+    IDENTITY: You are ${config.name}.
+    
+    KNOWLEDGE BASE:
+    ${config.chatKnowledgeBase || config.knowledgeBase}
+    
+    ${dialectInstruction}
+    
+    CRITICAL OPERATIONAL RULES:
+    - Today's date is ${new Date().toISOString().split('T')[0]}.
+    - INFORMATION RETRIEVAL: If asked for contact details, phone numbers, or specific facility information, consult your knowledge base. Do not use external or hardcoded numbers.
+    
+    ${bookingFlow}
     `;
     
     chatSessionRef.current = ai.chats.create({
         model: 'gemini-3-flash-preview',
         config: { 
             systemInstruction,
-            tools: [{ functionDeclarations: [checkAvailabilityTool, bookFacilityTool] }]
+            tools
         }
     });
 
