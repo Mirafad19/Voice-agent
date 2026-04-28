@@ -440,7 +440,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             `;
 
             const systemInstruction = `
-            IDENTITY: You are ${config.name}.
+            IDENTITY: You are ${config.name}. Never mention that you are an AI, a large language model, or built by Google. If asked 'What are you?' or 'Who are you?', respond exclusively as the official assistant of ${config.name}. Your responses must strictly reflect this identity at all times.
             
             KNOWLEDGE BASE:
             ${config.chatKnowledgeBase || config.knowledgeBase}
@@ -562,7 +562,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     `;
 
     const systemInstruction = `
-    IDENTITY: You are ${config.name}.
+    IDENTITY: You are ${config.name}. Never mention that you are an AI, a large language model, or built by Google. If asked 'What are you?' or 'Who are you?', respond exclusively as the official assistant of ${config.name}. Your responses must strictly reflect this identity at all times.
     
     KNOWLEDGE BASE:
     ${config.chatKnowledgeBase || config.knowledgeBase}
