@@ -1,13 +1,12 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { AgentProfile, AgentConfig, WidgetTheme, WidgetState, Recording, ReportingStatus, Booking } from '../types';
+import { AgentProfile, AgentConfig, WidgetTheme, WidgetState, Recording, ReportingStatus } from '../types';
 import { GeminiLiveService } from '../services/geminiLiveService';
 import { RecordingService } from '../services/recordingService';
 import { Spinner } from './ui/Spinner';
-import { GoogleGenAI, Type, Modality, Chat, FunctionDeclaration } from '@google/genai';
+import { GoogleGenAI, Type, Modality, Chat } from '@google/genai';
 import { blobToBase64 } from '../utils';
 import { decodePcmChunk } from '../utils/audio';
-import * as bookingService from '../services/bookingService';
 
 interface AgentWidgetProps {
   agentProfile: AgentProfile | AgentConfig;
@@ -172,11 +171,9 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
   const [selectedDialect, setSelectedDialect] = useState<Dialect | null>(null);
   const [chatDialectRequestPending, setChatDialectRequestPending] = useState(false);
+  const [isCheckedOut, setIsCheckedOut] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [isToolProcessing, setIsToolProcessing] = useState(false);
-  const [statusPhone, setStatusPhone] = useState('');
-  const [checkedBookings, setCheckedBookings] = useState<Booking[]>([]);
-  const [isCheckingStatus, setIsCheckingStatus] = useState(false);
 
   const geminiServiceRef = useRef<GeminiLiveService | null>(null);
   const recordingServiceRef = useRef<RecordingService | null>(null);
@@ -406,42 +403,14 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             }
 
             const dialectInstruction = dialect === 'pidgin' 
-                ? "LANGUAGE & STYLE: Speak strictly in hardcore Nigerian Pidgin. Be authentic and raw. Use deep Pidgin phrases like 'Wetin de sup?', 'Abeg', 'I de for you', 'No be small thing', 'E don cast', 'Gbege', 'Gbas gbos', 'Wahala no dey', 'How far now?', 'Wetin you wan do?', 'Oya, talk your own'. Avoid sounding like a school teacher; sound like a relatable person on the street but keep it helpful."
+                ? "LANGUAGE & STYLE: Speak strictly in hardcore Nigerian Pidgin. Be authentic and raw. Use deep Pidgin phrases like 'Wetin de sup?', 'Abeg', 'I de for you'. Avoid sounding formal. Your tone should be friendly and relatable."
                 : dialect === 'nigerian-english'
-                ? "LANGUAGE & STYLE: Use Nigerian Standard English. Be professional, warm, and polite. Do NOT use 'Sir' or 'Ma'. Use typical Nigerian professional phrasing like 'You're welcome', 'How may I assist you today?', 'Please hold on while I check that for you'."
+                ? "LANGUAGE & STYLE: Use Nigerian Standard English. Be professional, warm, and polite. Do NOT use 'Sir' or 'Ma'. Ensure you sound professional but avoiding being overly repetitive with phrases like 'You're welcome'. Focus on being helpful and direct."
                 : "LANGUAGE & STYLE: Use a standard international professional English tone.";
 
-            const bookingFlow = hasBookingCapability ? `
-            🗓️ APPOINTMENT BOOKING FLOW:
-            YOU MUST ASK ONLY ONE QUESTION AT A TIME. Wait for the user to answer before moving to the next step.
-            
-            1. Ask for full name:
-            “May I have your full name, please?”
-            
-            2. Ask for phone number:
-            “Please provide your phone number (11 digits). We will call you on this number to confirm.”
-            
-            3. Ask for preferred date:
-            “What day would you like to visit us?”
-            
-            4. Ask for purpose:
-            "What is the reason or purpose for your booking?"
-            
-            5. Data Collection & Processing:
-            When you have the Name, Phone, Date, and Purpose, you must FIRST notify the user:
-            "Thank you. I am passing your details to our management team right now..."
-            Then call 'book_facility'. Ensure the facilityName parameter accurately reflects the booking destination.
-            
-            6. Final Confirmation & Safe Handoff:
-            Once the tool returns success, IMMEDIATELY say: “Everything has been passed to our management. Please keep your phone reachable as they will CALL YOU directly on [The Phone Number they provided] to confirm your slot and finalize payment. Thank you for choosing ${config.name} and have a wonderful day!”
-            YOUR RESPONSE MUST BE FINAL. DO NOT ASK ANY MORE QUESTIONS.
-            ` : `
-            CONVERSATION STYLE: Keep the conversation focused strictly on the topics provided in your knowledge base. If the user asks for things outside your scope (like booking flights or medical appointments, unless specified in the knowledge base), politely decline and redirect them to what you CAN help with.
-            `;
-
             const systemInstruction = `
-            IDENTITY: You are ${config.name}. Never mention that you are an AI, a large language model, or built by Google. If asked 'What are you?' or 'Who are you?', respond exclusively as the official assistant of ${config.name}. Your responses must strictly reflect this identity at all times.
-            
+            IDENTITY: You are ${config.name}. Act as a helpful and professional representative. Never ever mention that you are an AI, a large language model, or built by Google. If asked 'What are you?' or 'Who are you?', respond exclusively as the official assistant of ${config.name}. Your responses must strictly reflect this identity at all times.
+
             KNOWLEDGE BASE:
             ${config.chatKnowledgeBase || config.knowledgeBase}
             
@@ -449,16 +418,15 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             
             CRITICAL OPERATIONAL RULES:
             - Today's date is ${new Date().toISOString().split('T')[0]}.
-            - INFORMATION RETRIEVAL: If asked for contact details, phone numbers, or specific facility information, consult your knowledge base. Do not use external or hardcoded numbers.
-            
-            ${bookingFlow}
+            - INITIAL GREETING: Your first words should be: "${config.initialGreetingText || config.initialGreeting || 'Hello, how can I help you?'}". Do not add anything else to the start.
+            - INFORMATION RETRIEVAL: If asked for contact details or specific information, consult your knowledge base. Do not use external or hardcoded info.
+            - TOPIC FOCUS: Keep the conversation focused strictly on the topics provided in your knowledge base. If the user asks for things outside your scope (like lodge booking or hospital appointments, unless specified in the knowledge base), politely decline and redirect them.
             `;
             
             chatSessionRef.current = ai.chats.create({
                 model: 'gemini-3-flash-preview',
                 config: { 
                     systemInstruction,
-                    tools
                 }
             });
             setChatStarted(true);
@@ -528,41 +496,13 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     }
 
     const dialectInstruction = selectedDialect === 'pidgin' 
-        ? "LANGUAGE & STYLE: Speak strictly in hardcore Nigerian Pidgin. Be authentic and raw. Use deep Pidgin phrases like 'Wetin de sup?', 'Abeg', 'I de for you', 'No be small thing', 'E don cast', 'Gbege', 'Gbas gbos', 'Wahala no dey', 'How far now?', 'Wetin you wan do?', 'Oya, talk your own'. Avoid sounding like a school teacher; sound like a relatable person on the street but keep it helpful."
+        ? "LANGUAGE & STYLE: Speak strictly in hardcore Nigerian Pidgin. Be authentic and raw. Use deep Pidgin phrases like 'Wetin de sup?', 'Abeg', 'I de for you'. Avoid sounding formal. Your tone should be friendly and relatable."
         : selectedDialect === 'nigerian-english' 
-        ? "LANGUAGE & STYLE: Use Nigerian Standard English. Be professional, warm, and polite. Do NOT use 'Sir' or 'Ma'. Use typical Nigerian professional phrasing like 'You're welcome', 'How may I assist you today?', 'Please hold on while I check that for you'."
+        ? "LANGUAGE & STYLE: Use Nigerian Standard English. Be professional, warm, and polite. Do NOT use 'Sir' or 'Ma'. Ensure you sound professional but avoiding being overly repetitive with phrases like 'You're welcome'. Focus on being helpful and direct."
         : "LANGUAGE & STYLE: Use a standard international professional English tone.";
 
-    const bookingFlow = hasBookingCapability ? `
-    🗓️ APPOINTMENT BOOKING FLOW:
-    YOU MUST ASK ONLY ONE QUESTION AT A TIME. Wait for the user to answer before moving to the next step.
-    
-    1. Ask for full name:
-    “May I have your full name, please?”
-    
-    2. Ask for phone number:
-    “Please provide your phone number (11 digits). We will call you on this number to confirm.”
-    
-    3. Ask for preferred date:
-    “What day would you like to visit us?”
-    
-    4. Ask for purpose:
-    "What is the reason or purpose for your booking?"
-    
-    5. Data Collection & Processing:
-    When you have the Name, Phone, Date, and Purpose, you must FIRST notify the user:
-    "Thank you. I am passing your details to our management team right now..."
-    Then call 'book_facility'. Ensure the facilityName parameter accurately reflects the booking destination.
-    
-    6. Final Confirmation & Safe Handoff:
-    Once the tool returns success, IMMEDIATELY say: “Everything has been passed to our management. Please keep your phone reachable as they will CALL YOU directly on [The Phone Number they provided] to confirm your slot and finalize payment. Thank you for choosing ${config.name} and have a wonderful day!”
-    YOUR RESPONSE MUST BE FINAL. DO NOT ASK ANY MORE QUESTIONS.
-    ` : `
-    CONVERSATION STYLE: Keep the conversation focused strictly on the topics provided in your knowledge base. If the user asks for things outside your scope (like booking flights or medical appointments, unless specified in the knowledge base), politely decline and redirect them to what you CAN help with.
-    `;
-
     const systemInstruction = `
-    IDENTITY: You are ${config.name}. Never mention that you are an AI, a large language model, or built by Google. If asked 'What are you?' or 'Who are you?', respond exclusively as the official assistant of ${config.name}. Your responses must strictly reflect this identity at all times.
+    IDENTITY: You are ${config.name}. Act as a helpful and professional representative. Never ever mention that you are an AI, a large language model, or built by Google. If asked 'What are you?' or 'Who are you?', respond exclusively as the official assistant of ${config.name}. Your responses must strictly reflect this identity at all times.
     
     KNOWLEDGE BASE:
     ${config.chatKnowledgeBase || config.knowledgeBase}
@@ -571,16 +511,15 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     
     CRITICAL OPERATIONAL RULES:
     - Today's date is ${new Date().toISOString().split('T')[0]}.
-    - INFORMATION RETRIEVAL: If asked for contact details, phone numbers, or specific facility information, consult your knowledge base. Do not use external or hardcoded numbers.
-    
-    ${bookingFlow}
+    - INITIAL GREETING: Your first words should be: "${config.initialGreetingText || config.initialGreeting || 'Hello, how can I help you?'}". Do not add anything else to the start.
+    - INFORMATION RETRIEVAL: If asked for contact details or specific information, consult your knowledge base. Do not use external or hardcoded info.
+    - TOPIC FOCUS: Keep the conversation focused strictly on the topics provided in your knowledge base. If the user asks for things outside your scope (like lodge booking or hospital appointments, unless specified in the knowledge base), politely decline and redirect them.
     `;
     
     chatSessionRef.current = ai.chats.create({
         model: 'gemini-3-flash-preview',
         config: { 
             systemInstruction,
-            tools
         }
     });
 
@@ -917,8 +856,8 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             const model = (ai as any).getGenerativeModel({ model: 'gemini-1.5-flash' });
             
             const prompt = activeDialect === 'pidgin' 
-                ? `Translate the following short greeting into hardcore, deep Nigerian Pidgin. Be real and authentic, don't sound formal. Use phrases like 'Wetin de sup', 'How far now'. Only return the translated text: "${greeting}"`
-                : `Translate the following greeting into warm and professional Nigerian English. Use local professional phrasing like "You're welcome", "How may I assist you today?". DO NOT use "Sir" or "Ma". Only return the translated text: "${greeting}"`;
+                ? `Translate the following short greeting into hardcore, deep Nigerian Pidgin. Be real and authentic, don't sound formal. Only return the translated text: "${greeting}"`
+                : `Translate the following greeting into warm and professional Nigerian English. Focus on warmth and respect. Only return the translated text: "${greeting}"`;
 
             const result = await model.generateContent(prompt);
             const translated = result.response.text().trim();
@@ -931,7 +870,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             if (activeDialect === 'pidgin') {
                 greetingToSpeak = "Wetin de sup? How I fit help you today?";
             } else if (activeDialect === 'nigerian-english') {
-                greetingToSpeak = "You're welcome! How may I assist you today?";
+                greetingToSpeak = "Hello! How may I assist you today?";
             }
         }
     }
@@ -1302,8 +1241,8 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             <h3 className="font-black text-lg uppercase tracking-tight leading-tight">Select Voice Style</h3>
         </div>
 
-        <div className="flex-grow flex flex-col justify-center p-8 gap-6 bg-gray-50 dark:bg-gray-900">
-            <div className="text-center mb-4">
+        <div className="flex-grow flex flex-col justify-center p-8 gap-6 bg-gray-50 dark:bg-gray-900 overflow-y-auto">
+            <div className="text-center mb-4 flex-shrink-0">
                 <div className="w-20 h-20 bg-accent-cyan/10 rounded-full flex items-center justify-center mx-auto mb-4">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-accent-cyan" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5h12M9 3v2m1.048 9.5a10.001 10.001 0 01-14.282-4.048M1 18l1.048-1.048M12 18H5.166" />
@@ -1313,44 +1252,46 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                 <p className="text-sm text-gray-500 font-bold mt-1">Please select how you want the AI to speak to you.</p>
             </div>
 
-            <button
-                onClick={() => { setSelectedDialect('nigerian-english'); startVoiceSession('nigerian-english'); }}
-                className="w-full bg-white dark:bg-gray-800 border-2 border-gray-100 dark:border-gray-700 rounded-2xl p-5 flex items-center gap-5 hover:border-accent-emerald hover:bg-emerald-50/10 transition-all group relative overflow-hidden active:scale-[0.98]"
-            >
-                <div className="p-3 bg-emerald-100 dark:bg-emerald-900/30 rounded-xl">
-                    <span className="text-2xl">🇳🇬</span>
-                </div>
-                <div className="text-left">
-                    <h3 className="font-black text-gray-900 dark:text-white uppercase tracking-tighter">Nigerian Standard English</h3>
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-0.5">Professional • Respectful • Local</p>
-                </div>
-            </button>
+            <div className="space-y-4 pb-8">
+                <button
+                    onClick={() => { setSelectedDialect('nigerian-english'); startVoiceSession('nigerian-english'); }}
+                    className="w-full bg-white dark:bg-gray-800 border-2 border-gray-100 dark:border-gray-700 rounded-2xl p-5 flex items-center gap-5 hover:border-accent-emerald hover:bg-emerald-50/10 transition-all group relative overflow-hidden active:scale-[0.98]"
+                >
+                    <div className="p-3 bg-emerald-100 dark:bg-emerald-900/30 rounded-xl">
+                        <span className="text-2xl">🇳🇬</span>
+                    </div>
+                    <div className="text-left">
+                        <h3 className="font-black text-gray-900 dark:text-white uppercase tracking-tighter">Nigerian Standard English</h3>
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-0.5">Professional • Respectful • Local</p>
+                    </div>
+                </button>
 
-            <button
-                onClick={() => { setSelectedDialect('pidgin'); startVoiceSession('pidgin'); }}
-                className="w-full bg-white dark:bg-gray-800 border-2 border-gray-100 dark:border-gray-700 rounded-2xl p-5 flex items-center gap-5 hover:border-accent-amber hover:bg-amber-50/10 transition-all group relative overflow-hidden active:scale-[0.98]"
-            >
-                <div className="p-3 bg-amber-100 dark:bg-amber-900/30 rounded-xl">
-                    <span className="text-2xl">🗣️</span>
-                </div>
-                <div className="text-left">
-                    <h3 className="font-black text-gray-900 dark:text-white uppercase tracking-tighter">Nigerian Pidgin</h3>
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-0.5">Relatable • Friendly • Natural</p>
-                </div>
-            </button>
+                <button
+                    onClick={() => { setSelectedDialect('pidgin'); startVoiceSession('pidgin'); }}
+                    className="w-full bg-white dark:bg-gray-800 border-2 border-gray-100 dark:border-gray-700 rounded-2xl p-5 flex items-center gap-5 hover:border-accent-amber hover:bg-amber-50/10 transition-all group relative overflow-hidden active:scale-[0.98]"
+                >
+                    <div className="p-3 bg-amber-100 dark:bg-amber-900/30 rounded-xl">
+                        <span className="text-2xl">🗣️</span>
+                    </div>
+                    <div className="text-left">
+                        <h3 className="font-black text-gray-900 dark:text-white uppercase tracking-tighter">Nigerian Pidgin</h3>
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-0.5">Relatable • Friendly • Natural</p>
+                    </div>
+                </button>
 
-            <button
-                onClick={() => { setSelectedDialect('abroad-english'); startVoiceSession('abroad-english'); }}
-                className="w-full bg-white dark:bg-gray-800 border-2 border-gray-100 dark:border-gray-700 rounded-2xl p-5 flex items-center gap-5 hover:border-accent-sky hover:bg-sky-50/10 transition-all group relative overflow-hidden active:scale-[0.98]"
-            >
-                <div className="p-3 bg-sky-100 dark:bg-sky-900/30 rounded-xl">
-                    <span className="text-2xl">🌐</span>
-                </div>
-                <div className="text-left">
-                    <h3 className="font-black text-gray-900 dark:text-white uppercase tracking-tighter">Abroad Standard English</h3>
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-0.5">International • Formal • Neutral</p>
-                </div>
-            </button>
+                <button
+                    onClick={() => { setSelectedDialect('abroad-english'); startVoiceSession('abroad-english'); }}
+                    className="w-full bg-white dark:bg-gray-800 border-2 border-gray-100 dark:border-gray-700 rounded-2xl p-5 flex items-center gap-5 hover:border-accent-sky hover:bg-sky-50/10 transition-all group relative overflow-hidden active:scale-[0.98]"
+                >
+                    <div className="p-3 bg-sky-100 dark:bg-sky-900/30 rounded-xl">
+                        <span className="text-2xl">🌐</span>
+                    </div>
+                    <div className="text-left">
+                        <h3 className="font-black text-gray-900 dark:text-white uppercase tracking-tighter">Abroad Standard English</h3>
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-0.5">International • Formal • Neutral</p>
+                    </div>
+                </button>
+            </div>
         </div>
       </div>
   );
@@ -1707,7 +1648,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
               {view === 'home' && renderHomeView()}
               {view === 'chat' && renderChatView()}
               {view === 'voice' && renderVoiceView()}
-              {view === 'status' && renderStatusView()}
               {view === 'dialect' && renderDialectView()}
           </div>
       </div>
