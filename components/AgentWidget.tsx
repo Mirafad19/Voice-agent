@@ -4,7 +4,8 @@ import { AgentProfile, AgentConfig, WidgetTheme, WidgetState, Recording, Reporti
 import { GeminiLiveService } from '../services/geminiLiveService';
 import { RecordingService } from '../services/recordingService';
 import { Spinner } from './ui/Spinner';
-import { GoogleGenAI, Type, Modality, Chat } from '@google/genai';
+import { GoogleGenAI, Type, Modality, Chat, FunctionDeclaration } from '@google/genai';
+import * as bookingService from '../services/bookingService';
 import { blobToBase64 } from '../utils';
 import { decodePcmChunk } from '../utils/audio';
 
@@ -165,6 +166,9 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [chatInput, setChatInput] = useState('');
+  const [statusPhone, setStatusPhone] = useState('');
+  const [isCheckingStatus, setIsCheckingStatus] = useState(false);
+  const [checkedBookings, setCheckedBookings] = useState<any[]>([]);
   const [isChatTyping, setIsChatTyping] = useState(false);
   const [chatStarted, setChatStarted] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -418,8 +422,10 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             
             CRITICAL OPERATIONAL RULES:
             - Today's date is ${new Date().toISOString().split('T')[0]}.
-            - INITIAL GREETING: Your first words should be: "${config.initialGreetingText || config.initialGreeting || 'Hello, how can I help you?'}". Do not add anything else to the start.
+            - INITIAL GREETING: Your first words should be: "${config.initialGreetingText || config.initialGreeting || 'Hello, thank you for calling the Public Service Staff Development Centre, P-S-S-D-C, Lagos. My name is Oluwole, your virtual assistant. How may I assist you today? Are you calling to learn about our training programmes, our services, our departments, or general information about P-S-S-D-C?'}". Do not add anything else to the start.
             - INFORMATION RETRIEVAL: If asked for contact details or specific information, consult your knowledge base. Do not use external or hardcoded info.
+            - DATA GATHERING FLOW: If you need to collect multiple pieces of information (e.g., for a booking or registration), ASK ONLY ONE QUESTION AT A TIME. Wait for the user's response before asking the next question.
+            - THOROUGHNESS: Be detailed and comprehensive. If the information is in your knowledge base, provide the FULL answer. Do not give short or lazy responses.
             - TOPIC FOCUS: Keep the conversation focused strictly on the topics provided in your knowledge base. If the user asks for things outside your scope (like lodge booking or hospital appointments, unless specified in the knowledge base), politely decline and redirect them.
             `;
             
@@ -511,8 +517,10 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     
     CRITICAL OPERATIONAL RULES:
     - Today's date is ${new Date().toISOString().split('T')[0]}.
-    - INITIAL GREETING: Your first words should be: "${config.initialGreetingText || config.initialGreeting || 'Hello, how can I help you?'}". Do not add anything else to the start.
+    - INITIAL GREETING: Your first words should be: "${config.initialGreetingText || config.initialGreeting || 'Hello, thank you for calling the Public Service Staff Development Centre, P-S-S-D-C, Lagos. My name is Oluwole, your virtual assistant. How may I assist you today? Are you calling to learn about our training programmes, our services, our departments, or general information about P-S-S-D-C?'}". Do not add anything else to the start.
     - INFORMATION RETRIEVAL: If asked for contact details or specific information, consult your knowledge base. Do not use external or hardcoded info.
+    - DATA GATHERING FLOW: If you need to collect multiple pieces of information (e.g., for a booking or registration), ASK ONLY ONE QUESTION AT A TIME. Wait for the user's response before asking the next question.
+    - THOROUGHNESS: Be detailed and comprehensive. If the information is in your knowledge base, provide the FULL answer. Do not give short or lazy responses.
     - TOPIC FOCUS: Keep the conversation focused strictly on the topics provided in your knowledge base. If the user asks for things outside your scope (like lodge booking or hospital appointments, unless specified in the knowledge base), politely decline and redirect them.
     `;
     
@@ -846,7 +854,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     recordingServiceRef.current = new RecordingService(handleVoiceSessionEnd);
     await recordingServiceRef.current.start(stream);
 
-    const greeting = (agentProfile as AgentConfig).initialGreeting;
+    const greeting = (agentProfile as AgentConfig).initialGreetingText || (agentProfile as AgentConfig).initialGreeting;
     const effectiveApiKey = apiKey || process.env.GEMINI_API_KEY || 'dummy';
 
     let greetingToSpeak = greeting;
@@ -856,8 +864,8 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             const model = (ai as any).getGenerativeModel({ model: 'gemini-1.5-flash' });
             
             const prompt = activeDialect === 'pidgin' 
-                ? `Translate the following short greeting into hardcore, deep Nigerian Pidgin. Be real and authentic, don't sound formal. Only return the translated text: "${greeting}"`
-                : `Translate the following greeting into warm and professional Nigerian English. Focus on warmth and respect. Only return the translated text: "${greeting}"`;
+                ? `Translate the following greeting into hardcore, deep Nigerian Pidgin. Be real and authentic. KEEP the names "PSSDC" and "Oluwole" as they are. If it is already in Pidgin, return it as is. Only return the translated text: "${greeting}"`
+                : `Translate the following greeting into warm and professional Nigerian English. Focus on warmth and respect. KEEP the names "PSSDC" and "Oluwole" exactly as they are. DO NOT change the structure if it is already professional. Only return the translated text: "${greeting}"`;
 
             const result = await model.generateContent(prompt);
             const translated = result.response.text().trim();
@@ -868,9 +876,9 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             console.error("Dialect greeting translation failed:", e);
             // Fallbacks if model fails
             if (activeDialect === 'pidgin') {
-                greetingToSpeak = "Wetin de sup? How I fit help you today?";
+                greetingToSpeak = "Wetin de sup? My name na Oluwole from P-S-S-D-C Lagos. How I fit help you today?";
             } else if (activeDialect === 'nigerian-english') {
-                greetingToSpeak = "Hello! How may I assist you today?";
+                greetingToSpeak = "Hello, thank you for calling the Public Service Staff Development Centre, P-S-S-D-C, Lagos. My name is Oluwole, your virtual assistant. How may I assist you today?";
             }
         }
     }
