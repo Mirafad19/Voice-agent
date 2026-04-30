@@ -67,8 +67,14 @@ export class GeminiLiveService {
     try {
       this.mediaStream = mediaStream;
       
-      const greetingContext = this.config.initialGreeting 
-        ? `INITIALIZATION: You have just spoken the following greeting to the user: "${this.config.initialGreeting}". The user has heard this. Do NOT repeat it. Your goal is to WAIT for the user to reply to this greeting.` 
+      const effectiveGreeting = this.dialect === 'pidgin' 
+        ? (this.config.pidginGreeting || this.config.initialGreeting)
+        : this.dialect === 'nigerian-english'
+        ? (this.config.nigerianEnglishGreeting || this.config.initialGreeting)
+        : (this.config.initialGreeting);
+
+      const greetingContext = effectiveGreeting 
+        ? `INITIALIZATION: You have just spoken the following greeting to the user: "${effectiveGreeting}". The user has heard this. Do NOT repeat it. Your goal is to WAIT for the user to reply to this greeting.` 
         : `INITIALIZATION: Wait for the user to speak first.`;
 
       const tools: any[] = [];

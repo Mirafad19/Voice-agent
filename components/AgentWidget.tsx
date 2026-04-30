@@ -532,7 +532,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     });
 
     setChatStarted(true);
-    const welcomeText = config.initialGreetingText || config.initialGreeting;
+    const welcomeText = selectedDialect === 'pidgin' ? (config.pidginGreeting || config.initialGreetingText || config.initialGreeting) : selectedDialect === 'nigerian-english' ? (config.nigerianEnglishGreeting || config.initialGreetingText || config.initialGreeting) : (config.initialGreetingText || config.initialGreeting);
     
     if (initialMessage) {
         // If user started with a message, don't show a pre-filled welcome bubble
@@ -854,31 +854,40 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     recordingServiceRef.current = new RecordingService(handleVoiceSessionEnd);
     await recordingServiceRef.current.start(stream);
 
-    const greeting = (agentProfile as AgentConfig).initialGreetingText || (agentProfile as AgentConfig).initialGreeting;
+    const greeting = (agentProfile as AgentConfig).initialGreeting;
+    const pidginGreeting = (agentProfile as AgentConfig).pidginGreeting;
+    const nigerianEnglishGreeting = (agentProfile as AgentConfig).nigerianEnglishGreeting;
     const effectiveApiKey = apiKey || process.env.GEMINI_API_KEY || 'dummy';
 
-    let greetingToSpeak = greeting;
-    if (greeting && (activeDialect === 'pidgin' || activeDialect === 'nigerian-english')) {
-        try {
-            const ai = new GoogleGenAI({ apiKey: effectiveApiKey });
-            const model = (ai as any).getGenerativeModel({ model: 'gemini-1.5-flash' });
-            
-            const prompt = activeDialect === 'pidgin' 
-                ? `Translate the following greeting into hardcore, deep Nigerian Pidgin. Be real and authentic. KEEP the names "PSSDC" and "Oluwole" as they are. If it is already in Pidgin, return it as is. Only return the translated text: "${greeting}"`
-                : `Translate the following greeting into warm and professional Nigerian English. Focus on warmth and respect. KEEP the names "PSSDC" and "Oluwole" exactly as they are. DO NOT change the structure if it is already professional. Only return the translated text: "${greeting}"`;
+    let greetingToSpeak = (agentProfile as AgentConfig).initialGreetingText || greeting;
 
-            const result = await model.generateContent(prompt);
-            const translated = result.response.text().trim();
-            if (translated && translated.length > 2) {
-                greetingToSpeak = translated;
-            }
-        } catch (e) {
-            console.error("Dialect greeting translation failed:", e);
-            // Fallbacks if model fails
-            if (activeDialect === 'pidgin') {
-                greetingToSpeak = "Wetin de sup? My name na Oluwole from P-S-S-D-C Lagos. How I fit help you today?";
-            } else if (activeDialect === 'nigerian-english') {
-                greetingToSpeak = "Hello, thank you for calling the Public Service Staff Development Centre, P-S-S-D-C, Lagos. My name is Oluwole, your virtual assistant. How may I assist you today?";
+    if (activeDialect && activeDialect !== 'abroad-english') {
+        if (activeDialect === 'pidgin' && pidginGreeting) {
+            greetingToSpeak = pidginGreeting;
+        } else if (activeDialect === 'nigerian-english' && nigerianEnglishGreeting) {
+            greetingToSpeak = nigerianEnglishGreeting;
+        } else if (greeting) {
+            try {
+                const ai = new GoogleGenAI({ apiKey: effectiveApiKey });
+                const model = (ai as any).getGenerativeModel({ model: 'gemini-1.5-flash' });
+                
+                const prompt = activeDialect === 'pidgin' 
+                    ? `Translate the following greeting into hardcore, deep Nigerian Pidgin. Be real and authentic. KEEP the names "PSSDC" and "Oluwole" as they are. If it is already in Pidgin, return it as is. Only return the translated text: "${greeting}"`
+                    : `Translate the following greeting into warm and professional Nigerian English. Focus on warmth and respect. KEEP the names "PSSDC" and "Oluwole" exactly as they are. DO NOT change the structure if it is already professional. Only return the translated text: "${greeting}"`;
+
+                const result = await model.generateContent(prompt);
+                const translated = result.response.text().trim();
+                if (translated && translated.length > 2) {
+                    greetingToSpeak = translated;
+                }
+            } catch (e) {
+                console.error("Dialect greeting translation failed:", e);
+                // Fallbacks if model fails
+                if (activeDialect === 'pidgin') {
+                    greetingToSpeak = pidginGreeting || "Wetin de sup? My name na Oluwole from P-S-S-D-C Lagos. How I fit help you today?";
+                } else if (activeDialect === 'nigerian-english') {
+                    greetingToSpeak = nigerianEnglishGreeting || "Hello, thank you for calling the Public Service Staff Development Centre, P-S-S-D-C, Lagos. My name is Oluwole, your virtual assistant. How may I assist you today?";
+                }
             }
         }
     }
@@ -1150,8 +1159,8 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     
     // When closed, just enough space for the FAB + callout if showing. 
     // When open, full widget size.
-    const width = isOpen ? 400 : (showCallout && agentProfile.calloutMessage ? 300 : 80);
-    const height = isOpen ? 600 : (showCallout && agentProfile.calloutMessage ? 200 : 80);
+    const width = isOpen ? 440 : (showCallout && agentProfile.calloutMessage ? 300 : 80);
+    const height = isOpen ? 720 : (showCallout && agentProfile.calloutMessage ? 200 : 80);
     
     window.parent.postMessage({ type: 'agent-widget-resize', isOpen, width, height }, '*');
   }, [isOpen, isWidgetMode, showCallout, agentProfile.calloutMessage]);
@@ -1266,7 +1275,10 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                     className="w-full bg-white dark:bg-gray-800 border-2 border-gray-100 dark:border-gray-700 rounded-2xl p-5 flex items-center gap-5 hover:border-accent-emerald hover:bg-emerald-50/10 transition-all group relative overflow-hidden active:scale-[0.98]"
                 >
                     <div className="p-3 bg-emerald-100 dark:bg-emerald-900/30 rounded-xl">
-                        <span className="text-2xl">🇳🇬</span>
+                        <svg className="w-8 h-8 rounded-sm" viewBox="0 0 3 2" xmlns="http://www.w3.org/2000/svg">
+                            <rect width="3" height="2" fill="#008751"/>
+                            <rect width="1" height="2" x="1" fill="#fff"/>
+                        </svg>
                     </div>
                     <div className="text-left">
                         <h3 className="font-black text-gray-900 dark:text-white uppercase tracking-tighter">Nigerian Standard English</h3>
@@ -1279,7 +1291,12 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                     className="w-full bg-white dark:bg-gray-800 border-2 border-gray-100 dark:border-gray-700 rounded-2xl p-5 flex items-center gap-5 hover:border-accent-amber hover:bg-amber-50/10 transition-all group relative overflow-hidden active:scale-[0.98]"
                 >
                     <div className="p-3 bg-amber-100 dark:bg-amber-900/30 rounded-xl">
-                        <span className="text-2xl">🗣️</span>
+                        <svg className="w-8 h-8 text-amber-600 dark:text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <path d="M12 21c4.97 0 9-3.582 9-8s-4.03-8-9-8-9 3.582-9 8c0 1.5.47 2.91 1.29 4.1L4 21l3.9-1.29c1.09.82 2.5 1.29 4.1 1.29z" />
+                            <circle cx="9" cy="12" r="1.5" fill="currentColor" />
+                            <circle cx="15" cy="12" r="1.5" fill="currentColor" />
+                            <path d="M9 16c1.5 1.5 4.5 1.5 6 0" />
+                        </svg>
                     </div>
                     <div className="text-left">
                         <h3 className="font-black text-gray-900 dark:text-white uppercase tracking-tighter">Nigerian Pidgin</h3>
@@ -1422,13 +1439,22 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                                 onClick={() => handleSelectDialectInChat('nigerian-english')}
                                 className="flex items-center gap-3 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 transition-colors text-sm font-black uppercase tracking-tighter"
                               >
-                                  <span>🇳🇬</span> Nigerian English
+                                  <svg className="w-5 h-5 rounded-sm" viewBox="0 0 3 2" xmlns="http://www.w3.org/2000/svg">
+                                      <rect width="3" height="2" fill="#008751"/>
+                                      <rect width="1" height="2" x="1" fill="#fff"/>
+                                  </svg>
+                                  Nigerian English
                               </button>
-                              <button 
+                               <button 
                                 onClick={() => handleSelectDialectInChat('pidgin')}
                                 className="flex items-center gap-3 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800 text-amber-700 dark:text-amber-400 hover:bg-amber-100 transition-colors text-sm font-black uppercase tracking-tighter"
                               >
-                                  <span>🗣️</span> Nigerian Pidgin
+                                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                      <path d="M12 21c4.97 0 9-3.582 9-8s-4.03-8-9-8-9 3.582-9 8c0 1.5.47 2.91 1.29 4.1L4 21l3.9-1.29c1.09.82 2.5 1.29 4.1 1.29z" />
+                                      <circle cx="9" cy="11.5" r="1.5" fill="currentColor" />
+                                      <circle cx="15" cy="11.5" r="1.5" fill="currentColor" />
+                                  </svg>
+                                  Nigerian Pidgin
                               </button>
                               <button 
                                 onClick={() => handleSelectDialectInChat('abroad-english')}
@@ -1638,7 +1664,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
   const containerClasses = isWidgetMode 
     ? 'w-full h-full flex flex-col justify-between' 
-    : 'fixed bottom-0 right-0 md:bottom-24 md:right-6 w-full h-[100dvh] md:w-[400px] md:h-[600px] md:rounded-3xl shadow-[0_35px_60px_-15px_rgba(0,0,0,0.3)] z-[9999] transition-all duration-500 ease-out';
+    : 'fixed bottom-0 right-0 md:bottom-24 md:right-6 w-full h-[100dvh] md:w-[400px] md:max-h-[calc(100vh-120px)] md:rounded-3xl shadow-[0_35px_60px_-15px_rgba(0,0,0,0.3)] z-[9999] transition-all duration-500 ease-out';
 
   return (
     <>

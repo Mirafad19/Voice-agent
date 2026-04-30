@@ -79,6 +79,8 @@ export interface AgentProfile {
   initialGreeting?: string; 
   chatKnowledgeBase?: string; 
   initialGreetingText?: string; 
+  pidginGreeting?: string;
+  nigerianEnglishGreeting?: string;
   theme: WidgetTheme;
   voice: AgentVoice;
   accentColor: AccentColor;

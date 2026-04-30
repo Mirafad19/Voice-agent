@@ -92,6 +92,8 @@ Email: info@pssdc.ng`,
     
     initialGreeting: 'Hello, thank you for calling the Public Service Staff Development Centre, P-S-S-D-C, Lagos. My name is Oluwole, your virtual assistant. How may I assist you today? Are you calling to learn about our training programmes, our services, our departments, or general information about P-S-S-D-C?',
     initialGreetingText: 'Hello, thank you for calling the Public Service Staff Development Centre, P-S-S-D-C, Lagos. 👋 My name is Oluwole, your virtual assistant. How may I assist you today? Are you calling to learn about our training programmes, our services, our departments, or general information about P-S-S-D-C?',
+    pidginGreeting: 'How far! You don call PSSDC Lagos. My name na Oluwole, we go help you today. I fit tell you about our training, guest lodge, or general info about PSSDC. Wetin you want know?',
+    nigerianEnglishGreeting: 'Hello, thank you for contacting the Public Service Staff Development Centre, P-S-S-D-C, Lagos. I am Oluwole, your professional assistant. How may I assist you today? Are you interested in our training programmes, consultancy services, or facilities like our Guest Lodge?',
     
     emailConfig: defaultEmailConfig,
     fileUploadConfig: defaultFileUploadConfig,

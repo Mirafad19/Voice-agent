@@ -195,16 +195,42 @@ export const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({
 
         <div>
           <Input
-            label="Voice Greeting (Spoken)"
+            label="Voice Greeting (Spoken - Default)"
             id="initialGreeting"
             value={editedProfile.initialGreeting || ""}
             onChange={(e) => handleChange("initialGreeting", e.target.value)}
             placeholder="e.g., Hello, welcome."
           />
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            Spoken by the AI when the call starts. Use phonetic spelling for
-            better pronunciation.
+            General greeting spoken when the call starts.
           </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <Input
+              label="Nigerian English Greeting"
+              id="nigerianEnglishGreeting"
+              value={editedProfile.nigerianEnglishGreeting || ""}
+              onChange={(e) => handleChange("nigerianEnglishGreeting", e.target.value)}
+              placeholder="e.g., Hello, thank you for calling..."
+            />
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              Spoken for Nigerian Standard English style.
+            </p>
+          </div>
+          <div>
+            <Input
+              label="Nigerian Pidgin Greeting"
+              id="pidginGreeting"
+              value={editedProfile.pidginGreeting || ""}
+              onChange={(e) => handleChange("pidginGreeting", e.target.value)}
+              placeholder="e.g., Wetin de sup? Abeg..."
+            />
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              Spoken for Nigerian Pidgin style.
+            </p>
+          </div>
         </div>
 
         <div>
