@@ -1159,8 +1159,8 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     
     // When closed, just enough space for the FAB + callout if showing. 
     // When open, full widget size.
-    const width = isOpen ? 440 : (showCallout && agentProfile.calloutMessage ? 300 : 80);
-    const height = isOpen ? 720 : (showCallout && agentProfile.calloutMessage ? 200 : 80);
+    const width = isOpen ? 420 : (showCallout && agentProfile.calloutMessage ? 300 : 80);
+    const height = isOpen ? 680 : (showCallout && agentProfile.calloutMessage ? 200 : 80);
     
     window.parent.postMessage({ type: 'agent-widget-resize', isOpen, width, height }, '*');
   }, [isOpen, isWidgetMode, showCallout, agentProfile.calloutMessage]);
@@ -1182,7 +1182,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
   const renderHomeView = () => (
       <div className="flex flex-col h-full w-full bg-white dark:bg-gray-900 animate-fade-in-up">
-          <div className={`relative h-[45%] bg-gradient-to-br from-accent-${accentColorClass} to-gray-900 flex flex-col p-6 text-white`}>
+          <div className={`relative h-[40%] bg-gradient-to-br from-accent-${accentColorClass} to-gray-900 flex flex-col p-6 text-white`}>
               <div className="flex items-center justify-between mb-4">
                   {(agentProfile.logoUrl || 'https://image2url.com/r2/default/images/1773703333770-c9e20d08-1933-459c-a8c7-d7c78bf2bc22.png') ? (
                       <img src={agentProfile.logoUrl || 'https://image2url.com/r2/default/images/1773703333770-c9e20d08-1933-459c-a8c7-d7c78bf2bc22.png'} alt="Logo" className="h-20 w-auto object-contain" referrerPolicy="no-referrer" />
@@ -1663,13 +1663,13 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   }
 
   const containerClasses = isWidgetMode 
-    ? 'w-full h-full flex flex-col justify-between' 
-    : 'fixed bottom-0 right-0 md:bottom-24 md:right-6 w-full h-[100dvh] md:w-[400px] md:max-h-[calc(100vh-120px)] md:rounded-3xl shadow-[0_35px_60px_-15px_rgba(0,0,0,0.3)] z-[9999] transition-all duration-500 ease-out';
+    ? 'w-full h-full flex flex-col' 
+    : 'fixed bottom-0 right-0 md:bottom-24 md:right-6 w-full h-[100dvh] md:w-[400px] md:h-[600px] md:rounded-3xl shadow-[0_35px_60px_-15px_rgba(0,0,0,0.3)] z-[9999] transition-all duration-500 ease-out';
 
   return (
     <>
       <div className={`${themeClass} ${containerClasses}`}>
-          <div className={`flex flex-col w-full h-full bg-white dark:bg-gray-900 text-black dark:text-white md:rounded-[2rem] overflow-hidden border-0 relative ${!isWidgetMode ? 'shadow-2xl' : ''}`}>
+          <div className={`flex flex-col w-full h-full bg-white dark:bg-gray-900 text-black dark:text-white rounded-none ${!isWidgetMode ? 'md:rounded-[2rem] shadow-2xl' : ''} overflow-hidden border-0 relative shadow-2xl`}>
               {/* Close Button */}
               <button 
                 onClick={toggleWidget}
