@@ -1,4 +1,5 @@
 
+import { motion, AnimatePresence } from 'motion/react';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AgentProfile, AgentConfig, WidgetTheme, WidgetState, Recording, ReportingStatus } from '../types';
 import { GeminiLiveService } from '../services/geminiLiveService';
@@ -101,6 +102,138 @@ const XIcon = ({className = "h-6 w-6"}) => (
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
     </svg>
 );
+
+const DynamicOrb = ({ state, accentColor }: { state: WidgetState, accentColor: string }) => {
+  const isSpeaking = state === WidgetState.Speaking;
+  const isListening = state === WidgetState.Listening;
+  const isConnecting = state === WidgetState.Connecting;
+  const isError = state === WidgetState.Error;
+
+  // We'll use a specific "Greenish Bright" theme for Option C as requested
+  // Emerald / Teal / Lime mix
+  const glowColor = `var(--color-accent-${accentColor})`;
+  
+  return (
+    <div className="relative w-full h-full flex items-center justify-center bg-black rounded-full overflow-hidden shadow-[inset_0_0_60px_rgba(0,0,0,0.8)]">
+      {/* SVG Filter for Gooey / Liquid Effect */}
+      <svg className="hidden">
+        <defs>
+          <filter id="goo">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="12" result="blur" />
+            <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 20 -10" result="goo" />
+            <feComposite in="SourceGraphic" in2="goo" operator="atop" />
+          </filter>
+        </defs>
+      </svg>
+
+      {/* Bioluminescent Background Glow */}
+      <motion.div 
+        animate={{
+          opacity: isSpeaking ? [0.6, 0.9, 0.6] : 0.4,
+          scale: isSpeaking ? [1, 1.1, 1] : 1,
+        }}
+        transition={{ duration: 2, repeat: Infinity }}
+        className="absolute inset-0 bg-[radial-gradient(circle,rgba(52,211,153,0.3)_0%,transparent_70%)] blur-3xl pointer-events-none"
+      />
+
+      {/* The Liquid Body */}
+      <div className="relative w-full h-full flex items-center justify-center filter-[url(#goo)] overflow-hidden">
+        {/* Core Mass */}
+        <motion.div
+          animate={{
+            scale: isSpeaking ? [1, 1.15, 0.95, 1.05, 1] : 1,
+            rotate: [0, 90, 180, 270, 360],
+            borderRadius: [
+                "40% 60% 70% 30% / 40% 50% 60% 50%",
+                "60% 40% 30% 70% / 50% 60% 40% 60%",
+                "40% 60% 70% 30% / 40% 50% 60% 50%"
+            ]
+          }}
+          transition={{
+            duration: isSpeaking ? 2 : 6,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+          className={`w-44 h-44 bg-gradient-to-br from-emerald-400 via-accent-${accentColor} to-teal-600 shadow-[0_0_40px_rgba(52,211,153,0.5)]`}
+        />
+
+        {/* Satellite Blobs (The liquid droplets) */}
+        {[...Array(5)].map((_, i) => (
+          <motion.div
+            key={i}
+            animate={{
+              x: isSpeaking 
+                ? [Math.random() * 40 - 20, Math.random() * 80 - 40, Math.random() * 40 - 20]
+                : [Math.random() * 20 - 10, Math.random() * 40 - 20, Math.random() * 20 - 10],
+              y: isSpeaking 
+                ? [Math.random() * 40 - 20, Math.random() * 80 - 40, Math.random() * 40 - 20]
+                : [Math.random() * 20 - 10, Math.random() * 40 - 20, Math.random() * 20 - 10],
+              scale: [1, 1.4, 0.8, 1],
+            }}
+            transition={{
+              duration: 3 + Math.random() * 4,
+              repeat: Infinity,
+              ease: "easeInOut",
+              delay: i * 0.4
+            }}
+            className={`absolute w-16 h-16 rounded-full bg-emerald-400 opacity-80`}
+            style={{
+                left: `${35 + (i % 3) * 10}%`,
+                top: `${35 + (i % 2) * 20}%`,
+            }}
+          />
+        ))}
+      </div>
+
+      {/* Visual Feedback Overlays */}
+      <AnimatePresence>
+        {(isConnecting || isError) && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-20 flex items-center justify-center backdrop-blur-[2px] bg-black/20"
+          >
+            {isConnecting && (
+               <div className="flex flex-col items-center gap-2">
+                 <div className="w-10 h-10 border-2 border-white/20 border-t-emerald-400 rounded-full animate-spin" />
+                 <span className="text-[10px] font-black text-white/60 tracking-widest uppercase">Connecting</span>
+               </div>
+            )}
+            {isError && (
+              <div className="text-red-400 flex flex-col items-center gap-1">
+                <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                <span className="text-[9px] font-black uppercase">Status Error</span>
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Ambient Ripples (Voice Waves) */}
+      {isSpeaking && (
+          <div className="absolute inset-0 z-30 pointer-events-none overflow-hidden">
+               {[...Array(3)].map((_, i) => (
+                   <motion.div
+                    key={i}
+                    animate={{
+                        scale: [1, 2],
+                        opacity: [0.5, 0]
+                    }}
+                    transition={{
+                        duration: 1.5,
+                        repeat: Infinity,
+                        delay: i * 0.5,
+                        ease: "easeOut"
+                    }}
+                    className="absolute inset-0 border-2 border-emerald-400/30 rounded-full"
+                   />
+               ))}
+          </div>
+      )}
+    </div>
+  );
+};
 
 const LiveBadge = () => (
     <div className="flex items-center gap-2 px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full border border-white/30 shadow-sm">
@@ -904,7 +1037,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         }
     }
 
-    const voiceToUse = (activeDialect === 'pidgin' || activeDialect === 'nigerian-english') ? 'Kore' : (agentProfile as AgentConfig).voice;
+    const voiceToUse = 'Charon';
 
     if (greetingToSpeak) {
         isGreetingProtectedRef.current = true;
@@ -1575,43 +1708,11 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             )}
             
             <div className="relative w-full flex items-center justify-center mb-10 min-h-[220px]">
-                
-                {(widgetState === WidgetState.Speaking) && (
-                    <>
-                        <div className={`absolute w-72 h-72 rounded-full border-4 border-accent-${accentColorClass} opacity-20 animate-sonar-ping`}></div>
-                        <div className={`absolute w-72 h-72 rounded-full border-4 border-accent-${accentColorClass} opacity-20 animate-sonar-ping [animation-delay:1s]`}></div>
-                    </>
-                )}
-
-                <div className={`relative w-56 h-56 rounded-full bg-gradient-to-br from-accent-${accentColorClass} to-gray-400 dark:to-gray-800 shadow-[0_30px_60px_rgba(0,0,0,0.2)] flex items-center justify-center transition-all duration-700 ${widgetState === WidgetState.Speaking ? 'scale-110' : 'scale-100'}`}>
-                    <div className="absolute top-0 left-0 w-full h-full rounded-full bg-gradient-to-b from-white/30 to-transparent pointer-events-none"></div>
-                    <div className={`relative w-52 h-52 rounded-full flex items-center justify-center shadow-inner z-10 overflow-hidden transition-colors duration-500 ${widgetState === WidgetState.Ended ? `bg-accent-${accentColorClass}` : 'bg-white dark:bg-gray-900'}`}>
-                        {widgetState === WidgetState.Connecting && <Spinner className={`w-24 h-24 text-accent-${accentColorClass}`} />}
-                        {(widgetState === WidgetState.Idle || widgetState === WidgetState.Listening || widgetState === WidgetState.Speaking) && (
-                            <div className={`transition-transform duration-500 ${widgetState === WidgetState.Speaking ? 'scale-115' : 'scale-100'}`}>
-                                <WaveformIcon className={`h-28 w-28 ${widgetState === WidgetState.Idle ? 'text-gray-200 dark:text-gray-700' : `text-accent-${accentColorClass}`}`} />
-                            </div>
-                        )}
-                        {widgetState === WidgetState.Error && (
-                            <div className="text-red-500 animate-pulse">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-24 w-24" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                            </div>
-                        )}
-                        
-                        {widgetState === WidgetState.Ended && (voiceReportingStatus === 'analyzing' || voiceReportingStatus === 'sending') && <Spinner className="w-24 h-24 text-white" />}
-                        {widgetState === WidgetState.Ended && voiceReportingStatus === 'sent' && <div className="text-white"><svg xmlns="http://www.w3.org/2000/svg" className="h-24 w-24" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg></div>}
-                        {widgetState === WidgetState.Ended && voiceReportingStatus === 'failed' && <div className="text-white"><svg xmlns="http://www.w3.org/2000/svg" className="h-24 w-24" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></div>}
-                        {widgetState === WidgetState.Ended && voiceReportingStatus === 'idle' && (
-                            <div className="p-8 transform scale-110 animate-fade-in">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                    <path d="M18.36 6.64a9 9 0 11-12.73 0M12 2v10" strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
-                            </div>
-                        )}
-
-                        {/* Network Warning Overlay directly on Orb */}
-                        {isOnline && isNetworkSlow && (widgetState === WidgetState.Speaking || widgetState === WidgetState.Listening) && <NetworkWarning />}
-                    </div>
+                <div className={`relative w-64 h-64 rounded-full shadow-[0_0_50px_rgba(0,0,0,0.3)] transition-all duration-700 ${widgetState === WidgetState.Speaking ? 'scale-110' : 'scale-100'}`}>
+                    <DynamicOrb state={widgetState} accentColor={accentColorClass} />
+                    
+                    {/* Network Warning Overlay directly on Orb */}
+                    {isOnline && isNetworkSlow && (widgetState === WidgetState.Speaking || widgetState === WidgetState.Listening) && <NetworkWarning />}
                 </div>
             </div>
 

@@ -92,7 +92,7 @@ export class GeminiLiveService {
           speechConfig: {
             voiceConfig: { 
               prebuiltVoiceConfig: { 
-                voiceName: (this.dialect === 'pidgin' || this.dialect === 'nigerian-english') ? 'Kore' : this.config.voice 
+                voiceName: 'Charon'
               } 
             },
           },
