@@ -1178,7 +1178,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     // When closed, just enough space for the FAB + callout if showing. 
     // When open, full widget size.
     const width = isOpen ? 420 : (showCallout && agentProfile.calloutMessage ? 300 : 80);
-    const height = isOpen ? 680 : (showCallout && agentProfile.calloutMessage ? 200 : 80);
+    const height = isOpen ? 595 : (showCallout && agentProfile.calloutMessage ? 200 : 80);
     
     window.parent.postMessage({ type: 'agent-widget-resize', isOpen, width, height }, '*');
   }, [isOpen, isWidgetMode, showCallout, agentProfile.calloutMessage]);
