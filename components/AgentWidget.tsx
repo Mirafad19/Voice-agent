@@ -412,6 +412,12 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                 ? "LANGUAGE & STYLE: Use Nigerian Standard English. Be professional, warm, and polite. Do NOT use 'Sir' or 'Ma'. Ensure you sound professional but avoiding being overly repetitive with phrases like 'You're welcome'. Focus on being helpful and direct."
                 : "LANGUAGE & STYLE: Use a standard international professional English tone.";
 
+            const effectiveGreeting = dialect === 'pidgin' 
+                ? (config.pidginGreeting || config.initialGreeting)
+                : dialect === 'nigerian-english'
+                ? (config.nigerianEnglishGreeting || config.initialGreeting)
+                : (config.initialGreetingText || config.initialGreeting);
+
             const systemInstruction = `
             IDENTITY: You are ${config.name}. Act as a helpful and professional representative. Never ever mention that you are an AI, a large language model, or built by Google. If asked 'What are you?' or 'Who are you?', respond exclusively as the official assistant of ${config.name}. Your responses must strictly reflect this identity at all times.
 
@@ -422,7 +428,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             
             CRITICAL OPERATIONAL RULES:
             - Today's date is ${new Date().toISOString().split('T')[0]}.
-            - INITIAL GREETING: Your first words should be: "${config.initialGreetingText || config.initialGreeting || 'Hello, thank you for calling the Public Service Staff Development Centre, P-S-S-D-C, Lagos. My name is Oluwole, your virtual assistant. How may I assist you today? Are you calling to learn about our training programmes, our services, our departments, or general information about P-S-S-D-C?'}". Do not add anything else to the start.
+            - INITIAL GREETING: Your first words should be: "${effectiveGreeting || 'Hello, thank you for calling...' }". Do not add anything else to the start.
             - INFORMATION RETRIEVAL: If asked for contact details or specific information, consult your knowledge base. Do not use external or hardcoded info.
             - DATA GATHERING FLOW: If you need to collect multiple pieces of information (e.g., for a booking or registration), ASK ONLY ONE QUESTION AT A TIME. Wait for the user's response before asking the next question.
             - THOROUGHNESS: Be detailed and comprehensive. If the information is in your knowledge base, provide the FULL answer. Do not give short or lazy responses.
@@ -507,6 +513,12 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         ? "LANGUAGE & STYLE: Use Nigerian Standard English. Be professional, warm, and polite. Do NOT use 'Sir' or 'Ma'. Ensure you sound professional but avoiding being overly repetitive with phrases like 'You're welcome'. Focus on being helpful and direct."
         : "LANGUAGE & STYLE: Use a standard international professional English tone.";
 
+    const effectiveGreeting = selectedDialect === 'pidgin' 
+        ? (config.pidginGreeting || config.initialGreeting)
+        : selectedDialect === 'nigerian-english'
+        ? (config.nigerianEnglishGreeting || config.initialGreeting)
+        : (config.initialGreetingText || config.initialGreeting);
+
     const systemInstruction = `
     IDENTITY: You are ${config.name}. Act as a helpful and professional representative. Never ever mention that you are an AI, a large language model, or built by Google. If asked 'What are you?' or 'Who are you?', respond exclusively as the official assistant of ${config.name}. Your responses must strictly reflect this identity at all times.
     
@@ -517,7 +529,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     
     CRITICAL OPERATIONAL RULES:
     - Today's date is ${new Date().toISOString().split('T')[0]}.
-    - INITIAL GREETING: Your first words should be: "${config.initialGreetingText || config.initialGreeting || 'Hello, thank you for calling the Public Service Staff Development Centre, P-S-S-D-C, Lagos. My name is Oluwole, your virtual assistant. How may I assist you today? Are you calling to learn about our training programmes, our services, our departments, or general information about P-S-S-D-C?'}". Do not add anything else to the start.
+    - INITIAL GREETING: Your first words should be: "${effectiveGreeting || 'Hello, thank you for calling...' }". Do not add anything else to the start.
     - INFORMATION RETRIEVAL: If asked for contact details or specific information, consult your knowledge base. Do not use external or hardcoded info.
     - DATA GATHERING FLOW: If you need to collect multiple pieces of information (e.g., for a booking or registration), ASK ONLY ONE QUESTION AT A TIME. Wait for the user's response before asking the next question.
     - THOROUGHNESS: Be detailed and comprehensive. If the information is in your knowledge base, provide the FULL answer. Do not give short or lazy responses.
@@ -902,9 +914,15 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             const ai = new GoogleGenAI({ 
                 apiKey: effectiveApiKey
             });
+            
+            // Add accent hint to prompt for standard Nigerian English to avoid "abroad" sound
+            const ttsPrompt = activeDialect === 'nigerian-english' 
+                ? `[PROFESSIONAL NIGERIAN ACCENT - LOCAL PRONUNCIATION] ${greetingToSpeak}` 
+                : greetingToSpeak;
+
             const response = await ai.models.generateContent({
                 model: "gemini-2.5-flash-preview-tts",
-                contents: [{ parts: [{ text: greetingToSpeak }] }],
+                contents: [{ parts: [{ text: ttsPrompt }] }],
                 config: {
                     responseModalities: [Modality.AUDIO],
                     speechConfig: {
@@ -1160,7 +1178,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     // When closed, just enough space for the FAB + callout if showing. 
     // When open, full widget size.
     const width = isOpen ? 420 : (showCallout && agentProfile.calloutMessage ? 300 : 80);
-    const height = isOpen ? 580 : (showCallout && agentProfile.calloutMessage ? 200 : 80);
+    const height = isOpen ? 680 : (showCallout && agentProfile.calloutMessage ? 200 : 80);
     
     window.parent.postMessage({ type: 'agent-widget-resize', isOpen, width, height }, '*');
   }, [isOpen, isWidgetMode, showCallout, agentProfile.calloutMessage]);
@@ -1169,10 +1187,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
       const isDismissed = localStorage.getItem(`callout-dismissed-${agentProfile.id}`) === 'true';
       if (!isOpen && agentProfile.calloutMessage && !isDismissed) {
         setShowCallout(true);
-        const timer = setTimeout(() => {
-          setShowCallout(false);
-        }, 8000);
-        return () => clearTimeout(timer);
       } else {
         setShowCallout(false);
       }
@@ -1210,20 +1224,27 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
           <div className="flex-1 bg-gray-50 dark:bg-gray-900 relative -mt-6 rounded-t-[2rem] px-6 pt-8 flex flex-col gap-4 shadow-2xl z-20">
               {!isOnline && <OfflineBanner />}
               
-              <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-gray-700">
+              <div className="bg-gray-100 dark:bg-gray-800 rounded-2xl p-5 shadow-sm border border-gray-200 dark:border-gray-700">
+                  <div className="mb-4">
+                      <h4 className={`text-sm font-black text-gray-900 dark:text-white uppercase tracking-tighter flex items-center gap-2`}>
+                          <span className={`w-2 h-2 bg-accent-${accentColorClass} rounded-full animate-pulse`}></span>
+                          Chat with our Digital Assistant
+                      </h4>
+                      <p className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest mt-1"></p>
+                  </div>
                   <form onSubmit={handleHomeFormSubmit} className="relative w-full">
                       <input 
                         type="text" 
-                        placeholder="Ask a question..." 
+                        placeholder="Type your question here..." 
                         value={chatInput}
                         disabled={!isOnline}
                         onChange={(e) => setChatInput(e.target.value)}
-                        className={`w-full pl-6 pr-14 py-4 rounded-2xl shadow-sm border-2 border-transparent dark:border-gray-700 bg-gray-50 dark:bg-gray-900 focus:outline-none focus:border-accent-${accentColorClass} text-gray-900 dark:text-white transition-all text-left font-semibold disabled:opacity-50 text-base`}
+                        className={`w-full pl-6 pr-14 py-4 rounded-xl shadow-md border-2 border-transparent bg-white dark:bg-gray-900 focus:outline-none focus:border-accent-${accentColorClass} text-gray-900 dark:text-white transition-all text-left font-semibold disabled:opacity-50 text-base`}
                       />
                       <button 
                         type="submit" 
                         disabled={!isOnline}
-                        className={`absolute right-3 top-1/2 -translate-y-1/2 p-2.5 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-500 hover:text-accent-${accentColorClass} transition-colors disabled:opacity-50`}
+                        className={`absolute right-3 top-1/2 -translate-y-1/2 p-2.5 rounded-xl bg-accent-${accentColorClass} text-white shadow-md hover:scale-110 transition-all active:scale-95 disabled:opacity-50`}
                       >
                           <SendIcon className="h-5 w-5" />
                       </button>
