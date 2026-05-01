@@ -1,5 +1,5 @@
 
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AgentProfile, AgentConfig, WidgetTheme, WidgetState, Recording, ReportingStatus } from '../types';
 import { GeminiLiveService } from '../services/geminiLiveService';
