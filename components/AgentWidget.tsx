@@ -1178,7 +1178,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     // When closed, just enough space for the FAB + callout if showing. 
     // When open, full widget size.
     const width = isOpen ? 420 : (showCallout && agentProfile.calloutMessage ? 300 : 80);
-    const height = isOpen ? 595 : (showCallout && agentProfile.calloutMessage ? 200 : 80);
+    const height = isOpen ? 600 : (showCallout && agentProfile.calloutMessage ? 200 : 80);
     
     window.parent.postMessage({ type: 'agent-widget-resize', isOpen, width, height }, '*');
   }, [isOpen, isWidgetMode, showCallout, agentProfile.calloutMessage]);
@@ -1312,12 +1312,17 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                     className="w-full bg-white dark:bg-gray-800 border-2 border-gray-100 dark:border-gray-700 rounded-2xl p-5 flex items-center gap-5 hover:border-accent-amber hover:bg-amber-50/10 transition-all group relative overflow-hidden active:scale-[0.98]"
                 >
                     <div className="p-3 bg-amber-100 dark:bg-amber-900/30 rounded-xl">
-                        <svg className="w-8 h-8 text-amber-600 dark:text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                            <path d="M12 21c4.97 0 9-3.582 9-8s-4.03-8-9-8-9 3.582-9 8c0 1.5.47 2.91 1.29 4.1L4 21l3.9-1.29c1.09.82 2.5 1.29 4.1 1.29z" />
-                            <circle cx="9" cy="12" r="1.5" fill="currentColor" />
-                            <circle cx="15" cy="12" r="1.5" fill="currentColor" />
-                            <path d="M9 16c1.5 1.5 4.5 1.5 6 0" />
-                        </svg>
+                        <div className="relative">
+                            <svg className="w-8 h-8 rounded-sm" viewBox="0 0 3 2" xmlns="http://www.w3.org/2000/svg">
+                                <rect width="3" height="2" fill="#008751"/>
+                                <rect width="1" height="2" x="1" fill="#fff"/>
+                            </svg>
+                            <div className="absolute -bottom-1 -right-1 bg-amber-500 rounded-full p-1 border-2 border-white dark:border-gray-800 shadow-sm">
+                                <svg className="w-3 h-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M2 10v4M6 4v16M10 8v8M14 7v10M18 4v16M22 10v4" />
+                                </svg>
+                            </div>
+                        </div>
                     </div>
                     <div className="text-left">
                         <h3 className="font-black text-gray-900 dark:text-white uppercase tracking-tighter">Nigerian Pidgin</h3>
@@ -1470,11 +1475,17 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                                 onClick={() => handleSelectDialectInChat('pidgin')}
                                 className="flex items-center gap-3 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800 text-amber-700 dark:text-amber-400 hover:bg-amber-100 transition-colors text-sm font-black uppercase tracking-tighter"
                               >
-                                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                      <path d="M12 21c4.97 0 9-3.582 9-8s-4.03-8-9-8-9 3.582-9 8c0 1.5.47 2.91 1.29 4.1L4 21l3.9-1.29c1.09.82 2.5 1.29 4.1 1.29z" />
-                                      <circle cx="9" cy="11.5" r="1.5" fill="currentColor" />
-                                      <circle cx="15" cy="11.5" r="1.5" fill="currentColor" />
-                                  </svg>
+                                  <div className="relative">
+                                      <svg className="w-5 h-5 rounded-sm" viewBox="0 0 3 2" xmlns="http://www.w3.org/2000/svg">
+                                          <rect width="3" height="2" fill="#008751"/>
+                                          <rect width="1" height="2" x="1" fill="#fff"/>
+                                      </svg>
+                                      <div className="absolute -bottom-0.5 -right-0.5 bg-amber-500 rounded-full p-0.5 border border-white dark:border-gray-800 shadow-sm">
+                                          <svg className="w-2 h-2 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
+                                              <path d="M2 10v4M6 4v16M10 8v8M14 7v10M18 4v16M22 10v4" />
+                                          </svg>
+                                      </div>
+                                  </div>
                                   Nigerian Pidgin
                               </button>
                               <button 
