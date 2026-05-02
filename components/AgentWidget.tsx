@@ -57,15 +57,10 @@ const WaveformIcon = ({className = "h-9 w-9 text-white"}) => (
     </svg>
 );
 
-const FabIcon = ({className = "h-9 w-9 text-white"}) => (
-    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" fill="none" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M4 13.5V12a8 8 0 1116 0v1.5" />
-        <path d="M4 12a2 2 0 00-2 2v3a2 2 0 002 2h1" />
-        <path d="M20 12a2 2 0 012 2v3a2 2 0 01-2 2h-1" />
-        <path d="M9 12h.01" />
-        <path d="M15 12h.01" />
-        <path d="M9.5 16a3.5 3.5 0 005 0" />
-        <path d="M5 14v1a2 2 0 002 2h2" />
+const FabIcon = ({className = "h-11 w-11 text-black/60"}) => (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} xmlns="http://www.w3.org/2000/svg">
+        <rect x="3" y="6" width="18" height="9" rx="4.5" />
+        <path d="M14 14 L18 18 L18 14 Z" />
     </svg>
 );
 
@@ -1785,8 +1780,8 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
           <div className="absolute -bottom-2 right-8 w-4 h-4 bg-white transform rotate-45 border-r border-b border-gray-50 shadow-[2px_2px_5px_rgba(0,0,0,0.02)]"></div>
         </div>
       )}
-      <button onClick={toggleWidget} className={`w-16 h-16 rounded-full bg-accent-${accentColorClass} shadow-xl flex items-center justify-center text-white transform hover:scale-110 transition-all active:scale-95`}>
-        {isOpen ? <ChevronDownIcon className="h-8 w-8 text-white" /> : <FabIcon />}
+      <button onClick={toggleWidget} className={`w-16 h-16 rounded-full bg-accent-${accentColorClass} shadow-xl flex items-center justify-center transform hover:scale-110 transition-all active:scale-95`}>
+        {isOpen ? <ChevronDownIcon className="h-8 w-8 text-white" /> : <FabIcon className="h-11 w-11 text-white" />}
       </button>
     </div>
   );
