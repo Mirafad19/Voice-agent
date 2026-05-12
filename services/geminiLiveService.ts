@@ -46,8 +46,10 @@ export class GeminiLiveService {
   private currentOutputTranscription = '';
 
   private speechDetectedFrameCount = 0;
-  private readonly SPEECH_DETECTION_THRESHOLD = 0.01; 
-  private readonly FRAMES_FOR_INTERRUPTION = 3; // ~75ms of sustained speech
+  private readonly SPEECH_DETECTION_THRESHOLD = 0.015; 
+  private readonly FRAMES_FOR_INTERRUPTION = 5; // ~125ms of sustained speech
+  private reconnectAttempts = 0;
+  private readonly MAX_RECONNECT_ATTEMPTS = 3;
 
   constructor(apiKey: string, config: AgentConfig, callbacks: Callbacks, dialect: Dialect = 'abroad-english') {
     this.ai = new GoogleGenAI({ 
@@ -63,9 +65,14 @@ export class GeminiLiveService {
   }
 
   public async connect(mediaStream: MediaStream): Promise<void> {
+    this.mediaStream = mediaStream;
+    await this.internalConnect();
+  }
+
+  private async internalConnect(): Promise<void> {
     this.setState('connecting');
     try {
-      this.mediaStream = mediaStream;
+      if (!this.mediaStream) throw new Error("No media stream");
       
       const effectiveGreeting = this.dialect === 'pidgin' 
         ? (this.config.pidginGreeting || this.config.initialGreeting)
@@ -126,15 +133,28 @@ export class GeminiLiveService {
           outputAudioTranscription: {},
         },
         callbacks: {
-          onopen: () => this.handleSessionOpen(mediaStream),
+          onopen: () => {
+              this.reconnectAttempts = 0;
+              this.handleSessionOpen(this.mediaStream!);
+          },
           onmessage: (message: LiveServerMessage) => this.handleSessionMessage(message),
-          onerror: (e: ErrorEvent) => this.handleError(`Connection error: ${e.message}`),
+          onerror: (e: ErrorEvent) => this.handleNetworkError(e),
           onclose: () => this.handleSessionClose(),
         },
       });
       this.session = await this.sessionPromise;
     } catch (e) {
-      this.handleError(e instanceof Error ? `Failed to connect: ${e.message}` : 'An unknown connection error occurred.');
+        this.handleNetworkError(e);
+    }
+  }
+
+  private handleNetworkError(e: any) {
+    if (this.reconnectAttempts < this.MAX_RECONNECT_ATTEMPTS) {
+        this.reconnectAttempts++;
+        console.warn(`Attempting reconnection ${this.reconnectAttempts}...`);
+        setTimeout(() => this.internalConnect(), 2000);
+    } else {
+        this.handleError(e instanceof Error ? `Failed to connect: ${e.message}` : 'An unknown connection error occurred.');
     }
   }
 

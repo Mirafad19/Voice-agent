@@ -318,11 +318,27 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const shouldEndAfterSpeakingRef = useRef(false);
   const chatSessionRef = useRef<Chat | null>(null);
   const silenceTimerRef = useRef<number | null>(null);
+  const localMicWarningTimerRef = useRef<number | null>(null);
   
   const isGreetingProtectedRef = useRef(false);
   const lastInterruptionTimeRef = useRef<number>(0);
 
   const accentColorClass = agentProfile.accentColor;
+
+  const speakLocal = useCallback((text: string) => {
+    if (!('speechSynthesis' in window)) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    
+    // Try to find a nice local voice (English Nigerian if possible, else Default)
+    const voices = window.speechSynthesis.getVoices();
+    const preferredVoice = voices.find(v => v.lang.includes('en-NG')) || voices.find(v => v.lang.includes('en-GB')) || voices[0];
+    if (preferredVoice) utterance.voice = preferredVoice;
+    
+    utterance.rate = 0.95;
+    utterance.pitch = 1.0;
+    window.speechSynthesis.speak(utterance);
+  }, []);
 
   // Monitor network quality
   useEffect(() => {
@@ -911,6 +927,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
   const handleInterruption = useCallback(() => {
     isGreetingProtectedRef.current = false;
+    shouldEndAfterSpeakingRef.current = false; // Reset auto-end on interruption
     lastInterruptionTimeRef.current = Date.now();
     activeAudioSourcesRef.current.forEach(source => {
         try { source.stop(); } catch(e) {}
@@ -969,9 +986,37 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         } 
       });
       mediaStreamRef.current = stream;
+
+      // Start local silence monitoring
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const source = audioCtx.createMediaStreamSource(stream);
+      const analyser = audioCtx.createAnalyser();
+      source.connect(analyser);
+      const data = new Uint8Array(analyser.frequencyBinCount);
+      
+      let zeroEnergyCount = 0;
+      const checkSilence = () => {
+        if (widgetStateRef.current !== WidgetState.Listening && widgetStateRef.current !== WidgetState.Connecting) return;
+        analyser.getByteFrequencyData(data);
+        const sum = data.reduce((a, b) => a + b, 0);
+        if (sum < 10) {
+            zeroEnergyCount++;
+            if (zeroEnergyCount > 60) { // ~3 seconds of absolute silence
+                speakLocal("I'm sorry, I can't hear you. Please make sure your microphone is on.");
+                zeroEnergyCount = -300; // Cool down before warning again
+            }
+        } else {
+            zeroEnergyCount = 0;
+        }
+        if (mediaStreamRef.current) requestAnimationFrame(checkSilence);
+        else audioCtx.close();
+      };
+      requestAnimationFrame(checkSilence);
+
     } catch (e) {
       setWidgetState(WidgetState.Error);
-      setErrorMessage("Microphone Access Denied. Please enable it in your settings.");
+      setErrorMessage("Microphone Access Denied.");
+      speakLocal("I can't hear you because your microphone is blocked. Please enable microphone access in your browser settings to continue.");
       cleanupServices();
       return;
     } finally {
@@ -1188,6 +1233,10 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const cleanupServices = useCallback(() => {
     isGreetingProtectedRef.current = false;
     clearSilenceTimer();
+    if (localMicWarningTimerRef.current) {
+        clearTimeout(localMicWarningTimerRef.current);
+        localMicWarningTimerRef.current = null;
+    }
     geminiServiceRef.current?.disconnect();
     geminiServiceRef.current = null;
     recordingServiceRef.current?.stop();
@@ -1716,12 +1765,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                 {widgetState === WidgetState.Listening && "Listening..."}
                 {widgetState === WidgetState.Speaking && "Speaking..."}
                 {widgetState === WidgetState.Error && (errorMessage || "Connection Error")}
-                {widgetState === WidgetState.Ended && (
-                        voiceReportingStatus === 'analyzing' ? 'Analyzing...' :
-                        voiceReportingStatus === 'sending' ? 'Sending Report...' :
-                        voiceReportingStatus === 'sent' ? 'Report Sent' : 
-                        voiceReportingStatus === 'failed' ? 'Failed' : 'Session Ended'
-                )}
+                {widgetState === WidgetState.Ended && "Session Ended"}
             </p>
             
             <div className="h-10 mb-6 flex items-center justify-center px-8 text-center">
@@ -1730,7 +1774,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                         Tap call to start
                     </p>
                 )}
-                {(widgetState === WidgetState.Ended && (voiceReportingStatus === 'sent' || voiceReportingStatus === 'failed' || voiceReportingStatus === 'idle')) && (
+                {(widgetState === WidgetState.Ended) && (
                     <p className="text-xs font-black text-gray-400 uppercase tracking-widest animate-pulse">
                         Ready to close
                     </p>
