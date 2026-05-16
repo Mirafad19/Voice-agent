@@ -1169,8 +1169,8 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         }
       },
       onAudioChunk: (chunk) => {
-        // Guard: Ignore chunks arriving within 400ms of an interruption
-        if (Date.now() - lastInterruptionTimeRef.current < 400) {
+        // Guard: Ignore chunks arriving within 1500ms of an interruption
+        if (Date.now() - lastInterruptionTimeRef.current < 1500) {
             return;
         }
         audioQueueRef.current.push(chunk);

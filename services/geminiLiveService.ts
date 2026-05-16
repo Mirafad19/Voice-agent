@@ -46,8 +46,8 @@ export class GeminiLiveService {
   private currentOutputTranscription = '';
 
   private speechDetectedFrameCount = 0;
-  private readonly SPEECH_DETECTION_THRESHOLD = 0.015; 
-  private readonly FRAMES_FOR_INTERRUPTION = 5; // ~125ms of sustained speech
+  private readonly SPEECH_DETECTION_THRESHOLD = 0.008; 
+  private readonly FRAMES_FOR_INTERRUPTION = 2; // ~50ms of sustained speech
   private reconnectAttempts = 0;
   private readonly MAX_RECONNECT_ATTEMPTS = 3;
 
@@ -109,7 +109,7 @@ export class GeminiLiveService {
           1. ${dialectInstruction}
           2. ${greetingContext}
           3. RESPONSIVE PROTOCOL: You are an active, helpful listener. Respond naturally and promptly as soon as the user finishes their thought.
-          4. AGGRESSIVE SILENCE: If the user starts talking while you are speaking, STOP IMMEDIATELY. Prioritize the user's voice above your own.
+          4. AGGRESSIVE SILENCE: If you hear even a single sound from the user while you are speaking, YOU MUST SHUT UP IMMEDIATELY. Do not finish your sentence. Prioritize the user's voice above your own.
           5. SOURCE OF TRUTH: Use the provided knowledge base accurately for all information.
           6. DATA GATHERING FLOW: If you need to collect multiple pieces of information (e.g., for a booking or registration), ASK ONLY ONE QUESTION AT A TIME. Wait for the user's response before asking the next question. Do not dump multiple questions in one turn.
           7. THOROUGHNESS: Be detailed and comprehensive. If the information is in your knowledge base, provide the FULL answer. Do not give short or lazy responses. 
