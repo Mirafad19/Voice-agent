@@ -30,56 +30,15 @@ export const EmbedCodeModal: React.FC<EmbedCodeModalProps> = ({
     // We include ID and Name in the config to ensure bookings are tied to the right profile even if renamed
     const configToEncode = { ...config, id, name };
     const encodedConfig = safeBtoa(JSON.stringify(configToEncode));
-    const baseUrl = publicUrl || "YOUR_HOSTED_URL";
+    const baseUrl = (publicUrl || "YOUR_HOSTED_URL").replace(/\/$/, "");
     const finalUrl = `${baseUrl}?config=${encodedConfig}`;
-    const iframeId = `ai-agent-iframe-${Date.now()}`;
 
-    const code = `<div style="position: fixed; bottom: 20px; right: 20px; z-index: 9999; display: flex; align-items: flex-end; justify-content: flex-end; pointer-events: none;">
-  <iframe
-    id="${iframeId}"
-    src="${finalUrl}"
-    style="border: none !important; outline: none !important; background-color: transparent !important; width: 80px; height: 80px; transition: width 0.3s cubic-bezier(0.19, 1, 0.22, 1), height 0.3s cubic-bezier(0.19, 1, 0.22, 1), opacity 0.2s ease, transform 0.3s cubic-bezier(0.19, 1, 0.22, 1); overflow: hidden; pointer-events: auto; will-change: width, height; border-radius: 20px; box-shadow: none;"
-    allow="microphone"
-    frameborder="0"
-    scrolling="no"
-    allowtransparency="true"
-    title="${agentProfile.name}"
-  ></iframe>
-</div>
-<script>
-  (function() {
-    var iframe = document.getElementById('${iframeId}');
-    var container = iframe.parentElement;
-    
-    window.addEventListener('message', function(event) {
-      if (event.source !== iframe.contentWindow) return;
-      if (event.data && event.data.type === 'agent-widget-resize') {
-        var isMobile = window.innerWidth < 768;
-        var isOpen = event.data.isOpen;
-        
-        if (isMobile && isOpen) {
-            container.style.bottom = '0';
-            container.style.right = '0';
-            container.style.left = '0';
-            container.style.top = '0';
-            iframe.style.width = '100%';
-            iframe.style.height = '100%';
-            iframe.style.borderRadius = '0';
-            iframe.style.boxShadow = 'none';
-        } else {
-            container.style.bottom = '20px';
-            container.style.right = '20px';
-            container.style.left = 'auto';
-            container.style.top = 'auto';
-            iframe.style.width = event.data.width + 'px';
-            iframe.style.height = event.data.height + 'px';
-            iframe.style.borderRadius = isOpen ? '24px' : '20px';
-            iframe.style.boxShadow = isOpen ? '0 25px 50px -12px rgba(0, 0, 0, 0.25)' : 'none';
-        }
-      }
-    });
-  })();
-</script>`;
+    const code = `<script 
+  src="${baseUrl}/embed.js" 
+  data-config="${encodedConfig}" 
+  data-base-url="${baseUrl}"
+  defer
+></script>`;
 
     return { embedCode: code, directLink: finalUrl };
   }, [agentProfile, publicUrl]);

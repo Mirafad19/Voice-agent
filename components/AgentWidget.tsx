@@ -322,6 +322,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   
   const isGreetingProtectedRef = useRef(false);
   const lastInterruptionTimeRef = useRef<number>(0);
+  const hasConversationStartedRef = useRef(false);
 
   const accentColorClass = agentProfile.accentColor;
 
@@ -927,6 +928,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
   const handleInterruption = useCallback(() => {
     isGreetingProtectedRef.current = false;
+    hasConversationStartedRef.current = true; // Mark that conversation started if interrupted
     shouldEndAfterSpeakingRef.current = false; // Reset auto-end on interruption
     lastInterruptionTimeRef.current = Date.now();
     activeAudioSourcesRef.current.forEach(source => {
@@ -971,6 +973,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     setVoiceReportingStatus('idle');
     setErrorMessage('');
     fullTranscriptRef.current = '';
+    hasConversationStartedRef.current = false;
     
     setPermissionRequested(true);
 
@@ -1046,83 +1049,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
     let greetingToSpeak = (agentProfile as AgentConfig).initialGreetingText || greeting;
 
-    if (activeDialect && activeDialect !== 'abroad-english') {
-        if (activeDialect === 'pidgin' && pidginGreeting) {
-            greetingToSpeak = pidginGreeting;
-        } else if (activeDialect === 'nigerian-english' && nigerianEnglishGreeting) {
-            greetingToSpeak = nigerianEnglishGreeting;
-        } else if (greeting) {
-            try {
-                const ai = new GoogleGenAI({ apiKey: effectiveApiKey });
-                const model = (ai as any).getGenerativeModel({ model: 'gemini-1.5-flash' });
-                
-                const prompt = activeDialect === 'pidgin' 
-                    ? `Translate the following greeting into hardcore, deep Nigerian Pidgin. Be real and authentic. KEEP the names "PSSDC" and "Oluwole" as they are. If it is already in Pidgin, return it as is. Only return the translated text: "${greeting}"`
-                    : `Translate the following greeting into warm and professional Nigerian English. Focus on warmth and respect. KEEP the names "PSSDC" and "Oluwole" exactly as they are. DO NOT change the structure if it is already professional. Only return the translated text: "${greeting}"`;
-
-                const result = await model.generateContent(prompt);
-                const translated = result.response.text().trim();
-                if (translated && translated.length > 2) {
-                    greetingToSpeak = translated;
-                }
-            } catch (e) {
-                console.error("Dialect greeting translation failed:", e);
-                // Fallbacks if model fails
-                if (activeDialect === 'pidgin') {
-                    greetingToSpeak = pidginGreeting || "Wetin de sup? My name na Oluwole from P-S-S-D-C Lagos. How I fit help you today?";
-                } else if (activeDialect === 'nigerian-english') {
-                    greetingToSpeak = nigerianEnglishGreeting || "Hello, thank you for calling the Public Service Staff Development Centre, P-S-S-D-C, Lagos. My name is Oluwole, your virtual assistant. How may I assist you today?";
-                }
-            }
-        }
-    }
-
-    const voiceToUse = 'Charon';
-
-    if (greetingToSpeak) {
-        isGreetingProtectedRef.current = true;
-        fullTranscriptRef.current = `Agent: ${greetingToSpeak}\n`;
-        
-        try {
-            const ai = new GoogleGenAI({ 
-                apiKey: effectiveApiKey
-            });
-            
-            // Add accent hint to prompt for standard Nigerian English to avoid "abroad" sound
-            const ttsPrompt = activeDialect === 'nigerian-english' 
-                ? `[PROFESSIONAL NIGERIAN ACCENT - LOCAL PRONUNCIATION] ${greetingToSpeak}` 
-                : greetingToSpeak;
-
-            const response = await ai.models.generateContent({
-                model: "gemini-2.5-flash-preview-tts",
-                contents: [{ parts: [{ text: ttsPrompt }] }],
-                config: {
-                    responseModalities: [Modality.AUDIO],
-                    speechConfig: {
-                        voiceConfig: {
-                            prebuiltVoiceConfig: { voiceName: voiceToUse },
-                        },
-                    },
-                },
-            });
-            const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-            if (base64Audio) {
-                const binaryString = atob(base64Audio);
-                const len = binaryString.length;
-                const bytes = new Uint8Array(len);
-                for (let i = 0; i < len; i++) {
-                    bytes[i] = binaryString.charCodeAt(i);
-                }
-                audioQueueRef.current.push(bytes);
-                recordingServiceRef.current?.addAgentAudioChunk(bytes);
-                playAudioQueue(true); 
-            }
-        } catch (error) {
-            console.error("Failed to generate greeting audio:", error);
-            isGreetingProtectedRef.current = false;
-        }
-    }
-
+    // Connect GeminiLiveService immediately in parallel to avoid connection delays
     geminiServiceRef.current = new GeminiLiveService(effectiveApiKey, agentProfile as AgentConfig, {
       onStateChange: (state) => {
         if (state === 'connected') {
@@ -1132,7 +1059,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             }
         }
         if (state === 'ended') {
-            // If it ends while still connecting, it's likely a network failure
             if (widgetStateRef.current === WidgetState.Connecting) {
                 setWidgetState(WidgetState.Error);
                 setErrorMessage("NETWORK ERROR: Connection Failed.");
@@ -1150,6 +1076,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
          
          if (type === 'input' && text.trim().length > 0) {
              resetSilenceTimer();
+             hasConversationStartedRef.current = true;
          }
          
         if (isFinal && type === 'output') {
@@ -1173,6 +1100,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         if (Date.now() - lastInterruptionTimeRef.current < 1500) {
             return;
         }
+        hasConversationStartedRef.current = true;
         audioQueueRef.current.push(chunk);
         recordingServiceRef.current?.addAgentAudioChunk(chunk);
         playAudioQueue();
@@ -1197,7 +1125,100 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         cleanupServices();
       },
     }, activeDialect as Dialect);
+
+    // Kicks off WebSocket handshaking instantly
     geminiServiceRef.current.connect(stream);
+
+    // Dynamic greeting translation and TTS generation runs in the background in parallel
+    (async () => {
+        try {
+            if (activeDialect && activeDialect !== 'abroad-english') {
+                if (activeDialect === 'pidgin' && pidginGreeting) {
+                    greetingToSpeak = pidginGreeting;
+                } else if (activeDialect === 'nigerian-english' && nigerianEnglishGreeting) {
+                    greetingToSpeak = nigerianEnglishGreeting;
+                } else if (greeting) {
+                    const ai = new GoogleGenAI({ apiKey: effectiveApiKey });
+                    const model = (ai as any).getGenerativeModel({ model: 'gemini-1.5-flash' });
+                    
+                    const prompt = activeDialect === 'pidgin' 
+                        ? `Translate the following greeting into hardcore, deep Nigerian Pidgin. Be real and authentic. KEEP the names "PSSDC" and "Oluwole" as they are. If it is already in Pidgin, return it as is. Only return the translated text: "${greeting}"`
+                        : `Translate the following greeting into warm and professional Nigerian English. Focus on warmth and respect. KEEP the names "PSSDC" and "Oluwole" exactly as they are. DO NOT change the structure if it is already professional. Only return the translated text: "${greeting}"`;
+
+                    const result = await model.generateContent(prompt);
+                    const translated = result.response.text().trim();
+                    if (translated && translated.length > 2) {
+                        greetingToSpeak = translated;
+                    }
+                }
+            }
+        } catch (e) {
+            console.error("Dialect greeting translation failed:", e);
+            if (activeDialect === 'pidgin') {
+                greetingToSpeak = pidginGreeting || "Wetin de sup? My name na Oluwole from P-S-S-D-C Lagos. How I fit help you today?";
+            } else if (activeDialect === 'nigerian-english') {
+                greetingToSpeak = nigerianEnglishGreeting || "Hello, thank you for calling the Public Service Staff Development Centre, P-S-S-D-C, Lagos. My name is Oluwole, your virtual assistant. How may I assist you today?";
+            }
+        }
+
+        // Fast safe exits if state closed in the meantime
+        if (widgetStateRef.current === WidgetState.Ended || widgetStateRef.current === WidgetState.Error || !mediaStreamRef.current) {
+            return;
+        }
+
+        const voiceToUse = 'Charon';
+
+        if (greetingToSpeak) {
+            isGreetingProtectedRef.current = true;
+            fullTranscriptRef.current = `Agent: ${greetingToSpeak}\n`;
+            
+            try {
+                const ai = new GoogleGenAI({ 
+                    apiKey: effectiveApiKey
+                });
+                
+                const ttsPrompt = activeDialect === 'nigerian-english' 
+                    ? `[PROFESSIONAL NIGERIAN ACCENT - LOCAL PRONUNCIATION] ${greetingToSpeak}` 
+                    : greetingToSpeak;
+
+                const response = await ai.models.generateContent({
+                    model: "gemini-2.5-flash-preview-tts",
+                    contents: [{ parts: [{ text: ttsPrompt }] }],
+                    config: {
+                        responseModalities: [Modality.AUDIO],
+                        speechConfig: {
+                            voiceConfig: {
+                                prebuiltVoiceConfig: { voiceName: voiceToUse },
+                            },
+                        },
+                    },
+                });
+
+                if (widgetStateRef.current === WidgetState.Ended || widgetStateRef.current === WidgetState.Error || !mediaStreamRef.current || hasConversationStartedRef.current) {
+                    return;
+                }
+
+                const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+                if (base64Audio) {
+                    if (hasConversationStartedRef.current) {
+                        return;
+                    }
+                    const binaryString = atob(base64Audio);
+                    const len = binaryString.length;
+                    const bytes = new Uint8Array(len);
+                    for (let i = 0; i < len; i++) {
+                        bytes[i] = binaryString.charCodeAt(i);
+                    }
+                    audioQueueRef.current.push(bytes);
+                    recordingServiceRef.current?.addAgentAudioChunk(bytes);
+                    playAudioQueue(true); 
+                }
+            } catch (error) {
+                console.error("Failed to generate greeting audio:", error);
+                isGreetingProtectedRef.current = false;
+            }
+        }
+    })();
   }, [apiKey, agentProfile, resetSilenceTimer, handleInterruption, isOnline, selectedDialect]);
 
   const endVoiceSession = useCallback(() => {
