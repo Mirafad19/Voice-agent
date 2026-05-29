@@ -75,13 +75,13 @@ export class GeminiLiveService {
       if (!this.mediaStream) throw new Error("No media stream");
       
       const effectiveGreeting = this.dialect === 'pidgin' 
-        ? (this.config.pidginGreeting || this.config.initialGreeting)
+        ? (this.config.pidginGreeting || this.config.initialGreetingText || this.config.initialGreeting)
         : this.dialect === 'nigerian-english'
-        ? (this.config.nigerianEnglishGreeting || this.config.initialGreeting)
-        : (this.config.initialGreeting);
+        ? (this.config.nigerianEnglishGreeting || this.config.initialGreetingText || this.config.initialGreeting)
+        : (this.config.initialGreetingText || this.config.initialGreeting);
 
       const greetingContext = effectiveGreeting 
-        ? `INITIALIZATION: You have just spoken the following greeting to the user: "${effectiveGreeting}". The user has heard this. Do NOT repeat it. Your goal is to WAIT for the user to reply to this greeting.` 
+        ? `INITIALIZATION: The user will speak first to start the call. When the user says something to initiate the conversation, your very first response MUST be to speak this exact voice greeting: "${effectiveGreeting}". You must deliver this greeting as your initial statement to the user, and then answer their question/statement in a natural flow. Do NOT say anything else before delivering this greeting.` 
         : `INITIALIZATION: Wait for the user to speak first.`;
 
       const tools: any[] = [];
