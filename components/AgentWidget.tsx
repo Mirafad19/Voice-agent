@@ -280,6 +280,9 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const [view, setView] = useState<ViewState>('home');
   const [showCallout, setShowCallout] = useState(false);
   const [permissionRequested, setPermissionRequested] = useState(false);
+  const [redirectingUrl, setRedirectingUrl] = useState<string | null>(null);
+  const [redirectingPageName, setRedirectingPageName] = useState<string | null>(null);
+  const [redirectCountdown, setRedirectCountdown] = useState(3);
   
   const [widgetState, _setWidgetState] = useState<WidgetState>(WidgetState.Idle);
   const widgetStateRef = useRef(widgetState);
@@ -388,6 +391,63 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
       if (conn) conn.removeEventListener('change', checkNetwork);
     };
   }, []);
+
+  // Restore persisted session from previous redirect refresh
+  useEffect(() => {
+    try {
+      const active = sessionStorage.getItem('voice_session_active');
+      const dialect = sessionStorage.getItem('voice_session_dialect') as Dialect | null;
+      if (active === 'true' && dialect) {
+        // Clear immediately so it doesn't loop forever if there's an error
+        sessionStorage.removeItem('voice_session_active');
+        
+        // Restore transcript history if exists
+        const oldTranscript = sessionStorage.getItem('voice_session_transcript');
+        if (oldTranscript) {
+          fullTranscriptRef.current = oldTranscript;
+        }
+
+        // Open widget
+        setIsOpen(true);
+        // Small delay to let audio and user interaction settle
+        setTimeout(() => {
+          setSelectedDialect(dialect);
+          startVoiceSession(dialect);
+        }, 1500);
+      }
+    } catch (e) {
+      console.error("Failed to restore session state:", e);
+    }
+  }, []);
+
+  // Redirect countdown handler
+  useEffect(() => {
+    if (!redirectingUrl) return;
+
+    if (redirectCountdown <= 0) {
+      // Trigger navigation in the parent frame, or locally if not in inside an iframe
+      const targetUrl = redirectingUrl;
+      setRedirectingUrl(null);
+      setRedirectingPageName(null);
+
+      // Clean up local mic and services safely before page reload
+      cleanupServices();
+
+      // Notify parent frame (embed.js) so it can redirect the top page
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: 'agent-navigate', url: targetUrl }, '*');
+      } else {
+        window.location.href = targetUrl;
+      }
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setRedirectCountdown(prev => prev - 1);
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [redirectingUrl, redirectCountdown]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -1081,13 +1141,22 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
          
         if (isFinal && type === 'output') {
           const lowerCaseText = text.toLowerCase();
-          const endKeywords = [
-            'goodbye', 'farewell', 'take care', 'talk to you later', 
-            'bye bye', 'bye', 'o dabo', 'oda bo', 'ese pupo',
-            'management will review', 'get back to you', 'check your appointment',
-            'have a wonderful day', 'have a great day'
+          // Use whole-word regex patterns to prevent false-positives like matching "nearby" with "bye".
+          // Normal middle-of-call helper phrases have been removed so the agent doesn't hang up mid-call.
+          const endPatterns = [
+            /\bgoodbye\b/,
+            /\bfarewell\b/,
+            /\btake care\b/,
+            /\btalk to you later\b/,
+            /\bbye\b/,
+            /\bbye bye\b/,
+            /\bo dabo\b/,
+            /\boda bo\b/,
+            /\bese pupo\b/,
+            /\bhave a wonderful day\b/,
+            /\bhave a great day\b/
           ];
-          if (endKeywords.some(keyword => lowerCaseText.includes(keyword))) {
+          if (endPatterns.some(pattern => pattern.test(lowerCaseText))) {
             shouldEndAfterSpeakingRef.current = true;
             if (activeAudioSourcesRef.current.size === 0 && audioQueueRef.current.length === 0) {
                 endVoiceSession();
@@ -1123,6 +1192,20 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         }
         setWidgetState(WidgetState.Error);
         cleanupServices();
+      },
+      onNavigate: (url, pageName) => {
+        setRedirectingUrl(url);
+        setRedirectingPageName(pageName);
+        setRedirectCountdown(3);
+        try {
+          sessionStorage.setItem('voice_session_active', 'true');
+          sessionStorage.setItem('voice_session_dialect', activeDialect);
+          if (fullTranscriptRef.current) {
+             sessionStorage.setItem('voice_session_transcript', fullTranscriptRef.current);
+          }
+        } catch (e) {
+          console.error("sessionStorage write failed", e);
+        }
       },
     }, activeDialect as Dialect);
 
@@ -1788,6 +1871,29 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
               {view === 'chat' && renderChatView()}
               {view === 'voice' && renderVoiceView()}
               {view === 'dialect' && renderDialectView()}
+
+              {redirectingUrl && (
+                <div className="absolute inset-0 z-[1000] flex flex-col items-center justify-center bg-gray-950/95 text-white p-6 text-center animate-fade-in backdrop-blur-md">
+                  <div className="relative w-24 h-24 mb-6 flex items-center justify-center">
+                    <svg className="absolute inset-0 w-full h-full text-gray-800" viewBox="0 0 36 36">
+                      <path className="text-gray-800" strokeWidth="3" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                      <path className={`text-accent-${accentColorClass} transition-all duration-1000`} strokeDasharray={`${(redirectCountdown / 3) * 100}, 100`} strokeWidth="3" strokeLinecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                    </svg>
+                    <span className="text-4xl font-extrabold text-white animate-pulse">{redirectCountdown}</span>
+                  </div>
+                  <h3 className="text-xl font-black mb-1 uppercase tracking-tight">Redirecting URL</h3>
+                  <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Going to: {redirectingPageName || 'Page'}</p>
+                  <p className="text-sm text-gray-300 font-medium px-4 max-w-xs">
+                    Please hold on as I open this page on the website. I will stay on this call with you!
+                  </p>
+                  <button 
+                    onClick={() => { setRedirectingUrl(null); setRedirectingPageName(null); }}
+                    className="mt-8 px-6 py-2.5 bg-white/10 hover:bg-white/20 transition-all rounded-full text-xs font-black uppercase tracking-widest active:scale-95 text-white/90 border border-white/20"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
           </div>
       </div>
       {!isWidgetMode && (

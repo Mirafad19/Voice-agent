@@ -14,6 +14,7 @@ interface Callbacks {
   onLocalInterruption?: () => void; 
   onError: (error: string) => void;
   onToolProcessing?: (isProcessing: boolean) => void;
+  onNavigate?: (url: string, pageName: string) => void;
 }
 
 function encode(bytes: Uint8Array): string {
@@ -84,7 +85,110 @@ export class GeminiLiveService {
         ? `INITIALIZATION: The user will speak first to start the call. When the user says something to initiate the conversation, your very first response MUST be to speak this exact voice greeting: "${effectiveGreeting}". You must deliver this greeting as your initial statement to the user, and then answer their question/statement in a natural flow. Do NOT say anything else before delivering this greeting.` 
         : `INITIALIZATION: Wait for the user to speak first.`;
 
-      const tools: any[] = [];
+      const isPssdc = this.config.name?.toLowerCase().includes('oluwole') || 
+                      this.config.name?.toLowerCase().includes('pssdc') ||
+                      this.config.knowledgeBase?.toLowerCase().includes('pssdc');
+
+      const tools: any[] = [
+        {
+          functionDeclarations: [
+            {
+              name: "navigateToUrl",
+              description: "Automatically navigates or redirects the user's web browser to an official page, section, or announcement of the website. Call this whenever the user expresses clear interest in seeing, visiting, opening, or reading a page, post, or section.",
+              parameters: {
+                type: Type.OBJECT,
+                properties: {
+                  url: {
+                    type: Type.STRING,
+                    description: "The exact official URL from the provided list to redirect the user to."
+                  },
+                  pageName: {
+                    type: Type.STRING,
+                    description: "The human-readable name of the webpage or article (e.g. 'LMS Portal', 'Contact Us Page', 'Lagos State News')."
+                  }
+                },
+                required: ["url", "pageName"]
+              }
+            }
+          ]
+        }
+      ];
+
+      const navInstruction = isPssdc ? `
+          NAVIGATION CAPABILITIES (CRITICAL RULE):
+          You have custom powers to automatically navigate the user's browser to any section, page, or article on the official PSSDC website when they ask for it.
+          Whenever a user specifies a target category, news topic, page, or says something like "take me to training materials", "show me the LMS", "open the contact page", "go to events", or "read the school retirement ceremony article", you MUST call the "navigateToUrl" tool immediately with the exact official URL from the list below.
+
+          Before calling the tool, say a brief polite confirmation (e.g., "Sure, let me take you to the learning management system portal right away" or "Alright, opening the sports news page now").
+
+          Use the following exact URLs based on their request:
+          - Homepage: https://pssdc.ng
+          - Events: https://pssdc.ng/category/pssdc-news/events
+          - General News: https://pssdc.ng/category/general-news
+          - Health & Lifestyle: https://pssdc.ng/category/health-lifestyle
+          - Lagos State News: https://pssdc.ng/category/lagos-state
+          - Learning & Development News: https://pssdc.ng/category/pssdc-news/learning-development
+          - Politics News: https://pssdc.ng/category/politics
+          - Sports News: https://pssdc.ng/category/sports
+          - Tech News: https://pssdc.ng/category/tech
+          - Leadership/DG Profile/Board: https://pssdc.ng/leadership
+          - LMS Portal/E-Learning Access: https://pssdc.ng/lms
+          - Training Materials/Slides/Downloads: https://pssdc.ng/training-materials
+          - Management Consultancy Services: https://pssdc.ng/management-consultancy
+          - Frequently Asked Questions (FAQ): https://pssdc.ng/faq
+          - Facility Hire/Lodge/Accommodation: https://pssdc.ng/facility-hire
+          - Contact Us page: https://pssdc.ng/contact
+          - Services List: https://pssdc.ng/services
+          - Learning & Development Courses: https://pssdc.ng/learning-and-development
+          - Research & Publications: https://pssdc.ng/research-and-publications
+          - LMS Courses list: https://pssdc.ng/courses-lms
+          - About Us/History/Vision: https://pssdc.ng/about
+          - Latest News Index: https://pssdc.ng/latest-news
+
+          For specific news announcements & blog posts:
+          - PSSDC collaboration for enhanced service delivery: https://pssdc.ng/pssdc-seeks-collaboration-for-enhanced-service-delivery
+          - Financial accountability as fundamental pillars of good governance: https://pssdc.ng/financial-accountability-and-transparency-are-fundamental-pillars-of-good-governance-dg-pssdc
+          - Emotional intelligence training: https://pssdc.ng/pssdc-trains-public-servants-on-emotional-intelligence
+          - Continuous assessment in learning approach: https://pssdc.ng/continuous-assessment-a-dynamic-approach-to-learning-dg
+          - Working to get results training: https://pssdc.ng/pssdc-trains-public-servants-on-working-to-get-results
+          - Retirement ceremony dedicated service celebration: https://pssdc.ng/pssdc-celebrates-dedicated-service-at-retirement-ceremony
+          - Eco-Learn Nigeria project launch: https://pssdc.ng/pssdc-launches-eco-learn-nigeria-project-in-collaboration-with-key-stakeholders
+          - LGA Certificate Course graduation of 135 participants: https://pssdc.ng/pssdc-graduates-135-participants-in-local-government-administration-certificate-course
+          - LGA Entrance Exam info: https://pssdc.ng/pssdc-conducts-entrance-examination-for-y2024-certificate-course-in-local-government-administration
+          - Duke and Duchess of Sussex reception in Lagos: https://pssdc.ng/gov-sanwo-olu-and-first-lady-dr-ibijoke-receive-duke-and-duchess-of-sussex
+          - Do not invest in fraudulent businesses: https://pssdc.ng/do-not-invest-in-fraudulent-businesses-hos
+          - Gov Sanwo-Olu pledges training investment: https://pssdc.ng/sanwo-olu-pledges-to-invest-in-workers-training
+          - Finidi George appointed Super Eagles coach: https://pssdc.ng/finidi-george-appointed-as-new-coach-of-the-super-eagles
+          - Ramadan Lecture (5th Annual): https://pssdc.ng/pssdc-muslim-community-holds-5th-annual-ramadan-lecture
+          - Train the trainers Kemrose collaboration: https://pssdc.ng/pssdc-collaborates-with-kemrose-to-train-trainers
+          - Evidence-based public policy: https://pssdc.ng/ensure-evidence-based-public-policy-dg-pssdc
+          - Training of 3000 public servants on digital literacy: https://pssdc.ng/lasg-trains-3000-public-servants-on-digital-literacy
+          - Landmark year of 2024 review: https://pssdc.ng/2024-a-landmark-year-for-pssdc-dg-adio-moses
+          - Christmas Carol theme: https://pssdc.ng/pssdc-hosts-joyous-2023-christmas-carol-with-the-theme-appreciating-the-king
+          - LNSA wins HOS cup: https://pssdc.ng/lnsa-wins-2nd-hos-cup-in-3-years
+          - Sports Commission collaboration with PSSDC: https://pssdc.ng/pssdc-welcomes-lagos-state-sports-commission-for-collaborative-sports-initiative
+          - Vibranium Valley visit: https://pssdc.ng/pssdc-visits-vibranium-valley
+          - Induction of Director-General into IARSA: https://pssdc.ng/dg-pssdc-inducted-as-a-fellow-of-iarsa
+          - Training of 5000 youth on tech up-skills with Learntor: https://pssdc.ng/pssdc-learntor-to-train-5000-youths-on-tech-up-skills
+          - Agile training for LASG executive officials: https://pssdc.ng/pssdc-learntor-hold-agile-training-for-lasg-executive-officials
+          - Agile Leadership in digital governance: https://pssdc.ng/navigating-the-future-agile-leadership-in-digital-governance
+          - Mrs. Obiwumi Temitope wins SpeakHers 2023 Speakathon: https://pssdc.ng/pssdc-faculty-member-mrs-obiwumi-temitope-emerges-as-a-winner-in-speakhers-2023-speakathon-speech-competition
+          - Conflict in the workplace tactics: https://pssdc.ng/conflict-in-the-workplace-top-tactics-every-young-adult-should-know
+          - Happy Teachers Day: https://pssdc.ng/happy-teachers-day
+          - Teachers urged to hope for better future: https://pssdc.ng/lasg-urges-teachers-to-hope-for-better-future
+          - Extra virgin olive oil disease protection: https://pssdc.ng/how-extra-virgin-olive-oil-protects-against-disease-risk-factors
+          - Independence Day statement: https://pssdc.ng/independence-day-nigeria-will-be-great-again-akpabio-abbas-makinde-sanwo-olu-tell-nigerians
+          - Judicial officers welfare: https://pssdc.ng/we-are-committed-to-judicial-officers-welfare-sanwo-olu
+          - Apple type-C connector news: https://pssdc.ng/apple-bows-to-eu-unveils-iphone-with-usb-c-charger
+          - Government ID verification on X: https://pssdc.ng/x-introduces-government-id-based-verification-for-paid-users
+          - Leandro Trossard strike news: https://pssdc.ng/leandro-trossard-strike-gives-gunners-points-after-gabriel-martinellis-disallowed-goal
+          - Collaboration as faculty of success: https://pssdc.ng/collaboration-a-faculty-of-success
+          - Noise and education perspective: https://pssdc.ng/noise-and-education-a-perspective
+          - Public Service Staff induction course details: https://pssdc.ng/lagos-state-government-the-public-service-staff-induction-course
+          - CPS social media team visibility: https://pssdc.ng/lagos-state-governors-cps-trained-the-pssdc-social-media-team-on-managing-social-media-for-better-visibility-in-the-21st-century
+          - Courtesy visit to Netherlands consulate: https://pssdc.ng/dg-pssdc-paid-a-courtesy-visit-to-netherlands-consulate-in-lagos
+          - CSR Impact story (TechUp Boys): https://pssdc.ng/pssdc-csr-impact-story-techup-boys-initiative-transforming-young-lives-in-education-district-i
+      ` : '';
 
       const dialectInstruction = this.dialect === 'pidgin'
         ? "LANGUAGE & STYLE: Speak strictly in hardcore Nigerian Pidgin. Be authentic and raw. Use deep Pidgin phrases like 'Wetin de sup?', 'Abeg', 'I de for you'. Avoid sounding formal. Your tone should be friendly and relatable."
@@ -128,7 +232,9 @@ export class GeminiLiveService {
           - Never mention being an AI or LLM.
           - If the information exists in your knowledge base, you MUST provide the complete, detailed answer. Do not summarize or shorten information unless specifically asked to be brief. 
           - Be conversational but professional. If you are asked about the "guest lodge" or "training programmes", give a full overview based on the knowledge base.
-          - For data gathering (like bookings), ask exactly one question at a time and wait for the user to finish.`,
+          - For data gathering (like bookings), ask exactly one question at a time and wait for the user to finish.
+          
+          ${navInstruction}`,
           inputAudioTranscription: {},
           outputAudioTranscription: {},
         },
@@ -263,7 +369,38 @@ export class GeminiLiveService {
     }
 
     if (message.toolCall) {
-        // Not implemented (booking functionality removed)
+      const functionCalls = (message.toolCall as any).functionCalls;
+      if (functionCalls && functionCalls.length > 0) {
+        const call = functionCalls[0];
+        if (call.name === 'navigateToUrl') {
+          const url = call.args.url;
+          const pageName = call.args.pageName;
+          
+          if (url && typeof url === 'string') {
+            this.callbacks.onNavigate?.(url, pageName || 'Page');
+          }
+          
+          // Send response back immediately to keep Gemini session in a healthy state
+          if (this.sessionPromise) {
+            this.sessionPromise.then(session => {
+              try {
+                (session as any).send({
+                  toolResponse: {
+                    functionResponses: [
+                      {
+                        response: { output: { success: true, message: `Redirecting to ${pageName}` } },
+                        id: call.id
+                      }
+                    ]
+                  }
+                });
+              } catch (err) {
+                console.error("Error sending tool response:", err);
+              }
+            });
+          }
+        }
+      }
     }
     
     if (message.serverContent?.outputTranscription) {

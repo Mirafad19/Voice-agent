@@ -46,6 +46,11 @@
     window.addEventListener('message', function(event) {
         if (event.source !== iframe.contentWindow) return;
         
+        if (event.data && event.data.type === 'agent-navigate') {
+            window.location.href = event.data.url;
+            return;
+        }
+        
         if (event.data && event.data.type === 'agent-widget-resize') {
             var isMobile = window.innerWidth < 768;
             var isOpen = event.data.isOpen;
