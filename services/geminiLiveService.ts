@@ -355,10 +355,11 @@ export class GeminiLiveService {
         }
       };
       
-      // Delay streaming audio and setting state to 'connected' by 1200ms
-      // to let the WebSocket handshake register and warm up the Gemini Live Model.
-      // This prevents audio packet flooding and ensures the very first spoken word
-      // is captured clearly and gets a fast response.
+      // Delay streaming audio and setting state to 'connected' by 8000ms
+      // as requested. This holds the "Connecting..." state for a solid 8 seconds
+      // to let the WebSocket handshake fully register, authenticate, and warm up
+      // the Gemini Live Model. This prevents packet floods or dropped initial words,
+      // guaranteeing that the agent is fully initialized before showing "Speak Now, Listening...".
       this.connectTimeoutId = setTimeout(() => {
         if (this.mediaStreamSource && this.scriptProcessor && this.inputAudioContext) {
           try {
@@ -369,7 +370,7 @@ export class GeminiLiveService {
             console.error("Failed to connect delayed audio process:", e);
           }
         }
-      }, 1200);
+      }, 8000);
     } catch (err) {
       this.handleError(err instanceof Error ? `Microphone error: ${err.message}` : "Failed to access microphone.");
     }
