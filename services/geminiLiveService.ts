@@ -51,6 +51,7 @@ export class GeminiLiveService {
   private readonly FRAMES_FOR_INTERRUPTION = 2; // ~50ms of sustained speech
   private reconnectAttempts = 0;
   private readonly MAX_RECONNECT_ATTEMPTS = 3;
+  private connectTimeoutId: any = null;
 
   constructor(apiKey: string, config: AgentConfig, callbacks: Callbacks, dialect: Dialect = 'abroad-english') {
     this.ai = new GoogleGenAI({ 
@@ -354,10 +355,21 @@ export class GeminiLiveService {
         }
       };
       
-      this.mediaStreamSource.connect(this.scriptProcessor);
-      this.scriptProcessor.connect(this.inputAudioContext.destination);
-      
-      this.setState('connected');
+      // Delay streaming audio and setting state to 'connected' by 1200ms
+      // to let the WebSocket handshake register and warm up the Gemini Live Model.
+      // This prevents audio packet flooding and ensures the very first spoken word
+      // is captured clearly and gets a fast response.
+      this.connectTimeoutId = setTimeout(() => {
+        if (this.mediaStreamSource && this.scriptProcessor && this.inputAudioContext) {
+          try {
+            this.mediaStreamSource.connect(this.scriptProcessor);
+            this.scriptProcessor.connect(this.inputAudioContext.destination);
+            this.setState('connected');
+          } catch (e) {
+            console.error("Failed to connect delayed audio process:", e);
+          }
+        }
+      }, 1200);
     } catch (err) {
       this.handleError(err instanceof Error ? `Microphone error: ${err.message}` : "Failed to access microphone.");
     }
@@ -454,6 +466,10 @@ export class GeminiLiveService {
   }
 
   private cleanup() {
+    if (this.connectTimeoutId) {
+        clearTimeout(this.connectTimeoutId);
+        this.connectTimeoutId = null;
+    }
     this.scriptProcessor?.disconnect();
     this.mediaStreamSource?.disconnect();
     this.analyser?.disconnect();

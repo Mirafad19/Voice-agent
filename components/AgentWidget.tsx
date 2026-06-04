@@ -1778,7 +1778,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
             <p className={`text-xl font-black h-10 mb-2 break-words max-w-full px-6 text-center uppercase tracking-tight ${!isOnline && widgetState === WidgetState.Error ? 'text-red-600' : 'text-gray-900 dark:text-white'}`}>
                 {widgetState === WidgetState.Connecting && "Connecting..."}
-                {widgetState === WidgetState.Listening && "Listening..."}
+                {widgetState === WidgetState.Listening && "Speak Now, Listening..."}
                 {widgetState === WidgetState.Speaking && "Speaking..."}
                 {widgetState === WidgetState.Error && (errorMessage || "Connection Error")}
                 {widgetState === WidgetState.Ended && "Session Ended"}
