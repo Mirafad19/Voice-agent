@@ -216,7 +216,7 @@ export const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({
               placeholder="e.g., Hello, thank you for calling..."
             />
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              Spoken for Nigerian Standard English style.
+              Spoken for Nigerian English style.
             </p>
           </div>
           <div>

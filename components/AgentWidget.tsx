@@ -1495,7 +1495,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                         </svg>
                     </div>
                     <div className="text-left">
-                        <h3 className="font-black text-gray-900 dark:text-white uppercase tracking-tighter">Nigerian Standard English</h3>
+                        <h3 className="font-black text-gray-900 dark:text-white uppercase tracking-tighter">Nigerian English</h3>
                         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-0.5">Professional • Respectful • Local</p>
                     </div>
                 </button>
@@ -1531,7 +1531,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                         <span className="text-2xl">🌐</span>
                     </div>
                     <div className="text-left">
-                        <h3 className="font-black text-gray-900 dark:text-white uppercase tracking-tighter">Abroad Standard English</h3>
+                        <h3 className="font-black text-gray-900 dark:text-white uppercase tracking-tighter">British English</h3>
                         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-0.5">International • Formal • Neutral</p>
                     </div>
                 </button>
@@ -1685,7 +1685,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                                 onClick={() => handleSelectDialectInChat('abroad-english')}
                                 className="flex items-center gap-3 p-3 rounded-xl bg-sky-50 dark:bg-sky-900/20 border border-sky-100 dark:border-sky-800 text-sky-700 dark:text-sky-400 hover:bg-sky-100 transition-colors text-sm font-black uppercase tracking-tighter"
                               >
-                                  <span>🌐</span> Abroad English
+                                  <span>🌐</span> British English
                               </button>
                           </div>
                       </div>
