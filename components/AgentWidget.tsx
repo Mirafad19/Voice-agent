@@ -1102,12 +1102,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     recordingServiceRef.current = new RecordingService(handleVoiceSessionEnd);
     await recordingServiceRef.current.start(stream);
 
-    const greeting = (agentProfile as AgentConfig).initialGreeting;
-    const pidginGreeting = (agentProfile as AgentConfig).pidginGreeting;
-    const nigerianEnglishGreeting = (agentProfile as AgentConfig).nigerianEnglishGreeting;
     const effectiveApiKey = apiKey || process.env.GEMINI_API_KEY || 'dummy';
-
-    let greetingToSpeak = (agentProfile as AgentConfig).initialGreetingText || greeting;
 
     // Connect GeminiLiveService immediately in parallel to avoid connection delays
     geminiServiceRef.current = new GeminiLiveService(effectiveApiKey, agentProfile as AgentConfig, {
@@ -1212,8 +1207,8 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     // Kicks off WebSocket handshaking instantly
     geminiServiceRef.current.connect(stream);
 
-    // No client-side pre-generated greeting playback because user speaks first.
-    // The greeting is delivered naturally by the Gemini Live Model during its very first response.
+    // The greeting is triggered automatically by GeminiLiveService immediately
+    // after the WebSocket stabilises (~500ms). No action needed here.
   }, [apiKey, agentProfile, resetSilenceTimer, handleInterruption, isOnline, selectedDialect]);
 
   const endVoiceSession = useCallback(() => {

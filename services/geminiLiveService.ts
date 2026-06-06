@@ -34,6 +34,16 @@ export class GeminiLiveService {
   private callbacks: Callbacks;
   private dialect: Dialect;
   
+  // Store the effective greeting as an instance property so it is accessible
+  // inside handleSessionOpen (which has no access to the internalConnect scope).
+  private effectiveGreeting: string = '';
+
+  // ── CRITICAL FIX: Gates all audio sending until the session is truly ready.
+  // Without this flag, onaudioprocess queues hundreds of .then() callbacks
+  // during the WebSocket handshake. When the promise finally resolves they all
+  // fire at once, flooding the server and causing the "forever connecting" bug.
+  private audioStreamingEnabled = false;
+
   private session: LiveSession | null = null;
   private sessionPromise: Promise<LiveSession> | null = null;
   
@@ -76,15 +86,21 @@ export class GeminiLiveService {
     try {
       if (!this.mediaStream) throw new Error("No media stream");
       
-      const effectiveGreeting = this.dialect === 'pidgin' 
-        ? (this.config.pidginGreeting || this.config.initialGreetingText || this.config.initialGreeting)
-        : this.dialect === 'nigerian-english'
-        ? (this.config.nigerianEnglishGreeting || this.config.initialGreetingText || this.config.initialGreeting)
-        : (this.config.initialGreetingText || this.config.initialGreeting);
+      this.effectiveGreeting = (
+        this.dialect === 'pidgin'
+          ? (this.config.pidginGreeting || this.config.initialGreetingText || this.config.initialGreeting)
+          : this.dialect === 'nigerian-english'
+          ? (this.config.nigerianEnglishGreeting || this.config.initialGreetingText || this.config.initialGreeting)
+          : (this.config.initialGreetingText || this.config.initialGreeting)
+      ) || '';
 
-      const greetingContext = effectiveGreeting 
-        ? `INITIALIZATION: The user will speak first to start the call. When the user says something to initiate the conversation, your very first response MUST be to speak this exact voice greeting: "${effectiveGreeting}". You must deliver this greeting as your initial statement to the user, and then answer their question/statement in a natural flow. Do NOT say anything else before delivering this greeting.` 
-        : `INITIALIZATION: Wait for the user to speak first.`;
+      const greetingContext = this.effectiveGreeting 
+        ? `INITIALIZATION: When you receive the system trigger "[START_CONVERSATION]", \
+immediately begin speaking your greeting out loud: "${this.effectiveGreeting}". \
+Deliver it naturally, as if starting a professional phone call. \
+After finishing the greeting, stop speaking and wait for the user to respond. \
+Do NOT say anything before or after the greeting until the user speaks.` 
+        : `INITIALIZATION: When you receive "[START_CONVERSATION]", warmly greet the caller and ask how you can help.`;
 
       const isPssdc = this.config.name?.toLowerCase().includes('oluwole') || 
                       this.config.name?.toLowerCase().includes('pssdc') ||
@@ -325,6 +341,15 @@ export class GeminiLiveService {
             this.speechDetectedFrameCount = 0;
         }
 
+        // ── GATE: Only stream audio to Gemini after audioStreamingEnabled ──
+        //
+        // CRITICAL: Without this gate, every onaudioprocess call (every ~128ms)
+        // queues a sessionPromise.then() callback while the WebSocket is still
+        // handshaking. When the promise resolves, ALL those callbacks fire at
+        // once, flooding the Gemini server with hundreds of stale audio chunks.
+        // The server rejects or drops the connection, causing "forever connecting".
+        if (!this.audioStreamingEnabled || !this.sessionPromise) return;
+
         const int16 = new Int16Array(l);
         for (let i = 0; i < l; i++) {
           let s = Math.max(-1, Math.min(1, inputData[i]));
@@ -340,7 +365,6 @@ export class GeminiLiveService {
         if (this.sessionPromise) {
             this.sessionPromise.then((session) => {
                 // Using raw send to ensure we use the 'audio' field instead of deprecated 'media_chunks'
-                // Some SDK versions might still be using the deprecated field in sendRealtimeInput
                 try {
                     (session as any).send({
                         realtimeInput: {
@@ -355,22 +379,45 @@ export class GeminiLiveService {
         }
       };
       
-      // Delay streaming audio and setting state to 'connected' by 8000ms
-      // as requested. This holds the "Connecting..." state for a solid 8 seconds
-      // to let the WebSocket handshake fully register, authenticate, and warm up
-      // the Gemini Live Model. This prevents packet floods or dropped initial words,
-      // guaranteeing that the agent is fully initialized before showing "Speak Now, Listening...".
-      this.connectTimeoutId = setTimeout(() => {
-        if (this.mediaStreamSource && this.scriptProcessor && this.inputAudioContext) {
-          try {
-            this.mediaStreamSource.connect(this.scriptProcessor);
-            this.scriptProcessor.connect(this.inputAudioContext.destination);
-            this.setState('connected');
-          } catch (e) {
-            console.error("Failed to connect delayed audio process:", e);
-          }
+      // Connect the audio pipeline RIGHT NOW so mic audio flows to Gemini
+      // immediately. This prevents any cold start/idle delays.
+      if (this.mediaStreamSource && this.scriptProcessor && this.inputAudioContext) {
+        try {
+          this.mediaStreamSource.connect(this.scriptProcessor);
+          this.scriptProcessor.connect(this.inputAudioContext.destination);
+        } catch (e) {
+          console.error("Failed to connect audio process:", e);
         }
-      }, 8000);
+      }
+
+      // 500ms stabilisation buffer — just enough time for the WebSocket
+      // handshake to fully settle before we start driving the conversation.
+      this.connectTimeoutId = setTimeout(() => {
+        if (!this.mediaStreamSource || !this.scriptProcessor || !this.inputAudioContext) return;
+
+        // Enable audio streaming NOW so cleanly synchronized frames flow to Gemini
+        this.audioStreamingEnabled = true;
+
+        // Mark the connection as ready. AgentWidget will show "Listening..."
+        // but this is only momentary — greeting audio arrives within ~1s.
+        this.setState('connected');
+
+        // Immediately fire the greeting trigger to start the conversation automatically
+        this.sessionPromise?.then(session => {
+          try {
+            (session as any).send({
+              clientContent: {
+                turns: [{ role: 'user', parts: [{ text: '[START_CONVERSATION]' }] }],
+                turnComplete: true
+              }
+            });
+          } catch (triggerError) {
+            console.error("Failed to send greeting trigger:", triggerError);
+            // Non-fatal: fallback to calling sendText directly
+            this.sendText('[START_CONVERSATION]');
+          }
+        });
+      }, 500); // ← 500ms vs the original 8000ms
     } catch (err) {
       this.handleError(err instanceof Error ? `Microphone error: ${err.message}` : "Failed to access microphone.");
     }
@@ -467,6 +514,7 @@ export class GeminiLiveService {
   }
 
   private cleanup() {
+    this.audioStreamingEnabled = false; // ← reset gate on every cleanup
     if (this.connectTimeoutId) {
         clearTimeout(this.connectTimeoutId);
         this.connectTimeoutId = null;
