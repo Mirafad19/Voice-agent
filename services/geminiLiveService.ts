@@ -34,9 +34,11 @@ export class GeminiLiveService {
   private callbacks: Callbacks;
   private dialect: Dialect;
   
-  // Store the effective greeting as an instance property so it is accessible
-  // inside handleSessionOpen (which has no access to the internalConnect scope).
-  private effectiveGreeting: string = '';
+  // ── CRITICAL FIX: Gates all audio sending until the session is truly ready.
+  // Without this flag, onaudioprocess queues hundreds of .then() callbacks
+  // during the WebSocket handshake. When the promise finally resolves they all
+  // fire at once, flooding the server and causing the "forever connecting" bug.
+  private audioStreamingEnabled = false;
 
   private session: LiveSession | null = null;
   private sessionPromise: Promise<LiveSession> | null = null;
@@ -80,21 +82,12 @@ export class GeminiLiveService {
     try {
       if (!this.mediaStream) throw new Error("No media stream");
       
-      this.effectiveGreeting = (
-        this.dialect === 'pidgin'
-          ? (this.config.pidginGreeting || this.config.initialGreetingText || this.config.initialGreeting)
-          : this.dialect === 'nigerian-english'
-          ? (this.config.nigerianEnglishGreeting || this.config.initialGreetingText || this.config.initialGreeting)
-          : (this.config.initialGreetingText || this.config.initialGreeting)
-      ) || '';
-
-      const greetingContext = this.effectiveGreeting 
-        ? `INITIALIZATION: When you receive the system trigger "[START_CONVERSATION]", \
-immediately begin speaking your greeting out loud: "${this.effectiveGreeting}". \
-Deliver it naturally, as if starting a professional phone call. \
-After finishing the greeting, stop speaking and wait for the user to respond. \
-Do NOT say anything before or after the greeting until the user speaks.` 
-        : `INITIALIZATION: When you receive "[START_CONVERSATION]", warmly greet the caller and ask how you can help.`;
+      const greetingContext = `INITIALIZATION: When you receive the system trigger "[START_CONVERSATION]", \
+immediately begin speaking your initial opening greeting naturally, as if starting a professional phone call. \
+Your greeting should reflect your identity, role, and any specific greeting or introduction instructions defined in your KNOWLEDGE BASE. \
+Keep the greeting extremely brief, clear, and direct. \
+Speak in your designated language dialect: ${this.dialect}. \
+After delivering the greeting, stop speaking immediately and wait for the user to respond. Do NOT say anything else until they speak.`;
 
       const isPssdc = this.config.name?.toLowerCase().includes('oluwole') || 
                       this.config.name?.toLowerCase().includes('pssdc') ||
@@ -335,6 +328,15 @@ Do NOT say anything before or after the greeting until the user speaks.`
             this.speechDetectedFrameCount = 0;
         }
 
+        // ── GATE: Only stream audio to Gemini after audioStreamingEnabled ──
+        //
+        // CRITICAL: Without this gate, every onaudioprocess call (every ~128ms)
+        // queues a sessionPromise.then() callback while the WebSocket is still
+        // handshaking. When the promise resolves, ALL those callbacks fire at
+        // once, flooding the Gemini server with hundreds of stale audio chunks.
+        // The server rejects or drops the connection, causing "forever connecting".
+        if (!this.audioStreamingEnabled || !this.sessionPromise) return;
+
         const int16 = new Int16Array(l);
         for (let i = 0; i < l; i++) {
           let s = Math.max(-1, Math.min(1, inputData[i]));
@@ -350,7 +352,6 @@ Do NOT say anything before or after the greeting until the user speaks.`
         if (this.sessionPromise) {
             this.sessionPromise.then((session) => {
                 // Using raw send to ensure we use the 'audio' field instead of deprecated 'media_chunks'
-                // Some SDK versions might still be using the deprecated field in sendRealtimeInput
                 try {
                     (session as any).send({
                         realtimeInput: {
@@ -380,6 +381,9 @@ Do NOT say anything before or after the greeting until the user speaks.`
       // handshake to fully settle before we start driving the conversation.
       this.connectTimeoutId = setTimeout(() => {
         if (!this.mediaStreamSource || !this.scriptProcessor || !this.inputAudioContext) return;
+
+        // Enable audio streaming NOW so cleanly synchronized frames flow to Gemini
+        this.audioStreamingEnabled = true;
 
         // Mark the connection as ready. AgentWidget will show "Listening..."
         // but this is only momentary — greeting audio arrives within ~1s.
@@ -497,6 +501,7 @@ Do NOT say anything before or after the greeting until the user speaks.`
   }
 
   private cleanup() {
+    this.audioStreamingEnabled = false; // ← reset gate on every cleanup
     if (this.connectTimeoutId) {
         clearTimeout(this.connectTimeoutId);
         this.connectTimeoutId = null;
