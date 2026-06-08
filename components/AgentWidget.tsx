@@ -491,7 +491,10 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         }
 
         const ai = new GoogleGenAI({ 
-            apiKey: apiKey || 'dummy'
+            apiKey: apiKey || 'dummy',
+            httpOptions: {
+                baseUrl: window.location.origin
+            }
         });
         
         let contents;
@@ -514,7 +517,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         
         try {
             const response = await ai.models.generateContent({
-                model: "gemini-3-flash-preview",
+                model: "gemini-3.5-flash",
                 contents: contents,
                 config: {
                     responseMimeType: "application/json",
@@ -573,7 +576,10 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             const config = agentProfile as AgentConfig;
             const effectiveApiKey = apiKey || process.env.GEMINI_API_KEY || 'dummy';
             const ai = new GoogleGenAI({ 
-                apiKey: effectiveApiKey
+                apiKey: effectiveApiKey,
+                httpOptions: {
+                    baseUrl: window.location.origin
+                }
             });
             
             const isPssdc = config.name.toLowerCase().includes('pssdc');
@@ -641,7 +647,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             `;
             
             chatSessionRef.current = ai.chats.create({
-                model: 'gemini-3-flash-preview',
+                model: 'gemini-3.5-flash',
                 config: { 
                     systemInstruction,
                 }
@@ -674,7 +680,10 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     const config = agentProfile as AgentConfig;
     const effectiveApiKey = apiKey || process.env.GEMINI_API_KEY || 'dummy';
     const ai = new GoogleGenAI({ 
-        apiKey: effectiveApiKey
+        apiKey: effectiveApiKey,
+        httpOptions: {
+            baseUrl: window.location.origin
+        }
     });
     
     const isPssdc = config.name.toLowerCase().includes('pssdc');
@@ -742,7 +751,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     `;
     
     chatSessionRef.current = ai.chats.create({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-3.5-flash',
         config: { 
             systemInstruction,
         }

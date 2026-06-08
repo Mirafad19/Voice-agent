@@ -61,7 +61,10 @@ export class GeminiLiveService {
 
   constructor(apiKey: string, config: AgentConfig, callbacks: Callbacks, dialect: Dialect = 'abroad-english') {
     this.ai = new GoogleGenAI({ 
-      apiKey: apiKey || 'dummy'
+      apiKey: apiKey || 'dummy',
+      httpOptions: {
+        baseUrl: window.location.origin
+      }
     });
     this.config = config;
     this.callbacks = callbacks;

@@ -21,8 +21,14 @@ async function startServer() {
     pathFilter: ['/v1alpha', '/v1beta', '/ws'],
     pathRewrite: (path, req) => {
       if (!apiKey) return path;
-      const separator = path.includes('?') ? '&' : '?';
-      return `${path}${separator}key=${apiKey}`;
+      try {
+        const url = new URL(path, 'https://generativelanguage.googleapis.com');
+        url.searchParams.set('key', apiKey);
+        return url.pathname + url.search;
+      } catch (err) {
+        const separator = path.includes('?') ? '&' : '?';
+        return `${path}${separator}key=${apiKey}`;
+      }
     },
     router: (req) => {
       if (req.headers.upgrade && req.headers.upgrade.toLowerCase() === 'websocket') {
@@ -32,10 +38,14 @@ async function startServer() {
     },
     on: {
       proxyReq: (proxyReq, req, res) => {
-        proxyReq.removeHeader('x-goog-api-key');
+        if (apiKey) {
+          proxyReq.setHeader('x-goog-api-key', apiKey);
+        }
       },
       proxyReqWs: (proxyReq, req, socket, options, head) => {
-        proxyReq.removeHeader('x-goog-api-key');
+        if (apiKey) {
+          proxyReq.setHeader('x-goog-api-key', apiKey);
+        }
       },
       error: (err, req, res) => {
         console.error('Proxy error:', err);
@@ -60,8 +70,12 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on http://localhost:${PORT}`);
+  });
+
+  server.on('upgrade', (req, socket, head) => {
+    geminiProxy.upgrade(req, socket as any, head);
   });
 }
 
