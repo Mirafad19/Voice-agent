@@ -326,6 +326,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   const isGreetingProtectedRef = useRef(false);
   const lastInterruptionTimeRef = useRef<number>(0);
   const hasConversationStartedRef = useRef(false);
+  const userHasSpokenRef = useRef(false);
 
   const accentColorClass = agentProfile.accentColor;
 
@@ -1023,6 +1024,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
     setView('voice');
     shouldEndAfterSpeakingRef.current = false;
+    userHasSpokenRef.current = false;
     setWidgetState(WidgetState.Connecting);
     setVoiceReportingStatus('idle');
     setErrorMessage('');
@@ -1126,6 +1128,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
          if (type === 'input' && text.trim().length > 0) {
              resetSilenceTimer();
              hasConversationStartedRef.current = true;
+             userHasSpokenRef.current = true;
          }
          
         if (isFinal && type === 'output') {
@@ -1145,7 +1148,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             /\bhave a wonderful day\b/,
             /\bhave a great day\b/
           ];
-          if (endPatterns.some(pattern => pattern.test(lowerCaseText))) {
+          if (userHasSpokenRef.current && endPatterns.some(pattern => pattern.test(lowerCaseText))) {
             shouldEndAfterSpeakingRef.current = true;
             if (activeAudioSourcesRef.current.size === 0 && audioQueueRef.current.length === 0) {
                 endVoiceSession();
