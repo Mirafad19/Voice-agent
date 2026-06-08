@@ -249,7 +249,7 @@ After delivering the greeting, stop speaking immediately and wait for the user t
           },
           onmessage: (message: LiveServerMessage) => this.handleSessionMessage(message),
           onerror: (e: ErrorEvent) => this.handleNetworkError(e),
-          onclose: () => this.handleSessionClose(),
+          onclose: (e?: any) => this.handleSessionClose(e),
         },
       });
       this.session = await this.sessionPromise;
@@ -271,15 +271,15 @@ After delivering the greeting, stop speaking immediately and wait for the user t
   public sendText(text: string) {
       if (this.sessionPromise) {
           this.sessionPromise.then(session => {
-              (session as any).send({
-                  clientContent: {
-                      turns: [{
-                          role: 'user',
-                          parts: [{ text }]
-                      }],
-                      turnComplete: true
-                  }
+              session.sendClientContent({
+                  turns: [{
+                      role: 'user',
+                      parts: [{ text }]
+                  }],
+                  turnComplete: true
               });
+          }).catch(err => {
+              console.error("sendText failed:", err);
           });
       }
   }
@@ -350,35 +350,20 @@ After delivering the greeting, stop speaking immediately and wait for the user t
         };
 
         if (this.session) {
-            // Using raw send to ensure we use the 'audio' field instead of deprecated 'media_chunks'
             try {
-                (this.session as any).send({
-                    realtimeInput: {
-                        audio: pcmBlob
-                    }
-                });
-            } catch (e) {
-                // Fallback to sendRealtimeInput if raw send fails
-                try {
-                    this.session.sendRealtimeInput({ audio: pcmBlob });
-                } catch (err) {
-                    // Fail-safe fallback to sessionPromise if needed
-                    this.sessionPromise?.then((session) => {
-                        session.sendRealtimeInput({ audio: pcmBlob });
-                    });
-                }
+                this.session.sendRealtimeInput({ audio: pcmBlob });
+            } catch (err) {
+                console.error("sendRealtimeInput direct failed:", err);
             }
         } else if (this.sessionPromise) {
             this.sessionPromise.then((session) => {
                 try {
-                    (session as any).send({
-                        realtimeInput: {
-                            audio: pcmBlob
-                        }
-                    });
-                } catch (e) {
                     session.sendRealtimeInput({ audio: pcmBlob });
+                } catch (e) {
+                    console.error("sendRealtimeInput promised failed:", e);
                 }
+            }).catch(err => {
+                console.error("sessionPromise failed to resolve for audio chunk:", err);
             });
         }
       };
@@ -409,17 +394,17 @@ After delivering the greeting, stop speaking immediately and wait for the user t
         // Immediately fire the greeting trigger to start the conversation automatically
         this.sessionPromise?.then(session => {
           try {
-            (session as any).send({
-              clientContent: {
-                turns: [{ role: 'user', parts: [{ text: '[START_CONVERSATION]' }] }],
-                turnComplete: true
-              }
+            session.sendClientContent({
+              turns: [{ role: 'user', parts: [{ text: '[START_CONVERSATION]' }] }],
+              turnComplete: true
             });
           } catch (triggerError) {
             console.error("Failed to send greeting trigger:", triggerError);
             // Non-fatal: fallback to calling sendText directly
             this.sendText('[START_CONVERSATION]');
           }
+        }).catch(err => {
+          console.error("sessionPromise failed to resolve for greeting trigger:", err);
         });
       }, 500); // ← 500ms vs the original 8000ms
     } catch (err) {
@@ -448,19 +433,20 @@ After delivering the greeting, stop speaking immediately and wait for the user t
           if (this.sessionPromise) {
             this.sessionPromise.then(session => {
               try {
-                (session as any).send({
-                  toolResponse: {
-                    functionResponses: [
-                      {
-                        response: { output: { success: true, message: `Redirecting to ${pageName}` } },
-                        id: call.id
-                      }
-                    ]
-                  }
+                session.sendToolResponse({
+                  functionResponses: [
+                    {
+                      name: 'navigateToUrl',
+                      response: { output: { success: true, message: `Redirecting to ${pageName}` } },
+                      id: call.id
+                    }
+                  ]
                 });
               } catch (err) {
                 console.error("Error sending tool response:", err);
               }
+            }).catch(err => {
+              console.error("sessionPromise failed to resolve for tool response:", err);
             });
           }
         }
@@ -500,7 +486,12 @@ After delivering the greeting, stop speaking immediately and wait for the user t
     }
   }
 
-  private handleSessionClose() {
+  private handleSessionClose(e?: any) {
+    if (e) {
+      console.warn(`WebSocket Session Closed cleanly: ${e.wasClean}, Code: ${e.code}, Reason: ${e.reason}`);
+    } else {
+      console.warn("WebSocket Session Closed.");
+    }
     this.setState('ended');
     this.cleanup();
   }
