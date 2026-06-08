@@ -18,16 +18,31 @@ async function startServer() {
     target: 'https://generativelanguage.googleapis.com',
     changeOrigin: true,
     ws: true,
-    pathFilter: ['/v1alpha', '/v1beta', '/ws'],
+    pathFilter: (pathname, req) => {
+      const cleanPath = pathname.replace(/^\/+/, '/');
+      const isMatch = cleanPath.startsWith('/v1alpha') || cleanPath.startsWith('/v1beta') || cleanPath.startsWith('/ws');
+      if (isMatch) {
+        console.log(`[Proxy Match] Path: ${pathname} -> Cleaned: ${cleanPath} | Upgrade: ${req.headers.upgrade || 'none'}`);
+      }
+      return isMatch;
+    },
     pathRewrite: (path, req) => {
-      if (!apiKey) return path;
+      const cleanPath = path.replace(/^\/+/, '/');
+      if (!apiKey) {
+        console.log(`[Proxy Rewrite] Path: ${path} -> Cleaned: ${cleanPath} (No API key)`);
+        return cleanPath;
+      }
       try {
-        const url = new URL(path, 'https://generativelanguage.googleapis.com');
+        const url = new URL(cleanPath, 'https://generativelanguage.googleapis.com');
         url.searchParams.set('key', apiKey);
-        return url.pathname + url.search;
+        const rewritten = url.pathname + url.search;
+        console.log(`[Proxy Rewrite] Path: ${path} -> Cleaned: ${cleanPath} -> Rewritten with API key`);
+        return rewritten;
       } catch (err) {
-        const separator = path.includes('?') ? '&' : '?';
-        return `${path}${separator}key=${apiKey}`;
+        const separator = cleanPath.includes('?') ? '&' : '?';
+        const rewritten = `${cleanPath}${separator}key=${apiKey}`;
+        console.log(`[Proxy Rewrite Error-Fallback] Path: ${path} -> Cleaned: ${cleanPath} -> Rewritten: ${rewritten}`);
+        return rewritten;
       }
     },
     router: (req) => {
@@ -43,6 +58,7 @@ async function startServer() {
         }
       },
       proxyReqWs: (proxyReq, req, socket, options, head) => {
+        console.log(`[Proxy WS Connect] Handshake URL: ${req.url}`);
         if (apiKey) {
           proxyReq.setHeader('x-goog-api-key', apiKey);
         }
