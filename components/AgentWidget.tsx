@@ -491,10 +491,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         }
 
         const ai = new GoogleGenAI({ 
-            apiKey: apiKey || 'dummy',
-            httpOptions: {
-                baseUrl: window.location.origin
-            }
+            apiKey: apiKey || 'dummy'
         });
         
         let contents;
@@ -576,10 +573,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             const config = agentProfile as AgentConfig;
             const effectiveApiKey = apiKey || process.env.GEMINI_API_KEY || 'dummy';
             const ai = new GoogleGenAI({ 
-                apiKey: effectiveApiKey,
-                httpOptions: {
-                    baseUrl: window.location.origin
-                }
+                apiKey: effectiveApiKey
             });
             
             const isPssdc = config.name.toLowerCase().includes('pssdc');
@@ -680,10 +674,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     const config = agentProfile as AgentConfig;
     const effectiveApiKey = apiKey || process.env.GEMINI_API_KEY || 'dummy';
     const ai = new GoogleGenAI({ 
-        apiKey: effectiveApiKey,
-        httpOptions: {
-            baseUrl: window.location.origin
-        }
+        apiKey: effectiveApiKey
     });
     
     const isPssdc = config.name.toLowerCase().includes('pssdc');
@@ -727,12 +718,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         ? "LANGUAGE & STYLE: Use Nigerian Standard English. Be professional, warm, and polite. Do NOT use 'Sir' or 'Ma'. Ensure you sound professional but avoiding being overly repetitive with phrases like 'You're welcome'. Focus on being helpful and direct."
         : "LANGUAGE & STYLE: Use a standard international professional English tone.";
 
-    const effectiveGreeting = selectedDialect === 'pidgin' 
-        ? (config.pidginGreeting || config.initialGreeting)
-        : selectedDialect === 'nigerian-english'
-        ? (config.nigerianEnglishGreeting || config.initialGreeting)
-        : (config.initialGreetingText || config.initialGreeting);
-
     const systemInstruction = `
     IDENTITY: You are ${config.name}. Act as a helpful and professional representative. Never ever mention that you are an AI, a large language model, or built by Google. If asked 'What are you?' or 'Who are you?', respond exclusively as the official assistant of ${config.name}. Your responses must strictly reflect this identity at all times.
     
@@ -743,7 +728,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     
     CRITICAL OPERATIONAL RULES:
     - Today's date is ${new Date().toISOString().split('T')[0]}.
-    - INITIAL GREETING: Your first words should be: "${effectiveGreeting || 'Hello, thank you for calling...' }". Do not add anything else to the start.
+    - INITIAL GREETING: Welcome the user naturally according to your role, dialect, and any greeting or introduction guidelines present in your KNOWLEDGE BASE.
     - INFORMATION RETRIEVAL: If asked for contact details or specific information, consult your knowledge base. Do not use external or hardcoded info.
     - DATA GATHERING FLOW: If you need to collect multiple pieces of information (e.g., for a booking or registration), ASK ONLY ONE QUESTION AT A TIME. Wait for the user's response before asking the next question.
     - THOROUGHNESS: Be detailed and comprehensive. If the information is in your knowledge base, provide the FULL answer. Do not give short or lazy responses.
@@ -758,7 +743,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     });
 
     setChatStarted(true);
-    const welcomeText = selectedDialect === 'pidgin' ? (config.pidginGreeting || config.initialGreetingText || config.initialGreeting) : selectedDialect === 'nigerian-english' ? (config.nigerianEnglishGreeting || config.initialGreetingText || config.initialGreeting) : (config.initialGreetingText || config.initialGreeting);
+    const welcomeText = config.initialGreetingText || '';
     
     if (initialMessage) {
         // If user started with a message, don't show a pre-filled welcome bubble
