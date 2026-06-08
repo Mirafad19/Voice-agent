@@ -201,7 +201,7 @@ After delivering the greeting, stop speaking immediately and wait for the user t
         : "LANGUAGE & STYLE: Use a standard international professional English tone.";
 
       this.sessionPromise = this.ai.live.connect({
-        model: 'gemini-2.0-flash-exp',
+        model: 'gemini-3.1-flash-live-preview',
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: {

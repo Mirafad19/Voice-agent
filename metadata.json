@@ -3,5 +3,8 @@
   "description": "A versatile multilingual AI assistant for professional organizations.",
   "requestFramePermissions": [
     "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
   ]
 }
