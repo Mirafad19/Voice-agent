@@ -201,7 +201,7 @@ After delivering the greeting, stop speaking immediately and wait for the user t
         : "LANGUAGE & STYLE: Use a standard international professional English tone.";
 
       this.sessionPromise = this.ai.live.connect({
-        model: 'gemini-2.0-flash-live-001',
+        model: 'gemini-2.0-flash-exp',
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: {
@@ -489,6 +489,10 @@ After delivering the greeting, stop speaking immediately and wait for the user t
   private handleSessionClose(e?: any) {
     if (e) {
       console.warn(`WebSocket Session Closed cleanly: ${e.wasClean}, Code: ${e.code}, Reason: ${e.reason}`);
+      if (e.code && e.code !== 1000 && e.code !== 1001 && e.code !== 1005) {
+        this.handleError(`Connection Closed (Code ${e.code}): ${e.reason || 'Authentication failed, invalid model/API key, or network issue.'}`);
+        return;
+      }
     } else {
       console.warn("WebSocket Session Closed.");
     }

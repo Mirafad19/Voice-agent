@@ -1180,7 +1180,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         if (!navigator.onLine) {
             setIsOnline(false);
         } else {
-            setErrorMessage("NETWORK ERROR: Check Connection.");
+            setErrorMessage(error || "NETWORK ERROR: Check Connection.");
         }
         setWidgetState(WidgetState.Error);
         cleanupServices();
