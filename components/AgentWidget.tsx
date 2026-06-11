@@ -98,6 +98,79 @@ const XIcon = ({className = "h-6 w-6"}) => (
     </svg>
 );
 
+const renderMessageText = (text: string, accentClass: string) => {
+    const lines = text.split('\n');
+    return lines.map((line, lineIdx) => {
+        const bulletMatch = line.match(/^(\s*)([-*]|\d+\.)\s+(.*)$/);
+        
+        let contentToParse = line;
+        let isListItem = false;
+        let listPrefix = '';
+        
+        if (bulletMatch) {
+            isListItem = true;
+            listPrefix = bulletMatch[2];
+            contentToParse = bulletMatch[3];
+        }
+
+        let parts: React.ReactNode[] = [];
+        const boldRegex = /\*\*([^*]+)\*\*/g;
+        let match;
+        let lastIndex = 0;
+        let partIdx = 0;
+
+        while ((match = boldRegex.exec(contentToParse)) !== null) {
+            const before = contentToParse.substring(lastIndex, match.index);
+            if (before) {
+                parts.push(<span key={`text-${partIdx++}`}>{before}</span>);
+            }
+            parts.push(
+               <strong key={`bold-${partIdx++}`} className="font-bold text-gray-900 border-b border-gray-100 dark:border-gray-800 dark:text-white">
+                   {match[1]}
+               </strong>
+            );
+            lastIndex = boldRegex.lastIndex;
+        }
+        
+        const remaining = contentToParse.substring(lastIndex);
+        if (remaining) {
+            parts.push(<span key={`text-${partIdx++}`}>{remaining}</span>);
+        }
+
+        const finalContent = parts.length > 0 ? parts : contentToParse;
+
+        if (isListItem) {
+            const isNumbered = /^\d+/.test(listPrefix);
+            return (
+                <div key={lineIdx} className="flex items-start gap-2.5 my-2 ml-2 pl-2 border-l-2 border-dashed border-gray-200 dark:border-gray-700">
+                    {isNumbered ? (
+                        <span className={`font-black text-xs text-accent-${accentClass} flex-shrink-0 mt-[2px] min-w-[14px]`}>
+                            {listPrefix}
+                        </span>
+                    ) : (
+                        <span className={`w-1.5 h-1.5 rounded-full bg-accent-${accentClass} mt-[9px] flex-shrink-0 shadow-sm`} />
+                    )}
+                    <span className="flex-1 text-gray-800 dark:text-gray-200 leading-normal text-[15px]">
+                        {finalContent}
+                    </span>
+                </div>
+            );
+        }
+
+        if (line.trim() === '') {
+            return <div key={lineIdx} className="h-2" />;
+        }
+
+        const isHeader = line.startsWith('**') && line.endsWith('**') && !line.includes(' ', line.length - 3);
+
+        return (
+            <p key={lineIdx} className={`my-1 text-gray-700 dark:text-gray-300 leading-relaxed text-[15px] ${isHeader ? 'mt-4 mb-2 font-bold text-gray-950 dark:text-white' : ''}`}>
+                {finalContent}
+            </p>
+        );
+    });
+};
+
 const DynamicOrb = ({ state, accentColor }: { state: WidgetState, accentColor: string }) => {
   const isSpeaking = state === WidgetState.Speaking;
   const isListening = state === WidgetState.Listening;
@@ -639,7 +712,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             - DATA GATHERING FLOW: If you need to collect multiple pieces of information (e.g., for a booking or registration), ASK ONLY ONE QUESTION AT A TIME. Wait for the user's response before asking the next question.
             - THOROUGHNESS: Be detailed and comprehensive. If the information is in your knowledge base, provide the FULL answer. Do not give short or lazy responses.
             - TOPIC FOCUS: Keep the conversation focused strictly on the topics provided in your knowledge base. If the user asks for things outside your scope (like lodge booking or hospital appointments, unless specified in the knowledge base), politely decline and redirect them.
-            - FORMATTING SHIELD (CRITICAL OPERATIONAL RULE): NEVER use any markdown, HTML, or formatting symbols (such as asterisks *, hash signs #, emojis, bullet points, numbers, dashes, bold, italic, or lists) in your responses. Speak entirely in plain, continuous, natural conversational text. Every utterance must be pure conversational prose with absolutely no special markup tags or bullet characters. This is a strict operational constraint.
+            - FORMATTING: Use clean, professional markdown formatting for your responses. When giving structured lists or detailed points, use bold headings enclosed in double-asterisks (e.g., "**Section Name**") and bullet points (starting each point with "- " or numbers) so that the response is highly readable, neatly styled, and easy to scan for the user. Avoid rendering giant walls of plain prose.
             `;
             
             chatSessionRef.current = ai.chats.create({
@@ -735,7 +808,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     - DATA GATHERING FLOW: If you need to collect multiple pieces of information (e.g., for a booking or registration), ASK ONLY ONE QUESTION AT A TIME. Wait for the user's response before asking the next question.
     - THOROUGHNESS: Be detailed and comprehensive. If the information is in your knowledge base, provide the FULL answer. Do not give short or lazy responses.
     - TOPIC FOCUS: Keep the conversation focused strictly on the topics provided in your knowledge base. If the user asks for things outside your scope (like lodge booking or hospital appointments, unless specified in the knowledge base), politely decline and redirect them.
-    - FORMATTING SHIELD (CRITICAL OPERATIONAL RULE): NEVER use any markdown, HTML, or formatting symbols (such as asterisks *, hash signs #, emojis, bullet points, numbers, dashes, bold, italic, or lists) in your responses. Speak entirely in plain, continuous, natural conversational text. Every utterance must be pure conversational prose with absolutely no special markup tags or bullet characters. This is a strict operational constraint.
+    - FORMATTING: Use clean, professional markdown formatting for your responses. When giving structured lists or detailed points, use bold headings enclosed in double-asterisks (e.g., "**Section Name**") and bullet points (starting each point with "- " or numbers) so that the response is highly readable, neatly styled, and easy to scan for the user. Avoid rendering giant walls of plain prose.
     `;
     
     chatSessionRef.current = ai.chats.create({
@@ -1634,7 +1707,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
                             ? `bg-accent-${accentColorClass} text-white rounded-br-none font-bold` 
                             : 'bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 text-gray-800 dark:text-gray-200 rounded-bl-none font-semibold'
                         }`}>
-                            {msg.text}
+                            {renderMessageText(msg.text, accentColorClass)}
                             <span className={`text-[10px] block text-right mt-1 opacity-70 font-black ${isUser ? 'text-white/80' : 'text-gray-400'}`}>
                                 {msg.timestamp ? msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                             </span>
