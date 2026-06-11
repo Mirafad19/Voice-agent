@@ -32,9 +32,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }, 5000);
 
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       clearTimeout(timeoutId);
-      setUser(user);
+      if (currentUser) {
+        const email = (currentUser.email || '').toLowerCase();
+        const isAllowedDomain = email.endsWith('@pssdc.ng');
+        const isAllowedDeveloper = email === 'fadahunsi.miracle@gmail.com';
+        const isAllowedOfficialGmail = email === 'lspssdc.ng@gmail.com';
+
+        if (isAllowedDomain || isAllowedDeveloper || isAllowedOfficialGmail) {
+          setUser(currentUser);
+          setError(null);
+        } else {
+          try {
+            await signOut(auth);
+          } catch (err) {
+            console.error('Error signing out unauthorized user:', err);
+          }
+          setUser(null);
+          setError('Access Denied: Only PSSDC accounts (@pssdc.ng) and authorized developers can access this dashboard.');
+        }
+      } else {
+        setUser(null);
+      }
       setLoading(false);
     });
     return () => {
@@ -47,7 +67,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const provider = new GoogleAuthProvider();
     setError(null);
     try {
-      await signInWithPopup(auth, provider);
+      const result = await signInWithPopup(auth, provider);
+      const email = (result.user?.email || '').toLowerCase();
+      const isAllowedDomain = email.endsWith('@pssdc.ng');
+      const isAllowedDeveloper = email === 'fadahunsi.miracle@gmail.com';
+      const isAllowedOfficialGmail = email === 'lspssdc.ng@gmail.com';
+
+      if (!isAllowedDomain && !isAllowedDeveloper && !isAllowedOfficialGmail) {
+        await signOut(auth);
+        setUser(null);
+        setError('Access Denied: Only PSSDC accounts (@pssdc.ng) and authorized developers can access this dashboard.');
+      }
     } catch (err: any) {
       console.error('Login failed:', err);
       setError(err.message || 'Login failed. Please try again.');
