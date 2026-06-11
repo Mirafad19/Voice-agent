@@ -639,6 +639,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             - DATA GATHERING FLOW: If you need to collect multiple pieces of information (e.g., for a booking or registration), ASK ONLY ONE QUESTION AT A TIME. Wait for the user's response before asking the next question.
             - THOROUGHNESS: Be detailed and comprehensive. If the information is in your knowledge base, provide the FULL answer. Do not give short or lazy responses.
             - TOPIC FOCUS: Keep the conversation focused strictly on the topics provided in your knowledge base. If the user asks for things outside your scope (like lodge booking or hospital appointments, unless specified in the knowledge base), politely decline and redirect them.
+            - FORMATTING SHIELD (CRITICAL OPERATIONAL RULE): NEVER use any markdown, HTML, or formatting symbols (such as asterisks *, hash signs #, emojis, bullet points, numbers, dashes, bold, italic, or lists) in your responses. Speak entirely in plain, continuous, natural conversational text. Every utterance must be pure conversational prose with absolutely no special markup tags or bullet characters. This is a strict operational constraint.
             `;
             
             chatSessionRef.current = ai.chats.create({
@@ -734,6 +735,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     - DATA GATHERING FLOW: If you need to collect multiple pieces of information (e.g., for a booking or registration), ASK ONLY ONE QUESTION AT A TIME. Wait for the user's response before asking the next question.
     - THOROUGHNESS: Be detailed and comprehensive. If the information is in your knowledge base, provide the FULL answer. Do not give short or lazy responses.
     - TOPIC FOCUS: Keep the conversation focused strictly on the topics provided in your knowledge base. If the user asks for things outside your scope (like lodge booking or hospital appointments, unless specified in the knowledge base), politely decline and redirect them.
+    - FORMATTING SHIELD (CRITICAL OPERATIONAL RULE): NEVER use any markdown, HTML, or formatting symbols (such as asterisks *, hash signs #, emojis, bullet points, numbers, dashes, bold, italic, or lists) in your responses. Speak entirely in plain, continuous, natural conversational text. Every utterance must be pure conversational prose with absolutely no special markup tags or bullet characters. This is a strict operational constraint.
     `;
     
     chatSessionRef.current = ai.chats.create({

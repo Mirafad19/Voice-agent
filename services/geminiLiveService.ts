@@ -89,7 +89,7 @@ Keep the greeting extremely brief, clear, and direct. \
 Speak in your designated language dialect: ${this.dialect}. \
 After delivering the greeting, stop speaking immediately and wait for the user to respond. Do NOT say anything else until they speak.`;
 
-      const isPssdc = this.config.name?.toLowerCase().includes('oluwole') || 
+      const isPssdc = this.config.name?.toLowerCase().includes('Amoye') || 
                       this.config.name?.toLowerCase().includes('pssdc') ||
                       this.config.knowledgeBase?.toLowerCase().includes('pssdc');
 
@@ -231,7 +231,7 @@ After delivering the greeting, stop speaking immediately and wait for the user t
           KNOWLEDGE BASE:
           ${this.config.knowledgeBase}
           
-          IDENTITY: You are ${this.config.name}. If your name is "Oluwole", act as the official virtual assistant for the Public Service Staff Development Centre (PSSDC), Lagos. 
+          IDENTITY: You are ${this.config.name}. If your name is "Amoye", act as the official virtual assistant for the Public Service Staff Development Centre (PSSDC), Lagos. 
           
           CRITICAL BEHAVIOR:
           - Never mention being an AI or LLM.
