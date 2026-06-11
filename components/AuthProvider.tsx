@@ -50,7 +50,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             console.error('Error signing out unauthorized user:', err);
           }
           setUser(null);
-          setError('Access Denied: Only PSSDC accounts (@pssdc.ng) and authorized developers can access this dashboard.');
+          setError('Access Denied: Only authorised accounts can access this dashboard.');
         }
       } else {
         setUser(null);
@@ -76,7 +76,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!isAllowedDomain && !isAllowedDeveloper && !isAllowedOfficialGmail) {
         await signOut(auth);
         setUser(null);
-        setError('Access Denied: Only PSSDC accounts (@pssdc.ng) and authorized developers can access this dashboard.');
+        setError('Access Denied: Only authorised accounts can access this dashboard.');
       }
     } catch (err: any) {
       console.error('Login failed:', err);
