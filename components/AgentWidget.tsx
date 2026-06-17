@@ -588,7 +588,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         
         try {
             const response = await ai.models.generateContent({
-                model: "gemini-3.5-flash",
+                model: "gemini-2.5-flash",
                 contents: contents,
                 config: {
                     responseMimeType: "application/json",
@@ -716,7 +716,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             `;
             
             chatSessionRef.current = ai.chats.create({
-                model: 'gemini-3.5-flash',
+                model: 'gemini-2.5-flash',
                 config: { 
                     systemInstruction,
                 }
@@ -812,7 +812,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     `;
     
     chatSessionRef.current = ai.chats.create({
-        model: 'gemini-3.5-flash',
+        model: 'gemini-2.5-flash',
         config: { 
             systemInstruction,
         }
