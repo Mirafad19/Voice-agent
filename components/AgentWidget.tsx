@@ -736,24 +736,49 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         - FORMATTING: Use clean, professional markdown formatting for your responses. When giving structured lists or detailed points, use bold headings enclosed in double-asterisks (e.g., "**Section Name**") and bullet points (starting each point with "- " or numbers) so that the response is highly readable, neatly styled, and easy to scan for the user. Avoid rendering giant walls of plain prose.
         `;
 
-        const response = await fetch('/api/chat', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                messages: updatedMessages,
-                systemInstruction
-            })
-        });
+        const maxRetries = 3;
+        let lastError: any = null;
+        let botResponse = "";
 
-        if (!response.ok) {
-            const errBody = await response.json().catch(() => ({}));
-            throw new Error(errBody.error || `HTTP error ${response.status}`);
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        messages: updatedMessages,
+                        systemInstruction
+                    })
+                });
+
+                if (!response.ok) {
+                    const errBody = await response.json().catch(() => ({}));
+                    throw new Error(errBody.error || `HTTP error ${response.status}`);
+                }
+
+                const data = await response.json();
+                botResponse = data.text || "No response received";
+                
+                // If we successfully got a response, break out of retry loop
+                lastError = null;
+                break;
+            } catch (err: any) {
+                console.warn(`Chat attempt ${attempt} of ${maxRetries} failed:`, err);
+                lastError = err;
+                
+                if (attempt < maxRetries) {
+                    // Exponential backoff: attempt 1 -> 1500ms, attempt 2 -> 3000ms
+                    const waitTime = attempt * 1500;
+                    await new Promise(resolve => setTimeout(resolve, waitTime));
+                }
+            }
         }
 
-        const data = await response.json();
-        const botResponse = data.text || "No response received";
+        if (lastError) {
+            throw lastError;
+        }
 
         setMessages(prev => [...prev, { role: 'model', text: botResponse, timestamp: new Date() }]);
     } catch (e) {
