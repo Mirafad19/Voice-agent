@@ -11,7 +11,60 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  app.use(express.json());
+
   const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+
+  // Groq Chat API route
+  app.post('/api/chat', async (req, res) => {
+    const { messages, systemInstruction } = req.body;
+    const groqApiKey = process.env.GROQ_API_KEY;
+
+    if (!groqApiKey) {
+      console.warn("GROQ_API_KEY is not defined in the environment.");
+      return res.status(500).json({ error: "Groq API Key is missing. Please set GROQ_API_KEY in the environment." });
+    }
+
+    const groqMessages = [
+      { role: 'system', content: systemInstruction || '' }
+    ];
+
+    if (Array.isArray(messages)) {
+      messages.forEach((msg) => {
+        const role = msg.role === 'model' ? 'assistant' : 'user';
+        groqMessages.push({ role, content: msg.text || '' });
+      });
+    }
+
+    try {
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${groqApiKey}`
+        },
+        body: JSON.stringify({
+          model: "llama-3.1-8b-instant",
+          messages: groqMessages,
+          temperature: 0.7,
+          max_completion_tokens: 2048,
+        })
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        console.error("Groq API error response:", errText);
+        return res.status(response.status).json({ error: `Groq error: ${errText}` });
+      }
+
+      const data = (await response.json()) as any;
+      const modelResponse = data.choices?.[0]?.message?.content || "";
+      return res.json({ text: modelResponse });
+    } catch (err: any) {
+      console.error("Failed to query Groq API:", err);
+      return res.status(500).json({ error: err.message || "Unknown error calling Groq API" });
+    }
+  });
 
   // Proxy Gemini API requests
   const geminiProxy = createProxyMiddleware({
