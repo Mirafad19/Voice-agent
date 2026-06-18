@@ -11,7 +11,40 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+  // Collect all server-side Gemini API Keys
+  const serverKeys: string[] = [];
+
+  // 1. Check GEMINI_API_KEYS (comma-separated list)
+  if (process.env.GEMINI_API_KEYS) {
+    process.env.GEMINI_API_KEYS.split(',').forEach(k => {
+      const trimmed = k.trim();
+      if (trimmed) serverKeys.push(trimmed);
+    });
+  }
+
+  // 2. Check numbered GEMINI_API_KEY_1 through GEMINI_API_KEY_5
+  for (let i = 1; i <= 5; i++) {
+    const key = process.env[`GEMINI_API_KEY_${i}`];
+    if (key && key.trim()) {
+      serverKeys.push(key.trim());
+    }
+  }
+
+  // 3. Fallback to standard env variables
+  const defaultKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+  if (defaultKey && defaultKey.trim() && !serverKeys.includes(defaultKey.trim())) {
+    serverKeys.push(defaultKey.trim());
+  }
+
+  console.log(`[Server Pool] Loaded ${serverKeys.length} Gemini API keys for rotating proxies.`);
+
+  let keyIndex = 0;
+  const getRotatedServerKey = (): string => {
+    if (serverKeys.length === 0) return '';
+    const key = serverKeys[keyIndex];
+    keyIndex = (keyIndex + 1) % serverKeys.length;
+    return key;
+  };
 
   // Proxy Gemini API requests
   const geminiProxy = createProxyMiddleware({
@@ -28,20 +61,23 @@ async function startServer() {
     },
     pathRewrite: (path, req) => {
       const cleanPath = path.replace(/^\/+/, '/');
-      if (!apiKey) {
-        console.log(`[Proxy Rewrite] Path: ${path} -> Cleaned: ${cleanPath} (No API key)`);
+      const activeKey = getRotatedServerKey();
+      if (!activeKey) {
+        console.warn(`[Proxy Rewrite] No Gemini API keys found configured on this server! Path: ${cleanPath}`);
         return cleanPath;
       }
+      
       try {
+        // Parse incoming query params and inject rotating key
         const url = new URL(cleanPath, 'https://generativelanguage.googleapis.com');
-        url.searchParams.set('key', apiKey);
+        url.searchParams.set('key', activeKey);
         const rewritten = url.pathname + url.search;
-        console.log(`[Proxy Rewrite] Path: ${path} -> Cleaned: ${cleanPath} -> Rewritten with API key`);
+        console.log(`[Proxy Rewrite] Rotating to server key ${activeKey.substring(0, 10)}...`);
         return rewritten;
       } catch (err) {
         const separator = cleanPath.includes('?') ? '&' : '?';
-        const rewritten = `${cleanPath}${separator}key=${apiKey}`;
-        console.log(`[Proxy Rewrite Error-Fallback] Path: ${path} -> Cleaned: ${cleanPath} -> Rewritten: ${rewritten}`);
+        const rewritten = `${cleanPath}${separator}key=${activeKey}`;
+        console.log(`[Proxy Rewrite Fallback] Rotating to server key ${activeKey.substring(0, 10)}... (Fallback url builder)`);
         return rewritten;
       }
     },
@@ -53,14 +89,33 @@ async function startServer() {
     },
     on: {
       proxyReq: (proxyReq, req, res) => {
-        if (apiKey) {
-          proxyReq.setHeader('x-goog-api-key', apiKey);
+        // Extract key from rewritten path to match header and query params
+        try {
+          const urlObj = new URL(proxyReq.path, 'https://localhost');
+          const keyInPath = urlObj.searchParams.get('key');
+          if (keyInPath) {
+            proxyReq.setHeader('x-goog-api-key', keyInPath);
+          }
+        } catch (e) {
+          const fallbackKey = getRotatedServerKey();
+          if (fallbackKey) {
+            proxyReq.setHeader('x-goog-api-key', fallbackKey);
+          }
         }
       },
       proxyReqWs: (proxyReq, req, socket, options, head) => {
         console.log(`[Proxy WS Connect] Handshake URL: ${req.url}`);
-        if (apiKey) {
-          proxyReq.setHeader('x-goog-api-key', apiKey);
+        try {
+          const urlObj = new URL(req.url || '', 'https://localhost');
+          const keyInPath = urlObj.searchParams.get('key');
+          if (keyInPath) {
+            proxyReq.setHeader('x-goog-api-key', keyInPath);
+          }
+        } catch (e) {
+          const fallbackKey = getRotatedServerKey();
+          if (fallbackKey) {
+            proxyReq.setHeader('x-goog-api-key', fallbackKey);
+          }
         }
       },
       error: (err, req, res) => {

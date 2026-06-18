@@ -1,6 +1,7 @@
 
 import { GoogleGenAI, Modality, LiveServerMessage, Type, FunctionDeclaration } from '@google/genai';
 import { AgentConfig } from '../types';
+import { KeyRotator } from './keyRotator';
 
 type LiveSession = Awaited<ReturnType<InstanceType<typeof GoogleGenAI>['live']['connect']>>;
 
@@ -60,8 +61,9 @@ export class GeminiLiveService {
   private connectTimeoutId: any = null;
 
   constructor(apiKey: string, config: AgentConfig, callbacks: Callbacks, dialect: Dialect = 'abroad-english') {
+    const effectiveKey = KeyRotator.getNextKey() || apiKey || 'dummy';
     this.ai = new GoogleGenAI({ 
-      apiKey: apiKey || 'dummy'
+      apiKey: effectiveKey
     });
     this.config = config;
     this.callbacks = callbacks;
@@ -89,7 +91,7 @@ Keep the greeting extremely brief, clear, and direct. \
 Speak in your designated language dialect: ${this.dialect}. \
 After delivering the greeting, stop speaking immediately and wait for the user to respond. Do NOT say anything else until they speak.`;
 
-      const isPssdc = this.config.name?.toLowerCase().includes('Amoye') || 
+      const isPssdc = this.config.name?.toLowerCase().includes('oluwole') || 
                       this.config.name?.toLowerCase().includes('pssdc') ||
                       this.config.knowledgeBase?.toLowerCase().includes('pssdc');
 
@@ -231,7 +233,7 @@ After delivering the greeting, stop speaking immediately and wait for the user t
           KNOWLEDGE BASE:
           ${this.config.knowledgeBase}
           
-          IDENTITY: You are ${this.config.name}. If your name is "Amoye", act as the official virtual assistant for the Public Service Staff Development Centre (PSSDC), Lagos. 
+          IDENTITY: You are ${this.config.name}. If your name is "Oluwole", act as the official virtual assistant for the Public Service Staff Development Centre (PSSDC), Lagos. 
           
           CRITICAL BEHAVIOR:
           - Never mention being an AI or LLM.
@@ -260,6 +262,16 @@ After delivering the greeting, stop speaking immediately and wait for the user t
   }
 
   private handleNetworkError(e: any) {
+    // Report connection error to mark the current utilized key as failed/cooldown
+    const activeKeys = KeyRotator.getKeys();
+    if (activeKeys.length > 1) {
+      console.warn("[GeminiLiveService] Connection issue detected. Swapping to a different API key from the rotation pool...");
+      const nextKey = KeyRotator.getNextKey();
+      if (nextKey) {
+        this.ai = new GoogleGenAI({ apiKey: nextKey });
+      }
+    }
+
     if (this.reconnectAttempts < this.MAX_RECONNECT_ATTEMPTS) {
         this.reconnectAttempts++;
         console.warn(`Attempting reconnection ${this.reconnectAttempts}...`);

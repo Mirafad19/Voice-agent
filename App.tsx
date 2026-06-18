@@ -2,6 +2,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useAgentProfiles } from './hooks/useAgentProfiles';
+import { KeyRotator } from './services/keyRotator';
 import { ConfigurationPanel } from './components/ConfigurationPanel';
 import { RecordingService } from './components/RecordingsPanel';
 import { EmbedCodeModal } from './components/EmbedCodeModal';
@@ -80,12 +81,19 @@ const DashboardContent: React.FC = () => {
 
     useEffect(() => {
         const checkApiKey = async () => {
-            if (window.aistudio) {
+            const keys = KeyRotator.getKeys();
+            if (keys.length > 0) {
+                setHasGeminiKey(true);
+            } else if (window.aistudio) {
                 const hasKey = await window.aistudio.hasSelectedApiKey();
                 setHasGeminiKey(hasKey);
+            } else {
+                setHasGeminiKey(false);
             }
         };
+        window.addEventListener('storage', checkApiKey);
         checkApiKey();
+        return () => window.removeEventListener('storage', checkApiKey);
     }, []);
 
     const handleConnectGemini = async () => {

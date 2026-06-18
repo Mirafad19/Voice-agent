@@ -9,6 +9,7 @@ import { GoogleGenAI, Type, Modality, Chat, FunctionDeclaration } from '@google/
 import * as bookingService from '../services/bookingService';
 import { blobToBase64 } from '../utils';
 import { decodePcmChunk } from '../utils/audio';
+import { KeyRotator } from '../services/keyRotator';
 
 interface AgentWidgetProps {
   agentProfile: AgentProfile | AgentConfig;
@@ -564,8 +565,9 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             audioLink = 'Text Chat Session';
         }
 
+        const effectiveApiKey = KeyRotator.getNextKey() || apiKey || process.env.GEMINI_API_KEY || 'dummy';
         const ai = new GoogleGenAI({ 
-            apiKey: apiKey || 'dummy'
+            apiKey: effectiveApiKey
         });
         
         let contents;
@@ -635,122 +637,9 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
   }, [agentProfile, apiKey, view]);
 
 
-  const handleSelectDialectInChat = async (dialect: Dialect) => {
-    setSelectedDialect(dialect);
-    setChatDialectRequestPending(false);
-    
-    // If there's already a message, we need to initialize the session and respond to it
-    if (messages.length > 0) {
-        const lastMsg = messages[messages.length - 1];
-        if (lastMsg.role === 'user') {
-            // We need to initialize chat session first
-            const config = agentProfile as AgentConfig;
-            const effectiveApiKey = apiKey || process.env.GEMINI_API_KEY || 'dummy';
-            const ai = new GoogleGenAI({ 
-                apiKey: effectiveApiKey
-            });
-            
-            const isPssdc = config.name.toLowerCase().includes('pssdc');
-            const hasBookingCapability = isPssdc || (config.chatKnowledgeBase || config.knowledgeBase).toLowerCase().includes('booking') || (config.chatKnowledgeBase || config.knowledgeBase).toLowerCase().includes('lodge') || (config.chatKnowledgeBase || config.knowledgeBase).toLowerCase().includes('hospital');
-
-            const tools: any[] = [];
-            if (hasBookingCapability) {
-                const checkAvailabilityTool: FunctionDeclaration = {
-                  name: 'check_facility_availability',
-                  description: 'Check if a specific date is available for the facility.',
-                  parameters: {
-                    type: Type.OBJECT,
-                    properties: {
-                      date: { type: Type.STRING, description: 'The date in YYYY-MM-DD format.' }
-                    },
-                    required: ['date']
-                  }
-                };
-
-                const bookFacilityTool: FunctionDeclaration = {
-                  name: 'book_facility',
-                  description: 'Record a booking or appointment request.',
-                  parameters: {
-                    type: Type.OBJECT,
-                    properties: {
-                      userName: { type: Type.STRING, description: 'The full name of the user.' },
-                      userPhone: { type: Type.STRING, description: 'The 11-digit phone number of the user.' },
-                      bookingDate: { type: Type.STRING, description: 'The date in YYYY-MM-DD format.' },
-                      purpose: { type: Type.STRING, description: 'The purpose of the visit or appointment.' },
-                      facilityName: { type: Type.STRING, description: 'The name of the facility for the booking.' }
-                    },
-                    required: ['userName', 'userPhone', 'bookingDate', 'purpose', 'facilityName']
-                  }
-                };
-                tools.push({ functionDeclarations: [checkAvailabilityTool, bookFacilityTool] });
-            }
-
-            const dialectInstruction = dialect === 'pidgin' 
-                ? "LANGUAGE & STYLE: Speak strictly in hardcore Nigerian Pidgin. Be authentic and raw. Use deep Pidgin phrases like 'Wetin de sup?', 'Abeg', 'I de for you'. Avoid sounding formal. Your tone should be friendly and relatable."
-                : dialect === 'nigerian-english'
-                ? "LANGUAGE & STYLE: Use Nigerian Standard English. Be professional, warm, and polite. Do NOT use 'Sir' or 'Ma'. Ensure you sound professional but avoiding being overly repetitive with phrases like 'You're welcome'. Focus on being helpful and direct."
-                : "LANGUAGE & STYLE: Use a standard international professional English tone.";
-
-            const effectiveGreeting = dialect === 'pidgin' 
-                ? (config.pidginGreeting || config.initialGreeting)
-                : dialect === 'nigerian-english'
-                ? (config.nigerianEnglishGreeting || config.initialGreeting)
-                : (config.initialGreetingText || config.initialGreeting);
-
-            const systemInstruction = `
-            IDENTITY: You are ${config.name}. Act as a helpful and professional representative. Never ever mention that you are an AI, a large language model, or built by Google. If asked 'What are you?' or 'Who are you?', respond exclusively as the official assistant of ${config.name}. Your responses must strictly reflect this identity at all times.
-
-            KNOWLEDGE BASE:
-            ${config.chatKnowledgeBase || config.knowledgeBase}
-            
-            ${dialectInstruction}
-            
-            CRITICAL OPERATIONAL RULES:
-            - Today's date is ${new Date().toISOString().split('T')[0]}.
-            - INITIAL GREETING: Your first words should be: "${effectiveGreeting || 'Hello, thank you for calling...' }". Do not add anything else to the start.
-            - INFORMATION RETRIEVAL: If asked for contact details or specific information, consult your knowledge base. Do not use external or hardcoded info.
-            - DATA GATHERING FLOW: If you need to collect multiple pieces of information (e.g., for a booking or registration), ASK ONLY ONE QUESTION AT A TIME. Wait for the user's response before asking the next question.
-            - THOROUGHNESS: Be detailed and comprehensive. If the information is in your knowledge base, provide the FULL answer. Do not give short or lazy responses.
-            - TOPIC FOCUS: Keep the conversation focused strictly on the topics provided in your knowledge base. If the user asks for things outside your scope (like lodge booking or hospital appointments, unless specified in the knowledge base), politely decline and redirect them.
-            - FORMATTING: Use clean, professional markdown formatting for your responses. When giving structured lists or detailed points, use bold headings enclosed in double-asterisks (e.g., "**Section Name**") and bullet points (starting each point with "- " or numbers) so that the response is highly readable, neatly styled, and easy to scan for the user. Avoid rendering giant walls of plain prose.
-            `;
-            
-            chatSessionRef.current = ai.chats.create({
-                model: 'gemini-2.5-flash',
-                config: { 
-                    systemInstruction,
-                }
-            });
-            setChatStarted(true);
-            
-            // Now handle the actual message
-            await handleChatMessage(lastMsg.text, true, dialect);
-        }
-    } else {
-        await initChat();
-    }
-  };
-
-  const initChat = async (initialMessage?: string) => {
-    if (chatStarted && !initialMessage) {
-        setView('chat');
-        return;
-    }
-
-    if (!selectedDialect) {
-        setChatDialectRequestPending(true);
-        setView('chat');
-        if (initialMessage) {
-            setMessages([{ role: 'user', text: initialMessage, timestamp: new Date() }]);
-        }
-        return;
-    }
-
+  const reconstructChatSession = async (customHistory: any[], activeDialect: Dialect, specificKey: string, customGreeting?: string) => {
     const config = agentProfile as AgentConfig;
-    const effectiveApiKey = apiKey || process.env.GEMINI_API_KEY || 'dummy';
-    const ai = new GoogleGenAI({ 
-        apiKey: effectiveApiKey
-    });
+    const ai = new GoogleGenAI({ apiKey: specificKey });
     
     const isPssdc = config.name.toLowerCase().includes('pssdc');
     const hasBookingCapability = isPssdc || (config.chatKnowledgeBase || config.knowledgeBase).toLowerCase().includes('booking') || (config.chatKnowledgeBase || config.knowledgeBase).toLowerCase().includes('lodge') || (config.chatKnowledgeBase || config.knowledgeBase).toLowerCase().includes('hospital');
@@ -787,14 +676,18 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         tools.push({ functionDeclarations: [checkAvailabilityTool, bookFacilityTool] });
     }
 
-    const dialectInstruction = selectedDialect === 'pidgin' 
+    const dialectInstruction = activeDialect === 'pidgin' 
         ? "LANGUAGE & STYLE: Speak strictly in hardcore Nigerian Pidgin. Be authentic and raw. Use deep Pidgin phrases like 'Wetin de sup?', 'Abeg', 'I de for you'. Avoid sounding formal. Your tone should be friendly and relatable."
-        : selectedDialect === 'nigerian-english' 
+        : activeDialect === 'nigerian-english' 
         ? "LANGUAGE & STYLE: Use Nigerian Standard English. Be professional, warm, and polite. Do NOT use 'Sir' or 'Ma'. Ensure you sound professional but avoiding being overly repetitive with phrases like 'You're welcome'. Focus on being helpful and direct."
         : "LANGUAGE & STYLE: Use a standard international professional English tone.";
 
+    const greetingInstruction = customGreeting 
+        ? `- INITIAL GREETING: Your first words should be: "${customGreeting}". Do not add anything else to the start.`
+        : `- INITIAL GREETING: Welcome the user naturally according to your role, dialect, and any greeting or introduction guidelines present in your KNOWLEDGE BASE.`;
+
     const systemInstruction = `
-    IDENTITY: You are ${config.name}. Act as a helpful and professional representative. Never ever mention that you are an AI, a large language model, or built by Google. If asked 'What are you?' or 'Who are you?', respond exclusively as the official assistant of ${config.name}. Your responses must strictly reflect this identity at all times.
+    IDENTITY: You are ${config.name}. Act as a helpful and professional representative. Never ever mention that you are an AI, a language model, or built by Google. If asked 'What are you?' or 'Who are you?', respond exclusively as the official assistant of ${config.name}. Your responses must strictly reflect this identity at all times.
     
     KNOWLEDGE BASE:
     ${config.chatKnowledgeBase || config.knowledgeBase}
@@ -803,21 +696,77 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     
     CRITICAL OPERATIONAL RULES:
     - Today's date is ${new Date().toISOString().split('T')[0]}.
-    - INITIAL GREETING: Welcome the user naturally according to your role, dialect, and any greeting or introduction guidelines present in your KNOWLEDGE BASE.
+    ${greetingInstruction}
     - INFORMATION RETRIEVAL: If asked for contact details or specific information, consult your knowledge base. Do not use external or hardcoded info.
     - DATA GATHERING FLOW: If you need to collect multiple pieces of information (e.g., for a booking or registration), ASK ONLY ONE QUESTION AT A TIME. Wait for the user's response before asking the next question.
     - THOROUGHNESS: Be detailed and comprehensive. If the information is in your knowledge base, provide the FULL answer. Do not give short or lazy responses.
     - TOPIC FOCUS: Keep the conversation focused strictly on the topics provided in your knowledge base. If the user asks for things outside your scope (like lodge booking or hospital appointments, unless specified in the knowledge base), politely decline and redirect them.
     - FORMATTING: Use clean, professional markdown formatting for your responses. When giving structured lists or detailed points, use bold headings enclosed in double-asterisks (e.g., "**Section Name**") and bullet points (starting each point with "- " or numbers) so that the response is highly readable, neatly styled, and easy to scan for the user. Avoid rendering giant walls of plain prose.
     `;
-    
-    chatSessionRef.current = ai.chats.create({
+
+    return ai.chats.create({
         model: 'gemini-2.5-flash',
+        history: customHistory,
         config: { 
             systemInstruction,
+            tools: tools.length > 0 ? tools : undefined
         }
     });
+  };
 
+  const handleSelectDialectInChat = async (dialect: Dialect) => {
+    setSelectedDialect(dialect);
+    setChatDialectRequestPending(false);
+    
+    // If there's already a message, we need to initialize the session and respond to it
+    if (messages.length > 0) {
+        const lastMsg = messages[messages.length - 1];
+        if (lastMsg.role === 'user') {
+            const config = agentProfile as AgentConfig;
+            const effectiveApiKey = KeyRotator.getNextKey() || apiKey || process.env.GEMINI_API_KEY || 'dummy';
+            
+            const effectiveGreeting = dialect === 'pidgin' 
+                ? (config.pidginGreeting || config.initialGreeting)
+                : dialect === 'nigerian-english'
+                ? (config.nigerianEnglishGreeting || config.initialGreeting)
+                : (config.initialGreetingText || config.initialGreeting);
+
+            // Reconstruct utilizing history minus user's last message, since handleChatMessage will handle that
+            const history = messages.slice(0, -1).map(m => ({
+                role: m.role === 'user' ? 'user' : 'model',
+                parts: [{ text: m.text }]
+            }));
+
+            chatSessionRef.current = await reconstructChatSession(history, dialect, effectiveApiKey, effectiveGreeting);
+            setChatStarted(true);
+            
+            // Now handle the actual message
+            await handleChatMessage(lastMsg.text, true, dialect);
+        }
+    } else {
+        await initChat();
+    }
+  };
+
+  const initChat = async (initialMessage?: string) => {
+    if (chatStarted && !initialMessage) {
+        setView('chat');
+        return;
+    }
+
+    if (!selectedDialect) {
+        setChatDialectRequestPending(true);
+        setView('chat');
+        if (initialMessage) {
+            setMessages([{ role: 'user', text: initialMessage, timestamp: new Date() }]);
+        }
+        return;
+    }
+
+    const config = agentProfile as AgentConfig;
+    const effectiveApiKey = KeyRotator.getNextKey() || apiKey || process.env.GEMINI_API_KEY || 'dummy';
+    
+    chatSessionRef.current = await reconstructChatSession([], selectedDialect, effectiveApiKey);
     setChatStarted(true);
     const welcomeText = config.initialGreetingText || '';
     
@@ -849,19 +798,6 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
         return;
     }
 
-    if (!chatSessionRef.current) {
-        await initChat();
-    }
-
-    if (!chatSessionRef.current) return;
-
-    const effectiveApiKey = apiKey || process.env.GEMINI_API_KEY;
-
-    if (!effectiveApiKey || effectiveApiKey === 'dummy') {
-        setMessages(prev => [...prev, { role: 'model', text: "API Key is missing. Please connect your Gemini API key in the dashboard.", timestamp: new Date() }]);
-        return;
-    }
-
     if (!skipMessageAdd) {
         const userMsg: Message = { role: 'user', text, timestamp: new Date() };
         setMessages(prev => [...prev, userMsg]);
@@ -870,8 +806,41 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
     setChatInput('');
     setIsChatTyping(true);
 
+    let streamResult = null;
+    let attempts = 0;
+    let currentKey = KeyRotator.getNextKey() || apiKey || process.env.GEMINI_API_KEY || 'dummy';
+
+    while (attempts < 3) {
+        try {
+            if (!chatSessionRef.current) {
+                const history = (skipMessageAdd ? messages : messages.slice(0, -1)).map(m => ({
+                    role: m.role === 'user' ? 'user' : 'model',
+                    parts: [{ text: m.text }]
+                }));
+                chatSessionRef.current = await reconstructChatSession(history, activeDialect, currentKey);
+            }
+
+            streamResult = await chatSessionRef.current.sendMessageStream({ message: text });
+            break;
+        } catch (error: any) {
+            console.error(`Chat session error with key ${currentKey.substring(0, 10)}...:`, error);
+            KeyRotator.reportFailure(currentKey);
+            chatSessionRef.current = null; // Invalidate current session to force reconstruct on retry
+
+            currentKey = KeyRotator.getNextKey() || apiKey || process.env.GEMINI_API_KEY || 'dummy';
+            attempts++;
+
+            if (attempts >= 3) {
+                setIsChatTyping(false);
+                setMessages(prev => [...prev, { role: 'model', text: "All backup channels are busy. Please try sending your message again in a few moments.", timestamp: new Date() }]);
+                return;
+            }
+        }
+    }
+
+    if (!streamResult) return;
+
     try {
-        let currentResult = await chatSessionRef.current.sendMessageStream({ message: text });
         let fullResponse = "";
         
         const processStream = async (stream: any) => {
@@ -879,43 +848,42 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             let hasFunctionCalls = false;
 
             for await (const chunk of stream) {
-                    if (chunk.functionCalls) {
-                        hasFunctionCalls = true;
-                        const calls = chunk.functionCalls;
-                        setIsToolProcessing(true);
-                        const results = [];
-                        
-                        // Sequential tool call processing to avoid parallel race conditions
-                        for (const call of calls) {
-                            let toolResult;
-                            try {
-                                if (call.name === 'check_facility_availability') {
-                                    const { date } = call.args as any;
-                                    const isAvailable = await bookingService.checkFacilityAvailability(agentProfile.id || agentProfile.name, date);
-                                    toolResult = { isAvailable, message: isAvailable ? "Available" : "Booked" };
-                                } else if (call.name === 'book_facility') {
-                                    const { userName, userPhone, bookingDate, purpose, facilityName } = call.args as any;
-                                    const bookingId = await bookingService.createBooking({
-                                        userName,
-                                        userPhone,
-                                        bookingDate,
-                                        purpose,
-                                        facility: facilityName || 'Hospital Appointment',
-                                        agentId: agentProfile.id || agentProfile.name
-                                    });
-                                    toolResult = { success: true, bookingId, message: "Recorded as PENDING" };
-                                }
-                            } catch (error) {
-                                console.error(`Chat Tool Error [${call.name}]:`, error);
-                                toolResult = { success: false, error: error instanceof Error ? error.message : "Unknown error" };
+                if (chunk.functionCalls) {
+                    hasFunctionCalls = true;
+                    const calls = chunk.functionCalls;
+                    setIsToolProcessing(true);
+                    const results = [];
+                    
+                    // Sequential tool call processing to avoid parallel race conditions
+                    for (const call of calls) {
+                        let toolResult;
+                        try {
+                            if (call.name === 'check_facility_availability') {
+                                const { date } = call.args as any;
+                                const isAvailable = await bookingService.checkFacilityAvailability(agentProfile.id || agentProfile.name, date);
+                                toolResult = { isAvailable, message: isAvailable ? "Available" : "Booked" };
+                            } else if (call.name === 'book_facility') {
+                                const { userName, userPhone, bookingDate, purpose, facilityName } = call.args as any;
+                                const bookingId = await bookingService.createBooking({
+                                    userName,
+                                    userPhone,
+                                    bookingDate,
+                                    purpose,
+                                    facility: facilityName || 'Hospital Appointment',
+                                    agentId: agentProfile.id || agentProfile.name
+                                });
+                                toolResult = { success: true, bookingId, message: "Recorded as PENDING" };
                             }
-                            results.push({ id: call.id, name: call.name, response: { result: toolResult } });
+                        } catch (error) {
+                            console.error(`Chat Tool Error [${call.name}]:`, error);
+                            toolResult = { success: false, error: error instanceof Error ? error.message : "Unknown error" };
                         }
-                        
-                        toolResponses = results;
-                        // Keep setIsToolProcessing(true) while we send the responses back
-                        break;
+                        results.push({ id: call.id, name: call.name, response: { result: toolResult } });
                     }
+                    
+                    toolResponses = results;
+                    break;
+                }
 
                 const chunkText = chunk.text;
                 if (chunkText) {
@@ -936,22 +904,18 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
 
             if (hasFunctionCalls) {
                 try {
-                    // Update state to show we are still processing the response from the tool
                     setIsToolProcessing(true);
                     
-                    // Correct mapping for Part-based function responses in v1.34.0
                     const nextResult = await chatSessionRef.current!.sendMessageStream(
                         toolResponses.map(tr => ({
                             functionResponse: {
-                                name: tr.name, // We'll add this to the toolResponses object
+                                name: tr.name,
                                 response: tr.response
                             }
                         }))
                     );
                     
-                    // Immediately transition out of processing mode once the stream starts
                     setIsToolProcessing(false);
-                    
                     await processStream(nextResult.stream);
                 } catch (toolError) {
                     console.error("Error after tool response:", toolError);
@@ -965,7 +929,7 @@ export const AgentWidget: React.FC<AgentWidgetProps> = ({ agentProfile, apiKey, 
             }
         };
 
-        await processStream(currentResult);
+        await processStream(streamResult);
     } catch (e) {
         console.error("Chat Error:", e);
         setMessages(prev => [...prev, { role: 'model', text: "I'm having a technical issue. Please try again or contact support if it persists.", timestamp: new Date() }]);
